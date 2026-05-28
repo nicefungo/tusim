@@ -1,0 +1,111 @@
+# TinyTU Production Configuration
+# ================================
+# YAML-driven parametric TU architecture.
+# All hardware parameters are configurable here.
+# The C model reads this via a generated header (tu_config.h).
+
+tu:
+  name: "TinyTU"
+  version: "2.0-dev"
+
+  # ---- Compute Engine ----
+  compute:
+    pe_array:
+      rows: 16            # PE rows (output dimension)
+      cols: 16            # PE columns (input dimension)
+      dataflow: "weight_stationary"   # weight_stationary | output_stationary | row_stationary
+      pipeline_depth: 2   # pipeline stages per PE (fetch → multiply → accumulate)
+
+    mac_units_per_pe: 1   # MAC units per PE (for multi-issue PEs)
+
+    supported_precisions: [fp16, fp32]
+    accumulator_precision: "fp32"
+
+    # Tiling configuration (0 = auto-compute from SRAM sizes)
+    max_tile_rows: 0
+    max_tile_cols: 0
+    max_tile_inner: 0
+
+  # ---- Memory System ----
+  memory:
+    sram:
+      # Buffer sizes in KB
+      w_buffer_kb: 128    # Weight buffer
+      a_buffer_kb: 64     # Activation buffer
+      o_buffer_kb: 64     # Output buffer
+
+    banking:
+      banks: 32           # Number of SRAM banks
+      bank_width_bytes: 4 # Bytes per bank (word size)
+      conflict_model: "detect"  # none | detect (log warning) | stall_cycle (model penalty)
+
+    # Memory access costs (cycles)
+    latency:
+      sram_read: 1        # SRAM read latency
+      sram_write: 1       # SRAM write latency
+      dram_read: 50       # DRAM read latency (for DMA)
+      dram_write: 50      # DRAM write latency
+
+  # ---- DMA Engine ----
+  dma:
+    bus_width_bits: 256   # AXI bus width
+    max_burst_bytes: 64   # Maximum burst size
+    channels: 3           # Number of independent DMA channels
+    max_outstanding: 4    # Maximum outstanding requests per channel
+    async_mode: false     # true = async DMA with completion notification
+
+  # ---- ISA / Command Queue ----
+  isa:
+    instruction_width_bits: 96
+    queue_depth: 16       # Hardware command queue depth
+    dependency_checking: false  # Hardware dependency tracking
+
+  # ---- Multi-Core ----
+  multicore:
+    enabled: false
+    num_cores: 1
+    interconnect: "none"  # none | ring | mesh | crossbar
+    cache_coherence: false
+
+  # ---- Performance Model ----
+  performance:
+    cycle_model: "functional"   # functional | estimated | cycle_accurate
+    counters:
+      enabled: true
+      detailed_stalls: false    # Track per-stall-reason counters
+    tracing:
+      enabled: false
+      format: "none"            # none | vcd | fst
+      output_file: ""
+
+  # ---- Power Model ----
+  power:
+    enabled: false
+    model: "none"           # none | simple (per-op energy) | detailed (per-component)
+
+  # ---- Precision Parameters ----
+  precision:
+    fp16:
+      rounding: "round_nearest_even"
+      subnormal: "flush_to_zero"   # flush_to_zero | full_support
+      saturate: true
+    fp32:
+      rounding: "round_nearest_even"
+    int8:
+      quantization: "symmetric"
+      per_channel: false
+    bf16:
+      rounding: "round_nearest_even"
+
+  # ---- Sparsity ----
+  sparsity:
+    enabled: false
+    structured_2of4: false
+    unstructured: false
+    metadata_format: "bitmask"   # bitmask | csf | coordinate_list
+
+  # ---- Verification ----
+  verification:
+    golden_reference: "pytorch"  # pytorch | numpy | onnxruntime
+    random_test_iterations: 1000
+    error_tolerance: 1e-5
