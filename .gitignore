@@ -1,0 +1,7 @@
+libtucmodel.a
+test-cmodel
+test-cmdq
+test-dma
+test-golden
+test-golden-full
+*.o

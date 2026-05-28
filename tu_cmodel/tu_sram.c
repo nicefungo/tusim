@@ -28,8 +28,7 @@ void tu_sram_read(const tu_sram_region_t *r, uint32_t addr, void *out) {
         abort();
     }
     uint32_t bank = (addr / r->banks.bank_width) % r->banks.bank_count;
-    /* In a real multi-bank SRAM, simultaneous reads to the same bank would stall.
-     * For bulk reads, we track this at a higher level. */
+    (void)bank; /* tracked for conflict detection at higher level */
     memcpy(out, r->banks.data + addr, r->banks.bank_width);
     ((tu_sram_region_t *)r)->banks.reads++;
 }

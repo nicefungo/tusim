@@ -16,6 +16,7 @@
 5. [Component Catalog with Interfaces](#5-component-catalog-with-interfaces)
 6. [Implementation Roadmap](#6-implementation-roadmap)
 7. [Verification Methodology](#7-verification-methodology)
+8. [References & Companion Docs](#8-references--companion-docs)
 
 ---
 
@@ -276,7 +277,7 @@ Every difference between the current TinyTU (toy) and what a production cmodel m
 |---|----------|---------------|-------------------|----------|----------|
 | V1 | **No golden reference** | Cmodel is the only implementation | Dual-path verification: reference (NumPy/PyTorch) vs cmodel vs RTL; bit-exact matching for fixed configs | Critical | P0 |
 | V2 | **4 unit tests** | Identity, small GEMM, bias, FP16 roundtrip | Comprehensive test suite: randomized tensor tests, coverage of all op types, all data types, all corner cases (edge tiles, zero dims, large dims), fuzzing | Critical | P0 |
-| V3 | **No regression framework** | Manual test execution | CI pipeline: build → unit tests → integration tests → performance regression → coverage report | High | P1 |
+| V3 | **No regression framework** | Manual test execution | CI pipeline: build → unit tests → integration tests → performance regression → coverage report; automated on every commit; daily full-regression with large network workloads; cross-validation against golden references (PyTorch/NumPy) | High | P1 |
 | V4 | **No performance validation** | Cycle estimates have unknown accuracy | Calibrate cycle model against known implementations (e.g., Gemmini RTL, MAERI RTL); report accuracy bounds | Medium | P2 |
 | V5 | **No comparative benchmarking** | None | Standard benchmark suite: MLPerf Tiny, Transformer layers, ResNet-50 blocks; compare against Gemmini, SCALE-Sim, Timeloop | High | P2 |
 | V6 | **No random/differential testing** | Hand-written tests only | Random tensor generation, compare against PyTorch FP32 reference, report max/mean error; differential testing across dataflows | High | P1 |
@@ -289,7 +290,20 @@ Every difference between the current TinyTU (toy) and what a production cmodel m
 | Q2 | **No logging/tracing** | fprintf to stderr | Structured logging with severity levels; execution trace in VCD/FST format; instruction-level trace for debugging | Medium | P1 |
 | Q3 | **No plugin system** | Everything compiled together | Plugin architecture: dataflow plugins, precision plugins, memory plugins; selectable at configure time | Medium | P1 |
 | Q4 | **No documentation generation** | 3 hand-written markdown files | Doxygen/Sphinx API docs; auto-generated configuration reference; architecture diagrams as code | Medium | P2 |
-| Q5 | **C only** | C code, Python compiler | C++ with templates for parameterization; Python bindings via pybind11; modeling infrastructure | Medium | P1 |
+| Q5 | **C only** | C code, Python compiler | C++ with templates for parameterization; Python bindings via pybind11 for integration with NPU simulators and test frameworks; modeling infrastructure | Medium | P1 |
+
+### 3.10 Integration & Ecosystem
+
+> Source: Industry TU cmodel practices (Synopsys, SAURIA, ONNXim, EONSim) — see companion doc `docs/Implementing_a_TU_CModel_Roadmap.md`.
+
+| # | Category | Current TinyTU | Production Target | Severity | Priority |
+|---|----------|---------------|-------------------|----------|----------|
+| I1 | **No DPI-C / SystemC interface** | Pure C API, no RTL co-simulation hooks | DPI-C wrapper so SystemVerilog testbenches call the cmodel as a golden reference; SystemC/TLM wrapper for transaction-level co-simulation; matches Synopsys/MathWorks verification flows | High | P1 |
+| I2 | **No Python bindings as integration API** | Python exists only in compiler (onnx_to_tu.py) | pybind11 bindings exposing TU core API (initialize, submit_command, read_counter, dump_state) as a first-class integration surface; enables use as plug-in compute engine in SCALE-Sim, NPUsim, NeuSim style simulators | High | P1 |
+| I3 | **No observability / debug hooks** | fprintf to stderr only | Internal state dump (partial sums, tile buffers, pipeline stages) for selected ops; deterministic replay from instruction trace; built-in self-checking assertions on invariants (accumulator range, memory alignment); critical for microarchitecture bring-up and cmodel-vs-RTL discrepancy diagnosis | Medium | P2 |
+| I4 | **No NPU simulator adapter** | cmodel is standalone | Pluggable adapter that lets NPU-level simulators (SCALE-Sim, ONNXim, NeuSim pattern) use the TU cmodel as their compute engine — tile-level ops with deterministic latency, exposing tunable knobs (array dims, buffer sizes, precision) for design space exploration | Medium | P2 |
+| I5 | **No RTL co-simulation harness** | cmodel runs in isolation | Co-simulation flow: same stimuli fed to both TU RTL (Verilator/VCS) and cmodel; outputs compared operation-by-operation; functional coverage metrics defined in terms of TU opcodes, operand ranges, dataflow patterns | Medium | P2 |
+| I6 | **No silicon cross-validation strategy** | No hardware target | Methodology for comparing cmodel predictions against silicon measurements: workload traces, output discrepancy analysis, performance gap attribution; feed back into cmodel refinement; follows EONSim's validated simulator approach against TPUv6e | Low | P3 |
 
 ---
 
@@ -1511,3 +1525,10 @@ Backward compatibility contract:
 6. **SCALE-Sim:** Samajdar et al., "SCALE-Sim: Systolic CNN Accelerator Simulator," ISPASS 2020
 7. **Timeloop:** Parashar et al., "Timeloop: A Systematic Approach to DNN Accelerator Evaluation," ISPASS 2019
 8. **OCP FP8:** "OCP 8-bit Floating Point Specification (OFP8)," Open Compute Project, 2023
+9. **ONNXim:** "ONNXim: A Fast, Cycle-level Multi-core NPU Simulator," arXiv:2406.08051, 2024
+10. **EONSim:** "EONSim: An NPU Simulator for On-Chip Memory and Embedding," arXiv:2511.06679, 2025
+11. **NeuSim:** Huang et al., "NeuSim: An Open-Source NPU Simulation Framework," 2025
+12. **NPUsim:** Kim et al., NPUsim full-system cycle-accurate NPU simulator
+13. **SAURIA:** BSC, "SAURIA: Systolic-Array Tensor Unit for AI Acceleration," GitHub
+14. **Synopsys C-Model Flow:** Eddington, "High-performance hardware models for system simulation," EENews Europe
+15. **Companion Doc:** `docs/Implementing_a_TU_CModel_Roadmap.md` — industry practices, fidelity levels, phased implementation strategy

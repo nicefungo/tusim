@@ -1,0 +1,28 @@
+{
+  "description": "TU CModel Golden Reference Index",
+  "version": "1.0",
+  "num_cases": 21,
+  "cases": [
+    "identity_16x16x16",
+    "identity_32x32x32",
+    "identity_8x8x16",
+    "identity_32x16x16",
+    "identity_4x8x16",
+    "identity_48x48x48",
+    "identity_20x20x20",
+    "known_16x8x16",
+    "edge_7x5x9",
+    "bias_8x8x8",
+    "large_64x64x64",
+    "random_0000",
+    "random_0001",
+    "random_0002",
+    "random_0003",
+    "random_0004",
+    "random_0005",
+    "random_0006",
+    "random_0007",
+    "random_0008",
+    "random_0009"
+  ]
+}
