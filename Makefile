@@ -8,12 +8,12 @@ LDFLAGS ?= -lm
 TU_DIR     = tu_cmodel
 COMPILER   = compiler/onnx_to_tu.py
 
-.PHONY: all clean test test-cmodel test-compiler
+.PHONY: all clean test test-cmodel test-cmdq test-compiler test-asm
 
 all: libtucmodel.a
 
 # ---- TU CModel library ----
-libtucmodel.a: $(TU_DIR)/tu_cmodel.o $(TU_DIR)/tu_asm.o $(TU_DIR)/tu_precision.o $(TU_DIR)/tu_sram.o $(TU_DIR)/tu_dma.o
+libtucmodel.a: $(TU_DIR)/tu_cmodel.o $(TU_DIR)/tu_asm.o $(TU_DIR)/tu_precision.o $(TU_DIR)/tu_sram.o $(TU_DIR)/tu_dma.o $(TU_DIR)/command_queue.o
 	$(AR) rcs $@ $^
 
 $(TU_DIR)/tu_cmodel.o: $(TU_DIR)/tu_cmodel.c $(TU_DIR)/tu_cmodel.h $(TU_DIR)/tu_precision.h $(TU_DIR)/tu_config.h
@@ -31,10 +31,18 @@ $(TU_DIR)/tu_sram.o: $(TU_DIR)/tu_sram.c $(TU_DIR)/tu_sram.h $(TU_DIR)/tu_config
 $(TU_DIR)/tu_dma.o: $(TU_DIR)/tu_dma.c $(TU_DIR)/tu_dma.h $(TU_DIR)/tu_sram.h $(TU_DIR)/tu_config.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
+$(TU_DIR)/command_queue.o: $(TU_DIR)/command_queue.c $(TU_DIR)/command_queue.h $(TU_DIR)/tu_cmodel.h
+	$(CC) $(CFLAGS) -c -o $@ $<
+
 # ---- Test: cmodel correctness ----
 test-cmodel: tests/test_cmodel.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-cmodel
+
+# ---- Test: command queue ----
+test-cmdq: tests/test_command_queue.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	./test-cmdq
 
 # ---- Test: compile ONNX → TU ----
 test-compiler:
@@ -63,4 +71,4 @@ test-asm: libtucmodel.a
 # ---- Clean ----
 clean:
 	rm -f $(TU_DIR)/*.o libtucmodel.a
-	rm -f test-cmodel /tmp/gpt_block_tu /tmp/gpt_block_tu.c
+	rm -f test-cmodel test-cmdq /tmp/gpt_block_tu /tmp/gpt_block_tu.c

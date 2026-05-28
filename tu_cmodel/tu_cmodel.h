@@ -55,6 +55,7 @@
 #include "tu_config.h"
 #include "tu_sram.h"
 #include "tu_dma.h"
+#include "command_queue.h"
 
 /* Backward-compat aliases */
 static inline fp16_t fp32_to_fp16(fp32_t v) { return tu_fp32_to_fp16(v); }
@@ -75,6 +76,9 @@ typedef struct {
 
     /* DMA engine */
     tu_dma_engine_t   dma;        /* DMA engine state */
+
+    /* Command queue */
+    tu_command_queue_t *cmdq;     /* Hardware command queue */
 
     /* Performance counters */
     uint64_t  total_dma_bytes;
@@ -149,6 +153,37 @@ void tu_mma(uint16_t M, uint16_t N, uint16_t K,
  * but the cycle counter accounts for pipeline drain.
  */
 void tu_sync(void);
+
+/*
+ * Command Queue API
+ * -----------------
+ * Submit commands to the hardware command queue instead of calling
+ * tu_mma/tu_dma_* directly. Commands are tracked with dependency
+ * ordering and completion signaling.
+ */
+
+/* Get the TU's command queue (for direct cmdq API access) */
+tu_command_queue_t *tu_get_cmdq(void);
+
+/* Submit an MMA command through the queue.
+ * Returns command ID (>0) on success, -1 if queue full. */
+int tu_cmdq_submit_mma(uint16_t M, uint16_t N, uint16_t K,
+                       uint32_t w_offset, uint32_t a_offset, uint32_t o_offset,
+                       bool has_bias);
+
+/* Submit a DMA load command. Returns command ID or -1. */
+int tu_cmdq_submit_dma_load(uint8_t channel, uint32_t sram_offset,
+                            const void *host_ptr, uint32_t size_bytes);
+
+/* Submit a DMA store command. Returns command ID or -1. */
+int tu_cmdq_submit_dma_store(uint8_t channel, uint32_t sram_offset,
+                             void *host_ptr, uint32_t size_bytes);
+
+/* Submit a barrier. Returns barrier command ID or -1. */
+int tu_cmdq_submit_barrier(void);
+
+/* Wait for all submitted commands to complete (drain the queue). */
+void tu_cmdq_sync_all(void);
 
 /*
  * Low-level helpers (exposed for direct use by generated code).

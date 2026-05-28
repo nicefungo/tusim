@@ -44,6 +44,9 @@ void tu_init_with_config(const tu_runtime_config_t *cfg) {
     /* Initialize DMA engine */
     tu_dma_init(TU_DMA_ASYNC_MODE ? true : false);
 
+    /* Initialize command queue */
+    g_tu.cmdq = tu_cmdq_create(TU_ISA_QUEUE_DEPTH, TU_CYCLE_MODEL == TU_CYCLE_MODEL_FUNCTIONAL);
+
     g_tu.initialized = true;
 }
 
@@ -205,4 +208,49 @@ void tu_mma(uint16_t M, uint16_t N, uint16_t K,
 void tu_sync(void) {
     tu_dma_sync();
     g_tu.estimated_cycles += TU_PE_PIPELINE_DEPTH * g_tu.rt_cfg.pe_cols;
+}
+
+/* ---- Command Queue Convenience API ---- */
+
+tu_command_queue_t *tu_get_cmdq(void) {
+    return g_tu.cmdq;
+}
+
+int tu_cmdq_submit_mma(uint16_t M, uint16_t N, uint16_t K,
+                       uint32_t w_offset, uint32_t a_offset, uint32_t o_offset,
+                       bool has_bias) {
+    tu_cmd_mma_desc_t desc = {
+        .M = M, .N = N, .K = K,
+        .w_offset = w_offset, .a_offset = a_offset, .o_offset = o_offset,
+        .has_bias = has_bias
+    };
+    return tu_cmdq_submit(g_tu.cmdq, TU_CMD_MMA, &desc, 0, NULL, NULL);
+}
+
+int tu_cmdq_submit_dma_load(uint8_t channel, uint32_t sram_offset,
+                            const void *host_ptr, uint32_t size_bytes) {
+    tu_cmd_dma_desc_t desc = {
+        .channel = channel, .is_store = false,
+        .sram_offset = sram_offset, .size_bytes = size_bytes,
+        .host_ptr = (void *)host_ptr
+    };
+    return tu_cmdq_submit(g_tu.cmdq, TU_CMD_DMA_LOAD, &desc, 0, NULL, NULL);
+}
+
+int tu_cmdq_submit_dma_store(uint8_t channel, uint32_t sram_offset,
+                             void *host_ptr, uint32_t size_bytes) {
+    tu_cmd_dma_desc_t desc = {
+        .channel = channel, .is_store = true,
+        .sram_offset = sram_offset, .size_bytes = size_bytes,
+        .host_ptr = host_ptr
+    };
+    return tu_cmdq_submit(g_tu.cmdq, TU_CMD_DMA_STORE, &desc, 0, NULL, NULL);
+}
+
+int tu_cmdq_submit_barrier(void) {
+    return tu_cmdq_barrier(g_tu.cmdq);
+}
+
+void tu_cmdq_sync_all(void) {
+    tu_cmdq_sync(g_tu.cmdq);
 }
