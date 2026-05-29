@@ -46,6 +46,13 @@ tu:
       dram_read: 50       # DRAM read latency (for DMA)
       dram_write: 50      # DRAM write latency
 
+    # DRAM subsystem (off-chip memory)
+    dram:
+      type: "ideal"       # ideal | hbm2 | hbm2e | hbm3 | ddr4 | ddr5 | lpddr5 | custom
+      bandwidth_gbps: 256.0
+      model_row_conflicts: false
+      core_clock_ghz: 1.0
+
   # ---- DMA Engine ----
   dma:
     bus_width_bits: 256   # AXI bus width

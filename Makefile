@@ -8,14 +8,15 @@ LDFLAGS ?= -lm
 TU_DIR     = tu_cmodel
 COMPILER   = compiler/onnx_to_tu.py
 
-.PHONY: all clean test test-cmodel test-cmdq test-dma test-golden test-compiler test-asm
+.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm
 
 all: libtucmodel.a
 
 # ---- TU CModel library ----
 TU_OBJS = $(TU_DIR)/tu_cmodel.o $(TU_DIR)/tu_asm.o $(TU_DIR)/tu_precision.o \
           $(TU_DIR)/tu_sram.o $(TU_DIR)/tu_dma.o $(TU_DIR)/dma_descriptor.o \
-          $(TU_DIR)/command_queue.o
+          $(TU_DIR)/command_queue.o $(TU_DIR)/memory/dram_model.o \
+          $(TU_DIR)/isa/tu_isa.o
 
 libtucmodel.a: $(TU_OBJS)
 	$(AR) rcs $@ $^
@@ -41,6 +42,12 @@ $(TU_DIR)/dma_descriptor.o: $(TU_DIR)/dma_descriptor.c $(TU_DIR)/dma_descriptor.
 $(TU_DIR)/command_queue.o: $(TU_DIR)/command_queue.c $(TU_DIR)/command_queue.h $(TU_DIR)/tu_cmodel.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
+$(TU_DIR)/memory/dram_model.o: $(TU_DIR)/memory/dram_model.c $(TU_DIR)/memory/dram_model.h $(TU_DIR)/tu_config.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
+$(TU_DIR)/isa/tu_isa.o: $(TU_DIR)/isa/tu_isa.c $(TU_DIR)/isa/tu_isa.h $(TU_DIR)/tu_config.h $(TU_DIR)/tu_precision.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
 # ---- Test: cmodel correctness ----
 test-cmodel: tests/test_cmodel.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)
@@ -55,6 +62,16 @@ test-cmdq: tests/test_command_queue.c libtucmodel.a
 test-dma: tests/test_dma.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-dma
+
+# ---- Test: DRAM model ----
+test-dram: tests/test_dram.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	./test-dram
+
+# ---- Test: ISA definitions ----
+test-isa: tests/test_isa.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	./test-isa
 
 # ---- Test: Golden reference verification ----
 test-golden: tests/test_golden.c libtucmodel.a
@@ -91,5 +108,5 @@ test-asm: libtucmodel.a
 
 # ---- Clean ----
 clean:
-	rm -f $(TU_DIR)/*.o libtucmodel.a
-	rm -f test-cmodel test-cmdq test-dma test-golden test-golden-full /tmp/gpt_block_tu /tmp/gpt_block_tu.c
+	rm -f $(TU_DIR)/*.o $(TU_DIR)/memory/*.o $(TU_DIR)/isa/*.o libtucmodel.a
+	rm -f test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-golden-full /tmp/gpt_block_tu /tmp/gpt_block_tu.c

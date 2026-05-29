@@ -25,6 +25,7 @@
 #define TU_COMMAND_QUEUE_H
 
 #include "tu_config.h"
+#include "isa/tu_isa.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -33,24 +34,25 @@
 extern "C" {
 #endif
 
-/* ---- Command opcodes ---- */
-typedef enum {
-    TU_CMD_NOP        = 0,
-    TU_CMD_DMA_LOAD   = 1,
-    TU_CMD_DMA_STORE  = 2,
-    TU_CMD_MMA        = 3,
-    TU_CMD_SYNC       = 4,
-    TU_CMD_BARRIER    = 5,
-    TU_CMD_HALT       = 6,
-    /* Reserved for future expansion */
-    TU_CMD_CONV       = 10,
-    TU_CMD_ATTENTION  = 11,
-    TU_CMD_ELEMENTWISE= 12,
-    TU_CMD_SOFTMAX    = 13,
-    TU_CMD_LAYERNORM  = 14,
-    TU_CMD_RMSNORM    = 15,
-    TU_CMD_POOL       = 16,
-} tu_cmd_opcode_t;
+/* ---- Command opcodes (alias to ISA opcodes) ---- */
+/* The command queue uses tu_isa_opcode_t directly. These aliases
+ * provide backward compatibility with existing code. */
+typedef tu_isa_opcode_t tu_cmd_opcode_t;
+
+#define TU_CMD_NOP          TU_ISA_NOP
+#define TU_CMD_DMA_LOAD     TU_ISA_DMA_LOAD
+#define TU_CMD_DMA_STORE    TU_ISA_DMA_STORE
+#define TU_CMD_MMA          TU_ISA_MMA
+#define TU_CMD_SYNC         TU_ISA_SYNC
+#define TU_CMD_BARRIER      TU_ISA_BARRIER
+#define TU_CMD_HALT         TU_ISA_HALT
+#define TU_CMD_CONV         TU_ISA_CONV2D
+#define TU_CMD_ATTENTION    TU_ISA_ATTENTION
+#define TU_CMD_ELEMENTWISE  TU_ISA_ELEMENTWISE
+#define TU_CMD_SOFTMAX      TU_ISA_SOFTMAX
+#define TU_CMD_LAYERNORM    TU_ISA_LAYER_NORM
+#define TU_CMD_RMSNORM      TU_ISA_RMS_NORM
+#define TU_CMD_POOL         TU_ISA_POOL_MAX
 
 /* ---- Command status ---- */
 typedef enum {

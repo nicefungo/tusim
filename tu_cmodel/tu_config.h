@@ -64,6 +64,23 @@ extern "C" {
 #define TU_LATENCY_DRAM_WRITE   50
 
 /* ================================================================
+ * DRAM Model
+ * ================================================================ */
+
+#define TU_DRAM_IDEAL             0
+#define TU_DRAM_HBM2              1
+#define TU_DRAM_HBM2E             2
+#define TU_DRAM_HBM3              3
+#define TU_DRAM_DDR4              4
+#define TU_DRAM_DDR5              5
+#define TU_DRAM_LPDDR5            6
+#define TU_DRAM_CUSTOM            7
+#define TU_DRAM_TYPE              TU_DRAM_IDEAL
+#define TU_DRAM_BANDWIDTH_GBPS    256.0
+#define TU_DRAM_CHANNELS          8
+#define TU_DRAM_MODEL_ROW_HIT     0
+
+/* ================================================================
  * DMA Engine
  * ================================================================ */
 

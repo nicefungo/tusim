@@ -2,6 +2,8 @@ libtucmodel.a
 test-cmodel
 test-cmdq
 test-dma
+test-dram
+test-isa
 test-golden
 test-golden-full
 *.o
