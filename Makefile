@@ -8,7 +8,7 @@ LDFLAGS ?= -lm
 TU_DIR     = tu_cmodel
 COMPILER   = compiler/onnx_to_tu.py
 
-.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm
+.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16
 
 all: libtucmodel.a
 
@@ -16,7 +16,9 @@ all: libtucmodel.a
 TU_OBJS = $(TU_DIR)/tu_cmodel.o $(TU_DIR)/tu_asm.o $(TU_DIR)/tu_precision.o \
           $(TU_DIR)/tu_sram.o $(TU_DIR)/tu_dma.o $(TU_DIR)/dma_descriptor.o \
           $(TU_DIR)/command_queue.o $(TU_DIR)/memory/dram_model.o \
-          $(TU_DIR)/isa/tu_isa.o $(TU_DIR)/compute/elementwise_pipeline.o
+          $(TU_DIR)/memory/memory_hierarchy.o \
+          $(TU_DIR)/isa/tu_isa.o $(TU_DIR)/compute/elementwise_pipeline.o \
+          $(TU_DIR)/compute/normalization_engine.o
 
 libtucmodel.a: $(TU_OBJS)
 	$(AR) rcs $@ $^
@@ -45,10 +47,16 @@ $(TU_DIR)/command_queue.o: $(TU_DIR)/command_queue.c $(TU_DIR)/command_queue.h $
 $(TU_DIR)/memory/dram_model.o: $(TU_DIR)/memory/dram_model.c $(TU_DIR)/memory/dram_model.h $(TU_DIR)/tu_config.h
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
+$(TU_DIR)/memory/memory_hierarchy.o: $(TU_DIR)/memory/memory_hierarchy.c $(TU_DIR)/memory/memory_hierarchy.h $(TU_DIR)/memory/dram_model.h $(TU_DIR)/tu_config.h $(TU_DIR)/tu_sram.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
 $(TU_DIR)/isa/tu_isa.o: $(TU_DIR)/isa/tu_isa.c $(TU_DIR)/isa/tu_isa.h $(TU_DIR)/tu_config.h $(TU_DIR)/tu_precision.h
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
 $(TU_DIR)/compute/elementwise_pipeline.o: $(TU_DIR)/compute/elementwise_pipeline.c $(TU_DIR)/compute/elementwise_pipeline.h $(TU_DIR)/tu_config.h $(TU_DIR)/tu_sram.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
+$(TU_DIR)/compute/normalization_engine.o: $(TU_DIR)/compute/normalization_engine.c $(TU_DIR)/compute/normalization_engine.h $(TU_DIR)/tu_config.h $(TU_DIR)/tu_sram.h
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
 # ---- Test: cmodel correctness ----
@@ -90,6 +98,16 @@ test-elementwise: tests/test_elementwise.c libtucmodel.a
 test-bf16: tests/test_bf16_subnormal.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-bf16
+
+# ---- Test: Memory Hierarchy ----
+test-memhier: tests/test_memory_hierarchy.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	./test-memhier
+
+# ---- Test: Normalization Engine ----
+test-norm: tests/test_normalization.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	./test-norm
 
 test-golden-full: tests/test_golden.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)

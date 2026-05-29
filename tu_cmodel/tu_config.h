@@ -53,6 +53,18 @@ extern "C" {
 #define TU_SRAM_BANKS           32
 #define TU_SRAM_BANK_WIDTH      4
 
+/* ================================================================
+ * Memory Hierarchy (A3)
+ * ================================================================ */
+
+/* Register File (Level 0) — per-PE */
+#define TU_MEM_REGFILE_PER_PE       256      /* Bytes per PE */
+
+/* Global Buffer (Level 2) — shared L2 */
+#define TU_MEM_GBUF_SIZE            (1 * 1024 * 1024)  /* 1 MB */
+#define TU_MEM_GBUF_BANKS           16
+#define TU_MEM_GBUF_BANK_WIDTH      8        /* 64-bit words */
+
 #define TU_CONFLICT_NONE        0
 #define TU_CONFLICT_DETECT      1
 #define TU_CONFLICT_STALL       2
