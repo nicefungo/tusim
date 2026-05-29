@@ -295,12 +295,16 @@ void tu_dma_execute_desc(tu_dma_descriptor_t *desc) {
     /* Determine source and destination pointers */
     const uint8_t *src_ptr = NULL;
     uint8_t       *dst_ptr = NULL;
+    tu_sram_region_t *sram_region = NULL;
+    bool sram_read = false, sram_write = false;
 
     switch (desc->direction) {
     case TU_DMA_DIR_HOST_TO_TU:
         src_ptr = (const uint8_t *)desc->src_host;
         if (desc->dst_region) {
             dst_ptr = tu_sram_raw_ptr(desc->dst_region) + desc->dst_base;
+            sram_region = desc->dst_region;
+            sram_write = true;
             /* Validate bounds */
             if (desc->dst_base + desc->total_bytes > desc->dst_region->total_size) {
                 fprintf(stderr, "DMA overflow: dst=%s offset=%u + %u > %u\n",
@@ -317,6 +321,8 @@ void tu_dma_execute_desc(tu_dma_descriptor_t *desc) {
     case TU_DMA_DIR_TU_TO_HOST:
         if (desc->src_region) {
             src_ptr = tu_sram_raw_ptr(desc->src_region) + desc->src_base;
+            sram_region = desc->src_region;
+            sram_read = true;
             if (desc->src_base + desc->total_bytes > desc->src_region->total_size) {
                 fprintf(stderr, "DMA overflow: src=%s offset=%u + %u > %u\n",
                         desc->src_region->name,
@@ -331,10 +337,14 @@ void tu_dma_execute_desc(tu_dma_descriptor_t *desc) {
         break;
 
     case TU_DMA_DIR_TU_TO_TU:
-        if (desc->src_region)
+        if (desc->src_region) {
             src_ptr = tu_sram_raw_ptr(desc->src_region) + desc->src_base;
-        if (desc->dst_region)
+            sram_read = true;
+        }
+        if (desc->dst_region) {
             dst_ptr = tu_sram_raw_ptr(desc->dst_region) + desc->dst_base;
+            sram_write = true;
+        }
         break;
 
     default:
@@ -367,6 +377,30 @@ void tu_dma_execute_desc(tu_dma_descriptor_t *desc) {
     /* Update accounting */
     uint64_t transfer_cycles = TU_LATENCY_DRAM_READ;  /* base latency */
     transfer_cycles += (desc->total_bytes + TU_DMA_BUS_WIDTH_BYTES - 1) / TU_DMA_BUS_WIDTH_BYTES;
+
+    /* M2: Account for SRAM bandwidth stalls */
+    uint64_t sram_stall_cycles = 0;
+    if (sram_region && sram_region->banks.bw_modeling) {
+        uint32_t words = (desc->total_bytes + sram_region->banks.bank_width - 1) / sram_region->banks.bank_width;
+        /* Advance cycle to trigger refill */
+        tu_sram_advance_cycle(sram_region, transfer_cycles);
+        /* Simulate bandwidth consumption per word */
+        for (uint32_t i = 0; i < words; i++) {
+            uint32_t off = (sram_read ? desc->src_base : desc->dst_base) + i * sram_region->banks.bank_width;
+            uint32_t bank = tu_sram_bank_index(sram_region, off);
+            tu_sram_bw_bank_t *bw = &sram_region->banks.bw_banks[bank];
+            if (bw->words_available > 0) {
+                bw->words_available--;
+                if (sram_write) bw->writes_served++;
+                else            bw->reads_served++;
+            } else {
+                sram_stall_cycles += sram_region->banks.stall_penalty;
+                if (sram_write) bw->write_stalls++;
+                else            bw->read_stalls++;
+            }
+        }
+    }
+    transfer_cycles += sram_stall_cycles;
 
     desc->completed = true;
     desc->cycles_completed = g_tu_dma.current_cycle + transfer_cycles;

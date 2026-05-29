@@ -64,6 +64,25 @@ extern "C" {
 #define TU_LATENCY_DRAM_WRITE   50
 
 /* ================================================================
+ * SRAM Bandwidth Model (M2)
+ * ================================================================ */
+
+/* Maximum words per bank per cycle (1 = single-ported, 2 = dual-ported) */
+#define TU_SRAM_WORDS_PER_CYCLE 1
+
+/* Arbitration policy when multiple accesses hit the same bank */
+#define TU_SRAM_ARB_NONE          0  /* No arbitration — all pass (unrealistic) */
+#define TU_SRAM_ARB_ROUND_ROBIN   1  /* Round-robin between contending ports */
+#define TU_SRAM_ARB_PRIORITY      2  /* Fixed priority (read > write) */
+#define TU_SRAM_ARB_MODE          TU_SRAM_ARB_ROUND_ROBIN
+
+/* Bandwidth metering: refill-based budget (words per cycle window) */
+#define TU_SRAM_BW_WINDOW_CYCLES  4  /* Refill window in cycles */
+
+/* Stall penalty when bandwidth is exhausted (in cycles) */
+#define TU_SRAM_BW_STALL_PENALTY  2
+
+/* ================================================================
  * DRAM Model
  * ================================================================ */
 
