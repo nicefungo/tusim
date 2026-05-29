@@ -6,6 +6,7 @@
  */
 
 #include "tu_sram.h"
+#include "memory/double_buffer.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -59,6 +60,7 @@ void tu_sram_init_bw(tu_sram_region_t *r, uint32_t size_bytes, const char *name,
     memset(r, 0, sizeof(*r));
     r->total_size = size_bytes;
     r->name = name;
+    r->db   = NULL;
 
     tu_sram_bank_t *b = &r->banks;
     b->data = (uint8_t *)calloc(1, size_bytes);
@@ -82,6 +84,11 @@ void tu_sram_init_bw(tu_sram_region_t *r, uint32_t size_bytes, const char *name,
 void tu_sram_destroy(tu_sram_region_t *r) {
     free(r->banks.data);
     free(r->banks.bw_banks);
+    /* Free double-buffer shadow if present */
+    if (r->db) {
+        free(r->db->shadow_data);
+        free(r->db);
+    }
     memset(r, 0, sizeof(*r));
 }
 
@@ -126,6 +133,14 @@ static void bounds_check(const tu_sram_region_t *r, uint32_t addr, uint32_t size
     }
 }
 
+/* ---- Internal: get active data pointer (respects double buffering) ---- */
+static uint8_t *sram_data_ptr(tu_sram_region_t *r) {
+    if (r->db && r->db->enabled) {
+        return (r->db->active_idx == 0) ? r->banks.data : r->db->shadow_data;
+    }
+    return r->banks.data;
+}
+
 uint64_t tu_sram_read(tu_sram_region_t *r, uint32_t addr, void *out) {
     bounds_check(r, addr, r->banks.bank_width);
     uint32_t bank = tu_sram_bank_index(r, addr);
@@ -133,7 +148,7 @@ uint64_t tu_sram_read(tu_sram_region_t *r, uint32_t addr, void *out) {
     /* Bandwidth arbitration */
     uint64_t stall = sram_bw_consume(&r->banks, bank, false);
 
-    memcpy(out, r->banks.data + addr, r->banks.bank_width);
+    memcpy(out, sram_data_ptr(r) + addr, r->banks.bank_width);
     r->banks.reads++;
     return stall;
 }
@@ -145,7 +160,7 @@ uint64_t tu_sram_write(tu_sram_region_t *r, uint32_t addr, const void *data) {
     /* Bandwidth arbitration */
     uint64_t stall = sram_bw_consume(&r->banks, bank, true);
 
-    memcpy(r->banks.data + addr, data, r->banks.bank_width);
+    memcpy(sram_data_ptr(r) + addr, data, r->banks.bank_width);
     r->banks.writes++;
     return stall;
 }
@@ -162,7 +177,7 @@ uint64_t tu_sram_read_bulk(tu_sram_region_t *r, uint32_t addr, void *out, uint32
         total_stall += sram_bw_consume(&r->banks, bank, false);
     }
 
-    memcpy(out, r->banks.data + addr, bytes);
+    memcpy(out, sram_data_ptr(r) + addr, bytes);
     r->banks.reads += words;
     return total_stall;
 }
@@ -179,12 +194,16 @@ uint64_t tu_sram_write_bulk(tu_sram_region_t *r, uint32_t addr, const void *data
         total_stall += sram_bw_consume(&r->banks, bank, true);
     }
 
-    memcpy(r->banks.data + addr, data, bytes);
+    memcpy(sram_data_ptr(r) + addr, data, bytes);
     r->banks.writes += words;
     return total_stall;
 }
 
 void *tu_sram_raw_ptr(tu_sram_region_t *r) {
+    /* When double-buffered, return active buffer */
+    if (r->db && r->db->enabled) {
+        return (r->db->active_idx == 0) ? r->banks.data : r->db->shadow_data;
+    }
     return r->banks.data;
 }
 

@@ -56,10 +56,13 @@ typedef struct {
 } tu_sram_bank_t;
 
 /* SRAM region (W-buffer, A-buffer, O-buffer) */
+typedef struct tu_double_buffer_t tu_double_buffer_t;
+
 typedef struct {
-    tu_sram_bank_t  banks;
-    uint32_t        total_size;
-    const char     *name;
+    tu_sram_bank_t      banks;
+    uint32_t            total_size;
+    const char         *name;
+    tu_double_buffer_t *db;       /* Double-buffer state (NULL = disabled) */
 } tu_sram_region_t;
 
 /* ---- Lifecycle ---- */
