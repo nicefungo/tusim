@@ -9,6 +9,7 @@
  */
 #include "command_queue.h"
 #include "tu_cmodel.h"
+#include "compute/elementwise_pipeline.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -96,6 +97,35 @@ static void execute_command(tu_command_queue_t *cq, tu_command_t *cmd) {
 
     case TU_CMD_HALT:
         break;
+
+    case TU_CMD_ELEMENTWISE: {
+        /* Select SRAM region */
+        tu_sram_region_t *sram;
+        switch (cmd->op.ew.sram_region) {
+        case 1: sram = &g_tu.sram_w; break;
+        case 2: sram = &g_tu.sram_a; break;
+        default: sram = &g_tu.sram_o; break;
+        }
+
+        /* Build op array from packed descriptors */
+        tu_ew_op_t ops[TU_EW_MAX_OPS];
+        uint8_t scalar_idx = 0;
+        for (uint8_t i = 0; i < cmd->op.ew.num_ops && i < TU_EW_MAX_OPS; i++) {
+            ops[i].opcode = (tu_ew_opcode_t)cmd->op.ew.ops[i];
+            if (scalar_idx < 4 && cmd->op.ew.has_scalar[scalar_idx]) {
+                ops[i].has_scalar = true;
+                ops[i].scalar = cmd->op.ew.scalars[scalar_idx];
+                scalar_idx++;
+            } else {
+                ops[i].has_scalar = false;
+                ops[i].scalar = 0.0f;
+            }
+        }
+
+        tu_ew_apply_fused(sram, cmd->op.ew.sram_offset,
+                          cmd->op.ew.elem_count, ops, cmd->op.ew.num_ops);
+        break;
+    }
 
     default:
         fprintf(stderr, "TU CMDQ: unknown opcode %d\n", cmd->opcode);
@@ -197,6 +227,9 @@ int tu_cmdq_submit(tu_command_queue_t *cq,
             break;
         case TU_CMD_MMA:
             memcpy(&cmd->op.mma, op_desc, sizeof(tu_cmd_mma_desc_t));
+            break;
+        case TU_CMD_ELEMENTWISE:
+            memcpy(&cmd->op.ew, op_desc, sizeof(tu_cmd_ew_desc_t));
             break;
         default:
             break;

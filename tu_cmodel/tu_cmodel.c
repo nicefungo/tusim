@@ -251,6 +251,29 @@ int tu_cmdq_submit_barrier(void) {
     return tu_cmdq_barrier(g_tu.cmdq);
 }
 
+int tu_cmdq_submit_elementwise(uint8_t sram_region, uint32_t sram_offset,
+                               uint32_t elem_count,
+                               const uint8_t *ops, uint8_t num_ops,
+                               const float *scalars, const bool *has_scalar) {
+    tu_cmd_ew_desc_t desc = {0};
+    desc.sram_region = sram_region;
+    desc.sram_offset = sram_offset;
+    desc.elem_count  = elem_count;
+    desc.num_ops     = num_ops;
+    if (num_ops > 8) num_ops = 8;
+
+    uint8_t si = 0;
+    for (uint8_t i = 0; i < num_ops; i++) {
+        desc.ops[i] = ops[i];
+        if (has_scalar && has_scalar[i] && si < 4 && scalars) {
+            desc.has_scalar[si] = true;
+            desc.scalars[si]    = scalars[i];
+            si++;
+        }
+    }
+    return tu_cmdq_submit(g_tu.cmdq, TU_CMD_ELEMENTWISE, &desc, 0, NULL, NULL);
+}
+
 void tu_cmdq_sync_all(void) {
     tu_cmdq_sync(g_tu.cmdq);
 }

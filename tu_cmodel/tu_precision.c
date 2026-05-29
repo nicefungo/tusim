@@ -8,6 +8,9 @@
 #include <string.h>
 #include <math.h>
 
+/* Forward: subnormal mode (defined close to its accessors below) */
+static tu_subnormal_mode_t g_subnormal_mode = TU_SUBNORMAL_FLUSH;
+
 /* ================================================================
  * FP16 ↔ FP32 (IEEE 754)
  * ================================================================ */
@@ -26,7 +29,10 @@ fp16_t tu_fp32_to_fp16(fp32_t v) {
     if (exp < -25) return sign << 15;
 
     uint16_t h;
+    /* Subnormal handling: flush-to-zero or full IEEE */
     if (exp <= -15) {
+        if (g_subnormal_mode == TU_SUBNORMAL_FLUSH)
+            return sign << 15;  /* Flush subnormal to zero */
         int shift = -14 - exp;
         uint32_t m = (mant | 0x800000) >> shift;
         if (shift > 0 && ((mant >> (shift - 1)) & 1)) {
@@ -78,11 +84,10 @@ void tu_fp16_to_fp32_buffer(const fp16_t *src, fp32_t *dst, size_t n) {
 }
 
 /* ================================================================
- * BF16 (bfloat16) support
+ * BF16 (bfloat16) support — public API
  * ================================================================ */
 
-typedef uint16_t bf16_t;
-
+/* Internal: BF16 ↔ FP32 for precision registry (const void* interface) */
 static fp32_t prec_bf16_to_fp32(const void *src) {
     uint16_t bits = *(const uint16_t *)src;
     uint32_t fp32 = (uint32_t)bits << 16;
@@ -94,11 +99,50 @@ static fp32_t prec_bf16_to_fp32(const void *src) {
 static void prec_bf16_from_fp32(fp32_t v, void *dst) {
     uint32_t bits;
     memcpy(&bits, &v, 4);
-    /* Round-to-nearest-even: add 0x7FFF then truncate */
     uint32_t rounded = bits + 0x7FFF + ((bits >> 16) & 1);
-    /* Handle overflow */
-    if ((rounded & 0x7F800000) > 0x7F800000) rounded = (rounded & 0x80000000) | 0x7F800000;
+    if ((rounded & 0x7F800000) > 0x7F800000)
+        rounded = (rounded & 0x80000000) | 0x7F800000;
     *(uint16_t *)dst = (uint16_t)(rounded >> 16);
+}
+
+/* Convert BF16 → FP32 (exact: BF16 is FP32 with truncated mantissa).
+ * BF16: 1 sign, 8 exponent, 7 mantissa bits.
+ * FP32: 1 sign, 8 exponent, 23 mantissa bits.
+ * Conversion is simply left-shifting by 16 bits. */
+fp32_t tu_bf16_to_fp32(bf16_t h) {
+    return prec_bf16_to_fp32(&h);
+}
+
+/* Convert FP32 → BF16 with round-to-nearest-even.
+ * This is the standard bfloat16 conversion used in TPU and NVIDIA hardware. */
+bf16_t tu_fp32_to_bf16(fp32_t v) {
+    bf16_t result;
+    prec_bf16_from_fp32(v, &result);
+    return result;
+}
+
+void tu_fp32_to_bf16_buffer(const fp32_t *src, bf16_t *dst, size_t n) {
+    for (size_t i = 0; i < n; i++) dst[i] = tu_fp32_to_bf16(src[i]);
+}
+
+void tu_bf16_to_fp32_buffer(const bf16_t *src, fp32_t *dst, size_t n) {
+    for (size_t i = 0; i < n; i++) dst[i] = tu_bf16_to_fp32(src[i]);
+}
+
+/* ================================================================
+ * Subnormal Handling Mode
+ * ================================================================ */
+
+/* ================================================================
+ * Subnormal Mode Accessors
+ * ================================================================ */
+
+tu_subnormal_mode_t tu_get_subnormal_mode(void) {
+    return g_subnormal_mode;
+}
+
+void tu_set_subnormal_mode(tu_subnormal_mode_t mode) {
+    g_subnormal_mode = mode;
 }
 
 /* ================================================================

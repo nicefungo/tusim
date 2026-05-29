@@ -182,6 +182,13 @@ int tu_cmdq_submit_dma_store(uint8_t channel, uint32_t sram_offset,
 /* Submit a barrier. Returns barrier command ID or -1. */
 int tu_cmdq_submit_barrier(void);
 
+/* Submit an elementwise command (fused unary/binary ops on SRAM data).
+ * sram_region: 0=O, 1=W, 2=A. Returns command ID or -1. */
+int tu_cmdq_submit_elementwise(uint8_t sram_region, uint32_t sram_offset,
+                               uint32_t elem_count,
+                               const uint8_t *ops, uint8_t num_ops,
+                               const float *scalars, const bool *has_scalar);
+
 /* Wait for all submitted commands to complete (drain the queue). */
 void tu_cmdq_sync_all(void);
 

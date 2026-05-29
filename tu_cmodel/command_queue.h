@@ -87,6 +87,17 @@ typedef struct {
     bool      has_bias;
 } tu_cmd_mma_desc_t;
 
+/* ---- Elementwise descriptor (embedded in command) ---- */
+typedef struct {
+    uint32_t  sram_offset;   /* Byte offset in output/accumulator SRAM */
+    uint32_t  elem_count;    /* Number of FP32 elements */
+    uint8_t   num_ops;       /* Number of fused ops (1-8) */
+    uint8_t   ops[8];        /* tu_ew_opcode_t packed as uint8 */
+    float     scalars[4];    /* Scalar operands (max 4 binary ops) */
+    bool      has_scalar[4]; /* Which ops have scalar operands */
+    uint8_t   sram_region;   /* 0=O, 1=W, 2=A */
+} tu_cmd_ew_desc_t;
+
 /* ---- Command descriptor ---- */
 typedef struct {
     uint32_t        cmd_id;         /* Unique command ID (monotonically increasing) */
@@ -97,6 +108,7 @@ typedef struct {
     union {
         tu_cmd_dma_desc_t  dma;
         tu_cmd_mma_desc_t  mma;
+        tu_cmd_ew_desc_t   ew;
     } op;
 
     /* Dependency tracking */

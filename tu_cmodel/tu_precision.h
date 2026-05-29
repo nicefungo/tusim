@@ -16,8 +16,9 @@
 extern "C" {
 #endif
 
-/* ---- FP16 type ---- */
+/* ---- FP16 and BF16 types ---- */
 typedef uint16_t fp16_t;
+typedef uint16_t bf16_t;
 typedef float    fp32_t;
 
 /* ---- FP32 ↔ FP16 ---- */
@@ -30,6 +31,30 @@ void tu_fp16_to_fp32_buffer(const fp16_t *src, fp32_t *dst, size_t n);
 
 /* Round FP32 → FP16 with configurable rounding mode */
 fp16_t tu_round_fp32_to_fp16(fp32_t v);
+
+/* ---- BF16 (bfloat16, 1-8-7 format) ---- */
+
+/* Convert BF16 → FP32 (exact: BF16 is FP32 with truncated mantissa) */
+fp32_t tu_bf16_to_fp32(bf16_t h);
+
+/* Convert FP32 → BF16 (round-to-nearest-even, truncate mantissa) */
+bf16_t tu_fp32_to_bf16(fp32_t v);
+
+/* Batch BF16 conversions */
+void tu_fp32_to_bf16_buffer(const fp32_t *src, bf16_t *dst, size_t n);
+void tu_bf16_to_fp32_buffer(const bf16_t *src, fp32_t *dst, size_t n);
+
+/* ---- Subnormal Handling ---- */
+
+/* Subnormal handling mode */
+typedef enum {
+    TU_SUBNORMAL_FULL = 0,   /* Full IEEE 754 subnormal support */
+    TU_SUBNORMAL_FLUSH = 1,  /* Flush-to-zero (FTZ): subnormals → 0 */
+} tu_subnormal_mode_t;
+
+/* Get/set global subnormal handling mode for FP16 conversion */
+tu_subnormal_mode_t tu_get_subnormal_mode(void);
+void tu_set_subnormal_mode(tu_subnormal_mode_t mode);
 
 /*
  * Precision type descriptor — for multi-precision support.
