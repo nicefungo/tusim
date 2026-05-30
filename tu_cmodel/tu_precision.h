@@ -69,9 +69,10 @@ typedef enum {
     TU_PREC_FP16 = 0,
     TU_PREC_FP32 = 1,
     TU_PREC_BF16 = 2,
-    TU_PREC_FP8  = 3,
-    TU_PREC_INT8 = 4,
-    TU_PREC_INT4 = 5,
+    TU_PREC_FP8_E4M3 = 3,
+    TU_PREC_FP8_E5M2 = 4,
+    TU_PREC_INT8 = 5,
+    TU_PREC_INT4 = 6,
     TU_PREC_COUNT
 } tu_precision_t;
 

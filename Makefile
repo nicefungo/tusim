@@ -15,7 +15,7 @@ all: libtucmodel.a
 # ---- TU CModel library ----
 TU_OBJS = $(TU_DIR)/tu_cmodel.o $(TU_DIR)/tu_asm.o $(TU_DIR)/tu_precision.o \
           $(TU_DIR)/tu_sram.o $(TU_DIR)/tu_dma.o $(TU_DIR)/dma_descriptor.o \
-          $(TU_DIR)/rounding.o \
+          $(TU_DIR)/rounding.o $(TU_DIR)/fp8.o \
           $(TU_DIR)/command_queue.o $(TU_DIR)/memory/dram_model.o \
           $(TU_DIR)/memory/memory_hierarchy.o \
           $(TU_DIR)/isa/tu_isa.o $(TU_DIR)/compute/elementwise_pipeline.o \
@@ -51,6 +51,9 @@ $(TU_DIR)/dma_descriptor.o: $(TU_DIR)/dma_descriptor.c $(TU_DIR)/dma_descriptor.
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 $(TU_DIR)/rounding.o: $(TU_DIR)/rounding.c $(TU_DIR)/rounding.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
+$(TU_DIR)/fp8.o: $(TU_DIR)/fp8.c $(TU_DIR)/fp8.h $(TU_DIR)/rounding.h
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
 $(TU_DIR)/command_queue.o: $(TU_DIR)/command_queue.c $(TU_DIR)/command_queue.h $(TU_DIR)/tu_cmodel.h $(TU_DIR)/compute/elementwise_pipeline.h
@@ -175,6 +178,11 @@ test-rounding: tests/test_rounding.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-rounding
 
+# ---- Test: FP8 E4M3/E5M2 (D4) ----
+test-fp8: tests/test_fp8.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	./test-fp8
+
 test-golden-full: tests/test_golden.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-golden
@@ -202,7 +210,7 @@ test-asm: libtucmodel.a
 .PHONY: test test-quick test-random test-full
 test: test-cmodel test-cmdq test-dma test-dram test-isa test-golden \
       test-elementwise test-bf16 test-memhier test-norm test-dataflow \
-      test-logging test-int-quant test-conv test-asm test-rounding
+      test-logging test-int-quant test-conv test-asm test-rounding test-fp8
 	@echo ""
 	@echo "═══════════════════════════════════════════"
 	@echo "  ✅ All tests complete"
@@ -234,5 +242,6 @@ clean:
 	rm -f test-dataflow test-elementwise test-bf16 test-memhier test-norm test-logging
 	rm -f test-int-quant test-conv test-random
 	rm -f test-rounding
+	rm -f test-fp8
 	rm -f /tmp/gpt_block_tu /tmp/gpt_block_tu.c /tmp/test_asm
 	rm -rf build/ci_reports

@@ -34,8 +34,10 @@ extern "C" {
 #define TU_PRECISION_FP32       (1 << 1)
 #define TU_PRECISION_BF16       (1 << 2)
 #define TU_PRECISION_FP8        (1 << 3)
-#define TU_PRECISION_INT8       (1 << 4)
-#define TU_PRECISION_INT4       (1 << 5)
+#define TU_PRECISION_FP8_E4M3   (1 << 3)  /* D4: Forward pass format */
+#define TU_PRECISION_FP8_E5M2   (1 << 4)  /* D4: Backward pass format */
+#define TU_PRECISION_INT8       (1 << 5)
+#define TU_PRECISION_INT4       (1 << 6)
 #define TU_PRECISION_MASK       3
 #define TU_ACCUMULATOR_PRECISION_FP32  1
 

@@ -73,6 +73,10 @@ static double prng_uniform(void) {
     return (double)(prng_next() >> 11) * 0x1.0p-53;
 }
 
+double tu_stochastic_uniform(void) {
+    return prng_uniform();
+}
+
 /* ================================================================
  * Rounding Mode Accessors
  * ================================================================ */

@@ -46,6 +46,9 @@ tu_rounding_mode_t tu_get_rounding_mode(void);
  * Default seed is fixed (deterministic across runs until changed). */
 void tu_stochastic_set_seed(uint64_t seed);
 
+/* Get a uniform random double in [0, 1) — for custom stochastic logic */
+double tu_stochastic_uniform(void);
+
 /* ---- Core Rounding Functions ---- */
 
 /*
