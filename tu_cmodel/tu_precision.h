@@ -9,6 +9,7 @@
 #define TU_PRECISION_H
 
 #include "tu_config.h"
+#include "tu_int_quant.h"
 #include <stdint.h>
 #include <stddef.h>
 
@@ -20,6 +21,10 @@ extern "C" {
 typedef uint16_t fp16_t;
 typedef uint16_t bf16_t;
 typedef float    fp32_t;
+
+/* ---- INT8 / INT4 types (aliased from tu_int_quant.h) ---- */
+typedef int8_t   int8_t_t;
+typedef uint8_t  uint4_t_t;
 
 /* ---- FP32 ↔ FP16 ---- */
 fp16_t tu_fp32_to_fp16(fp32_t v);

@@ -154,10 +154,49 @@ static void   prec_fp16_from_fp32(fp32_t v, void *dst) { *(fp16_t*)dst = tu_fp32
 static fp32_t prec_fp32_to_fp32(const void *src) { return *(const fp32_t*)src; }
 static void   prec_fp32_from_fp32(fp32_t v, void *dst) { *(fp32_t*)dst = v; }
 
+/* ---- FP8 precision registry entries (stub — FP8 not yet implemented) ---- */
+static fp32_t prec_fp8_to_fp32(const void *src) {
+    /* FP8 not implemented; pass through as uint8 → FP32 for now */
+    return (float)(*(const uint8_t*)src);
+}
+static void prec_fp8_from_fp32(fp32_t v, void *dst) {
+    /* Stub: clamp to 0-255 */
+    if (v < 0.0f) v = 0.0f;
+    if (v > 255.0f) v = 255.0f;
+    *(uint8_t*)dst = (uint8_t)v;
+}
+
+/* ---- INT8 precision registry entries ---- */
+static fp32_t prec_int8_to_fp32(const void *src) {
+    tu_quant_params_t qp;
+    tu_quant_params_init_int8(&qp);
+    return tu_int8_to_fp32(*(const int8_t_t*)src, &qp);
+}
+static void prec_int8_from_fp32(fp32_t v, void *dst) {
+    tu_quant_params_t qp;
+    tu_quant_params_init_int8(&qp);
+    *(int8_t_t*)dst = tu_fp32_to_int8(v, &qp);
+}
+
+/* ---- INT4 precision registry entries ---- */
+static fp32_t prec_int4_to_fp32(const void *src) {
+    tu_quant_params_t qp;
+    tu_quant_params_init_uint4(&qp);
+    return tu_uint4_nibble_to_fp32(*(const uint8_t*)src & 0x0F, &qp);
+}
+static void prec_int4_from_fp32(fp32_t v, void *dst) {
+    tu_quant_params_t qp;
+    tu_quant_params_init_uint4(&qp);
+    *(uint8_t*)dst = tu_fp32_to_uint4_nibble(v, &qp);
+}
+
 static tu_precision_desc_t builtin_precisions[] = {
     { TU_PREC_FP16, 2, "fp16", prec_fp16_to_fp32, prec_fp16_from_fp32 },
     { TU_PREC_FP32, 4, "fp32", prec_fp32_to_fp32, prec_fp32_from_fp32 },
     { TU_PREC_BF16, 2, "bf16", prec_bf16_to_fp32, prec_bf16_from_fp32 },
+    { TU_PREC_FP8,  1, "fp8",  prec_fp8_to_fp32,  prec_fp8_from_fp32  },
+    { TU_PREC_INT8, 1, "int8", prec_int8_to_fp32, prec_int8_from_fp32 },
+    { TU_PREC_INT4, 1, "int4", prec_int4_to_fp32, prec_int4_from_fp32 },
 };
 
 static tu_precision_desc_t *custom_precisions = NULL;

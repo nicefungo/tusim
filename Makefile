@@ -8,7 +8,7 @@ LDFLAGS ?= -lm
 TU_DIR     = tu_cmodel
 COMPILER   = compiler/onnx_to_tu.py
 
-.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16
+.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv
 
 all: libtucmodel.a
 
@@ -19,7 +19,9 @@ TU_OBJS = $(TU_DIR)/tu_cmodel.o $(TU_DIR)/tu_asm.o $(TU_DIR)/tu_precision.o \
           $(TU_DIR)/memory/memory_hierarchy.o \
           $(TU_DIR)/isa/tu_isa.o $(TU_DIR)/compute/elementwise_pipeline.o \
           $(TU_DIR)/compute/normalization_engine.o \
+          $(TU_DIR)/compute/convolution_engine.o \
           $(TU_DIR)/infra/logging.o \
+          $(TU_DIR)/tu_int_quant.o \
           $(TU_DIR)/compute/dataflow/dataflow_registry.o \
           $(TU_DIR)/compute/dataflow/dataflow_dispatcher.o \
           $(TU_DIR)/compute/dataflow/weight_stationary.o \
@@ -62,6 +64,14 @@ $(TU_DIR)/compute/elementwise_pipeline.o: $(TU_DIR)/compute/elementwise_pipeline
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
 $(TU_DIR)/compute/normalization_engine.o: $(TU_DIR)/compute/normalization_engine.c $(TU_DIR)/compute/normalization_engine.h $(TU_DIR)/tu_config.h $(TU_DIR)/tu_sram.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
+# ---- Compute: Convolution Engine (O2) ----
+$(TU_DIR)/compute/convolution_engine.o: $(TU_DIR)/compute/convolution_engine.c $(TU_DIR)/compute/convolution_engine.h $(TU_DIR)/tu_config.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
+# ---- Precision: INT8 Quantization (D2) ----
+$(TU_DIR)/tu_int_quant.o: $(TU_DIR)/tu_int_quant.c $(TU_DIR)/tu_int_quant.h
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
 # ---- Infrastructure: Logging (Q2) ----
@@ -140,6 +150,16 @@ test-dataflow: tests/test_dataflow.c libtucmodel.a
 test-logging: tests/test_logging.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-logging
+
+# ---- Test: INT8 Quantization (D2) ----
+test-int-quant: tests/test_int_quant.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	./test-int-quant
+
+# ---- Test: Convolution Engine (O2) ----
+test-conv: tests/test_convolution.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	./test-conv
 
 test-golden-full: tests/test_golden.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)

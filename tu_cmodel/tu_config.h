@@ -39,6 +39,13 @@ extern "C" {
 #define TU_PRECISION_MASK       3
 #define TU_ACCUMULATOR_PRECISION_FP32  1
 
+/* INT8 quantization: enable integer quantization path (D2) */
+#define TU_INT8_ENABLED              1
+#define TU_INT8_ACCUM_BITS           32
+#define TU_INT8_SYMMETRIC_DEFAULT    1
+/* INT4 quantization: packed UINT4 storage */
+#define TU_INT4_ENABLED              1
+
 /* ================================================================
  * Memory System
  * ================================================================ */
