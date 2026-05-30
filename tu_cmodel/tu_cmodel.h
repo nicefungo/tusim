@@ -56,6 +56,7 @@
 #include "tu_sram.h"
 #include "tu_dma.h"
 #include "command_queue.h"
+#include "infra/logging.h"
 
 /* Backward-compat aliases */
 static inline fp16_t fp32_to_fp16(fp32_t v) { return tu_fp32_to_fp16(v); }

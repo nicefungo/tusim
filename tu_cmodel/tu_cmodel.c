@@ -34,6 +34,10 @@ void tu_init(void) {
 }
 
 void tu_init_with_config(const tu_runtime_config_t *cfg) {
+    /* Initialize logging first */
+    tu_log_init();
+    TU_LOG_INFO(TU_COMP_CORE, "TinyTU CModel initializing...");
+
     /* Tear down previous state if re-initializing */
     if (g_tu.initialized) {
         tu_sram_destroy(&g_tu.sram_w);
@@ -62,6 +66,11 @@ void tu_init_with_config(const tu_runtime_config_t *cfg) {
     tu_dataflow_register(tu_dataflow_ws_create());
     tu_dataflow_register(tu_dataflow_os_create());
     tu_set_dataflow(TU_DATAFLOW_MODE);  /* Default from tu_config.h */
+
+    TU_LOG_INFO(TU_COMP_CORE, "Initialized: %u×%u PE, %u KB SRAM, dataflow=%s",
+                cfg->pe_rows, cfg->pe_cols,
+                (cfg->sram_w_size + cfg->sram_a_size + cfg->sram_o_size) / 1024,
+                tu_get_dataflow_name());
 
     g_tu.initialized = true;
 }
@@ -108,7 +117,7 @@ void tu_print_stats(void) {
 
 static void check_sram_bounds(const tu_sram_region_t *r, uint32_t offset, uint32_t size_bytes) {
     if (offset + size_bytes > r->total_size) {
-        fprintf(stderr, "TU ERROR: %s overflow: offset=%u size=%u max=%u\n",
+        TU_LOG_ERR(TU_COMP_MEM, "%s overflow: offset=%u size=%u max=%u",
                 r->name, offset, size_bytes, r->total_size);
         abort();
     }
@@ -150,12 +159,15 @@ void tu_dma_load_o(const void *host_ptr, uint32_t tu_offset, uint32_t size_bytes
 void tu_mma(uint16_t M, uint16_t N, uint16_t K,
             uint32_t w_offset, uint32_t a_offset, uint32_t o_offset,
             bool has_bias) {
-    if (!g_tu.initialized) { fprintf(stderr, "TU ERROR: not initialized\n"); abort(); }
+    if (!g_tu.initialized) { TU_LOG_ERR(TU_COMP_CORE, "not initialized"); abort(); }
 
     uint16_t pe_rows = g_tu.rt_cfg.pe_rows;
     uint16_t pe_cols = g_tu.rt_cfg.pe_cols;
 
     g_tu.total_mma_calls++;
+
+    /* Trace event: MMA operation start */
+    tu_trace_event(TU_COMP_MMA, 0x01, (uint32_t)M, (uint32_t)N, (uint32_t)K, 0);
 
     uint32_t w_bytes = (uint32_t)M * K * sizeof(fp16_t);
     uint32_t a_bytes = (uint32_t)K * N * sizeof(fp16_t);
@@ -333,7 +345,7 @@ void tu_cmdq_sync_all(void) {
 int tu_set_dataflow(int dataflow_id) {
     tu_dataflow_plugin_t *plugin = tu_dataflow_lookup((tu_dataflow_id_t)dataflow_id);
     if (!plugin) {
-        fprintf(stderr, "TU WARNING: dataflow id=%d not registered, falling back to WS\n",
+        TU_LOG_WARN(TU_COMP_DF, "dataflow id=%d not registered, falling back to WS",
                 dataflow_id);
         plugin = tu_dataflow_lookup(TU_DATAFLOW_WEIGHT_STATIONARY);
         if (!plugin) return -1;

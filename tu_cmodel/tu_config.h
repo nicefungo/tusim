@@ -158,6 +158,26 @@ extern "C" {
 #define TU_TRACE_ENABLED              0
 
 /* ================================================================
+ * Logging & Trace (Q2)
+ * ================================================================ */
+
+/* Default minimum log level: ERROR=1, WARN=2, INFO=3, DEBUG=4, TRACE=5 */
+#define TU_LOG_LEVEL_DEFAULT         TU_LOG_INFO
+
+/* Enable colored output (ANSI escape codes) */
+#define TU_LOG_USE_COLOR             1
+
+/* Show timestamps in log output [cycles] */
+#define TU_LOG_SHOW_TIMESTAMPS       1
+
+/* Show source file:line (useful for DEBUG and TRACE) */
+#define TU_LOG_SHOW_FILE_LINE        0
+
+/* Trace buffer: record execution events for VCD export */
+#define TU_TRACE_MAX_EVENTS          65536
+#define TU_TRACE_EXPORT_VCD          1
+
+/* ================================================================
  * Precision Parameters
  * ================================================================ */
 
