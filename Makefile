@@ -19,6 +19,7 @@ TU_OBJS = $(TU_DIR)/tu_cmodel.o $(TU_DIR)/tu_asm.o $(TU_DIR)/tu_precision.o \
           $(TU_DIR)/memory/memory_hierarchy.o \
           $(TU_DIR)/isa/tu_isa.o $(TU_DIR)/compute/elementwise_pipeline.o \
           $(TU_DIR)/compute/normalization_engine.o \
+          $(TU_DIR)/compute/softmax_engine.o \
           $(TU_DIR)/compute/convolution_engine.o \
           $(TU_DIR)/infra/logging.o \
           $(TU_DIR)/tu_int_quant.o \
@@ -64,6 +65,10 @@ $(TU_DIR)/compute/elementwise_pipeline.o: $(TU_DIR)/compute/elementwise_pipeline
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
 $(TU_DIR)/compute/normalization_engine.o: $(TU_DIR)/compute/normalization_engine.c $(TU_DIR)/compute/normalization_engine.h $(TU_DIR)/tu_config.h $(TU_DIR)/tu_sram.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
+# ---- Compute: Softmax Engine (O7) ----
+$(TU_DIR)/compute/softmax_engine.o: $(TU_DIR)/compute/softmax_engine.c $(TU_DIR)/compute/softmax_engine.h $(TU_DIR)/tu_config.h $(TU_DIR)/tu_sram.h
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
 # ---- Compute: Convolution Engine (O2) ----
@@ -173,7 +178,38 @@ test-compiler:
 	@echo "=== Lines of generated C ==="
 	@wc -l /tmp/gpt_block_tu.c
 
-# ---- Full pipeline test: CModel → compile → run ----
+# ---- Test: ASM interpreter ----
+test-asm: libtucmodel.a
+	@echo "=== Building ASM test ==="
+	$(CC) $(CFLAGS) -I. -o /tmp/test_asm tests/test_asm.c -L. -ltucmodel $(LDFLAGS)
+	@echo "=== Running ASM interpreter ==="
+	/tmp/test_asm
+
+# ══════════════════════════════════════════════════════════════════
+# Test Suite — Comprehensive (Gap V3: CI/Regression Framework)
+# ══════════════════════════════════════════════════════════════════
+
+# Run full test suite: build library + all unit tests + integration
+.PHONY: test test-quick test-random test-full
+test: test-cmodel test-cmdq test-dma test-dram test-isa test-golden \
+      test-elementwise test-bf16 test-memhier test-norm test-dataflow \
+      test-logging test-int-quant test-conv test-asm
+	@echo ""
+	@echo "═══════════════════════════════════════════"
+	@echo "  ✅ All tests complete"
+	@echo "═══════════════════════════════════════════"
+
+# Quick smoke test (pre-commit)
+test-quick: test-cmodel test-cmdq test-dma test-asm
+	@echo ""
+	@echo "═══ Quick smoke test passed ═══"
+
+# Extended random differential testing (nightly)
+test-random: tests/test_random.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	./test-random
+
+# Full pipeline: ONNX → compile → run
 test-full: test-compiler libtucmodel.a
 	@echo ""
 	@echo "=== Building generated code ==="
@@ -182,14 +218,11 @@ test-full: test-compiler libtucmodel.a
 	@echo "=== Running on TU CModel ==="
 	/tmp/gpt_block_tu 2>&1 || true
 
-# ---- Test: ASM interpreter ----
-test-asm: libtucmodel.a
-	@echo "=== Building ASM test ==="
-	$(CC) $(CFLAGS) -I. -o /tmp/test_asm tests/test_asm.c -L. -ltucmodel $(LDFLAGS)
-	@echo "=== Running ASM interpreter ==="
-	/tmp/test_asm
-
 # ---- Clean ----
 clean:
-	rm -f $(TU_DIR)/*.o $(TU_DIR)/memory/*.o $(TU_DIR)/isa/*.o $(TU_DIR)/compute/*.o $(TU_DIR)/compute/dataflow/*.o libtucmodel.a
-	rm -f test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-golden-full test-dataflow /tmp/gpt_block_tu /tmp/gpt_block_tu.c
+	rm -f $(TU_DIR)/*.o $(TU_DIR)/memory/*.o $(TU_DIR)/isa/*.o $(TU_DIR)/compute/*.o $(TU_DIR)/compute/dataflow/*.o $(TU_DIR)/infra/*.o libtucmodel.a
+	rm -f test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-golden-full
+	rm -f test-dataflow test-elementwise test-bf16 test-memhier test-norm test-logging
+	rm -f test-int-quant test-conv test-random
+	rm -f /tmp/gpt_block_tu /tmp/gpt_block_tu.c /tmp/test_asm
+	rm -rf build/ci_reports

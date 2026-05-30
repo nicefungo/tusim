@@ -1,0 +1,114 @@
+name: TinyTU CI Pipeline
+# ==========================
+# Gap V3: Production-grade CI/regression framework
+# Triggers: push to main, PRs, manual dispatch for nightly
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+  workflow_dispatch:
+    inputs:
+      extended:
+        description: 'Run extended random testing (10K iterations)'
+        type: boolean
+        default: false
+
+jobs:
+  # ── Pre-commit: build + quick smoke test ────────────────────────
+  quick:
+    name: Quick Check (smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3
+
+      - name: Build & smoke test
+        run: bash tools/ci_runner.sh --quick
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quick-logs
+          path: build/ci_reports/
+
+  # ── Full regression: all unit tests + integration ──────────────
+  regression:
+    name: Full Regression
+    runs-on: ubuntu-latest
+    needs: quick
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3
+
+      - name: Run full regression
+        run: bash tools/ci_runner.sh
+
+      - name: Generate HTML report
+        if: always()
+        run: python3 tools/test_report.py --html > build/ci_reports/report.html
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-logs
+          path: build/ci_reports/
+
+  # ── Nightly: extended random testing (on dispatch or schedule) ─
+  nightly:
+    name: Nightly Extended Testing
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.extended)
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3 valgrind
+
+      - name: Run extended testing
+        run: bash tools/ci_runner.sh --random --valgrind
+
+      - name: Generate HTML report
+        if: always()
+        run: python3 tools/test_report.py --html > build/ci_reports/nightly_report.html
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-logs
+          path: build/ci_reports/
+
+  # ── Coverage ────────────────────────────────────────────────────
+  coverage:
+    name: Coverage Build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3 lcov
+
+      - name: Build with coverage
+        run: bash tools/ci_runner.sh --coverage
+
+      - name: Generate coverage report
+        run: |
+          lcov --capture --directory . --output-file coverage.info 2>/dev/null || true
+          lcov --remove coverage.info '/usr/*' '*/tests/*' --output-file coverage_filtered.info 2>/dev/null || true
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: |
+            coverage.info
+            build/ci_reports/
