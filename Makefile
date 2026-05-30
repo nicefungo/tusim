@@ -18,7 +18,11 @@ TU_OBJS = $(TU_DIR)/tu_cmodel.o $(TU_DIR)/tu_asm.o $(TU_DIR)/tu_precision.o \
           $(TU_DIR)/command_queue.o $(TU_DIR)/memory/dram_model.o \
           $(TU_DIR)/memory/memory_hierarchy.o \
           $(TU_DIR)/isa/tu_isa.o $(TU_DIR)/compute/elementwise_pipeline.o \
-          $(TU_DIR)/compute/normalization_engine.o
+          $(TU_DIR)/compute/normalization_engine.o \
+          $(TU_DIR)/compute/dataflow/dataflow_registry.o \
+          $(TU_DIR)/compute/dataflow/dataflow_dispatcher.o \
+          $(TU_DIR)/compute/dataflow/weight_stationary.o \
+          $(TU_DIR)/compute/dataflow/output_stationary.o
 
 libtucmodel.a: $(TU_OBJS)
 	$(AR) rcs $@ $^
@@ -57,6 +61,19 @@ $(TU_DIR)/compute/elementwise_pipeline.o: $(TU_DIR)/compute/elementwise_pipeline
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
 $(TU_DIR)/compute/normalization_engine.o: $(TU_DIR)/compute/normalization_engine.c $(TU_DIR)/compute/normalization_engine.h $(TU_DIR)/tu_config.h $(TU_DIR)/tu_sram.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
+# ---- Dataflow plugins (A4) ----
+$(TU_DIR)/compute/dataflow/dataflow_registry.o: $(TU_DIR)/compute/dataflow/dataflow_registry.c $(TU_DIR)/compute/dataflow/dataflow_registry.h $(TU_DIR)/compute/dataflow/dataflow_interface.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
+$(TU_DIR)/compute/dataflow/dataflow_dispatcher.o: $(TU_DIR)/compute/dataflow/dataflow_dispatcher.c $(TU_DIR)/compute/dataflow/dataflow_interface.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
+$(TU_DIR)/compute/dataflow/weight_stationary.o: $(TU_DIR)/compute/dataflow/weight_stationary.c $(TU_DIR)/compute/dataflow/dataflow_interface.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
+$(TU_DIR)/compute/dataflow/output_stationary.o: $(TU_DIR)/compute/dataflow/output_stationary.c $(TU_DIR)/compute/dataflow/dataflow_interface.h
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
 # ---- Test: cmodel correctness ----
@@ -109,6 +126,11 @@ test-norm: tests/test_normalization.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-norm
 
+# ---- Test: Dataflow plugins (A4) ----
+test-dataflow: tests/test_dataflow.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	./test-dataflow
+
 test-golden-full: tests/test_golden.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-golden
@@ -139,5 +161,5 @@ test-asm: libtucmodel.a
 
 # ---- Clean ----
 clean:
-	rm -f $(TU_DIR)/*.o $(TU_DIR)/memory/*.o $(TU_DIR)/isa/*.o $(TU_DIR)/compute/*.o libtucmodel.a
-	rm -f test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-golden-full /tmp/gpt_block_tu /tmp/gpt_block_tu.c
+	rm -f $(TU_DIR)/*.o $(TU_DIR)/memory/*.o $(TU_DIR)/isa/*.o $(TU_DIR)/compute/*.o $(TU_DIR)/compute/dataflow/*.o libtucmodel.a
+	rm -f test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-golden-full test-dataflow /tmp/gpt_block_tu /tmp/gpt_block_tu.c

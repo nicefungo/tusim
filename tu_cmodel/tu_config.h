@@ -23,10 +23,12 @@ extern "C" {
 #define TU_PE_PIPELINE_DEPTH    2
 #define TU_MAC_UNITS_PER_PE     1
 
-#define TU_DATAFLOW_WEIGHT_STATIONARY  0
-#define TU_DATAFLOW_OUTPUT_STATIONARY  1
-#define TU_DATAFLOW_ROW_STATIONARY     2
-#define TU_DATAFLOW_MODE              0
+#define TU_DATAFLOW_MODE_WS            0
+#define TU_DATAFLOW_MODE_OS            1
+#define TU_DATAFLOW_MODE_RS            2
+#define TU_DATAFLOW_MODE_NLR           3
+#define TU_DATAFLOW_MODE               TU_DATAFLOW_MODE_WS
+#define TU_DATAFLOW_DISPATCH_VIA_PLUGIN 1  /* A4: use pluggable dataflow (1) or legacy inline (0) */
 
 #define TU_PRECISION_FP16       (1 << 0)
 #define TU_PRECISION_FP32       (1 << 1)

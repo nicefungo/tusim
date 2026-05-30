@@ -14,6 +14,16 @@
 #include <string.h>
 #include <math.h>
 
+/* A4: Pluggable dataflow */
+#include "compute/dataflow/dataflow_interface.h"
+#include "compute/dataflow/dataflow_registry.h"
+
+/* Forward declarations of dataflow constructors */
+tu_dataflow_plugin_t *tu_dataflow_ws_create(void);
+void tu_dataflow_ws_destroy(tu_dataflow_plugin_t *p);
+tu_dataflow_plugin_t *tu_dataflow_os_create(void);
+void tu_dataflow_os_destroy(tu_dataflow_plugin_t *p);
+
 tu_state_t g_tu = {0};
 
 /* ---- Lifecycle ---- */
@@ -47,6 +57,12 @@ void tu_init_with_config(const tu_runtime_config_t *cfg) {
     /* Initialize command queue */
     g_tu.cmdq = tu_cmdq_create(TU_ISA_QUEUE_DEPTH, TU_CYCLE_MODEL == TU_CYCLE_MODEL_FUNCTIONAL);
 
+    /* A4: Initialize dataflow registry and select default dataflow */
+    tu_dataflow_registry_init();
+    tu_dataflow_register(tu_dataflow_ws_create());
+    tu_dataflow_register(tu_dataflow_os_create());
+    tu_set_dataflow(TU_DATAFLOW_MODE);  /* Default from tu_config.h */
+
     g_tu.initialized = true;
 }
 
@@ -60,6 +76,7 @@ void tu_print_stats(void) {
         "  TinyTU CModel — Performance Report\n"
         "───────────────────────────────────────────\n"
         "  PE Array    : %u×%u (%u MACs)\n"
+        "  Dataflow    : %s\n"
         "  DMA bytes   : %lu\n"
         "  MMA calls   : %lu\n"
         "  MMA tiles   : %lu (%u×%u×%u per tile)\n"
@@ -67,6 +84,7 @@ void tu_print_stats(void) {
         "  Est. cycles : %lu\n"
         "───────────────────────────────────────────\n",
         pe_rows, pe_cols, pe_rows * pe_cols,
+        tu_get_dataflow_name(),
         (unsigned long)g_tu.total_dma_bytes,
         (unsigned long)g_tu.total_mma_calls,
         (unsigned long)g_tu.total_mma_tiles,
@@ -167,6 +185,38 @@ void tu_mma(uint16_t M, uint16_t N, uint16_t K,
     uint16_t mt = (M + pe_rows - 1) / pe_rows;
     uint16_t nt = (N + pe_cols - 1) / pe_cols;
     uint16_t kt = (K + pe_cols - 1) / pe_cols;
+
+#if TU_DATAFLOW_DISPATCH_VIA_PLUGIN
+    /* A4: Dispatch through the pluggable dataflow system */
+    if (g_tu.dataflow && g_tu.dataflow->execute_tile) {
+        tu_dataflow_tensor_t W_t = {
+            .data = W, .rows = M, .cols = K,
+            .stride = K * sizeof(fp16_t), .elem_size = sizeof(fp16_t)
+        };
+        tu_dataflow_tensor_t A_t = {
+            .data = A, .rows = K, .cols = N,
+            .stride = N * sizeof(fp16_t), .elem_size = sizeof(fp16_t)
+        };
+        tu_dataflow_tensor_t O_t = {
+            .data = O, .rows = M, .cols = N,
+            .stride = N * sizeof(fp32_t), .elem_size = sizeof(fp32_t)
+        };
+
+        uint64_t df_cycles = tu_dataflow_execute_mma(
+            g_tu.dataflow, &W_t, &A_t, &O_t,
+            pe_rows, pe_cols, pe_cols, TU_PE_PIPELINE_DEPTH);
+
+        g_tu.total_mma_tiles += g_tu.dataflow->total_tiles;
+        g_tu.total_mma_flops += g_tu.dataflow->total_flops;
+        g_tu.estimated_cycles += df_cycles;
+        /* Reset per-invocation counters to avoid double-counting */
+        g_tu.dataflow->total_tiles = 0;
+        g_tu.dataflow->total_flops = 0;
+        return;
+    }
+#endif
+
+    /* Legacy path: inline tiling (fallback when no plugin selected) */
 
     for (uint16_t mi = 0; mi < mt; mi++) {
         uint16_t ms = mi * pe_rows;
@@ -276,4 +326,27 @@ int tu_cmdq_submit_elementwise(uint8_t sram_region, uint32_t sram_offset,
 
 void tu_cmdq_sync_all(void) {
     tu_cmdq_sync(g_tu.cmdq);
+}
+
+/* ---- A4: Dataflow selection ---- */
+
+int tu_set_dataflow(int dataflow_id) {
+    tu_dataflow_plugin_t *plugin = tu_dataflow_lookup((tu_dataflow_id_t)dataflow_id);
+    if (!plugin) {
+        fprintf(stderr, "TU WARNING: dataflow id=%d not registered, falling back to WS\n",
+                dataflow_id);
+        plugin = tu_dataflow_lookup(TU_DATAFLOW_WEIGHT_STATIONARY);
+        if (!plugin) return -1;
+    }
+    /* Clean up previous plugin if replaced */
+    /* (We don't destroy plugins — they're owned by the registry) */
+    g_tu.dataflow = plugin;
+    if (plugin->init) plugin->init(plugin);
+    return 0;
+}
+
+const char *tu_get_dataflow_name(void) {
+    if (g_tu.dataflow && g_tu.dataflow->name)
+        return g_tu.dataflow->name;
+    return "none";
 }

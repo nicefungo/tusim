@@ -68,6 +68,8 @@ static inline fp32_t fp16_to_fp32(fp16_t h) { return tu_fp16_to_fp32(h); }
  * via tu_runtime_config_t. */
 
 /* ---- TU State ---- */
+typedef struct tu_dataflow_plugin_t tu_dataflow_plugin_t;
+
 typedef struct {
     /* SRAM regions (using banked SRAM module) */
     tu_sram_region_t  sram_w;     /* weight buffer */
@@ -79,6 +81,9 @@ typedef struct {
 
     /* Command queue */
     tu_command_queue_t *cmdq;     /* Hardware command queue */
+
+    /* A4: Pluggable dataflow plugin (selected at init) */
+    tu_dataflow_plugin_t *dataflow;
 
     /* Performance counters */
     uint64_t  total_dma_bytes;
@@ -191,6 +196,22 @@ int tu_cmdq_submit_elementwise(uint8_t sram_region, uint32_t sram_offset,
 
 /* Wait for all submitted commands to complete (drain the queue). */
 void tu_cmdq_sync_all(void);
+
+/*
+ * A4: Dataflow Selection
+ * ----------------------
+ * Select the dataflow mode for subsequent MMA operations.
+ * Must be called after tu_init() and before tu_mma().
+ *
+ *   tu_set_dataflow(TU_DATAFLOW_WEIGHT_STATIONARY);  // default, original behavior
+ *   tu_set_dataflow(TU_DATAFLOW_OUTPUT_STATIONARY);  // vector/TPU-style
+ *
+ * Returns 0 on success, -1 if the dataflow plugin is not registered.
+ */
+int tu_set_dataflow(int dataflow_id);
+
+/* Get the currently active dataflow plugin name. Returns "none" if unset. */
+const char *tu_get_dataflow_name(void);
 
 /*
  * Low-level helpers (exposed for direct use by generated code).
