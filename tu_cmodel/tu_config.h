@@ -190,6 +190,7 @@ extern "C" {
 
 #define TU_FP16_ROUNDING_RNE          0
 #define TU_FP16_ROUNDING_RTZ          1
+#define TU_FP16_ROUNDING_STOCHASTIC   2
 #define TU_FP16_ROUNDING_MODE         0
 #define TU_FP16_SUBNORMAL_FLUSH       1
 #define TU_FP16_SATURATE              1

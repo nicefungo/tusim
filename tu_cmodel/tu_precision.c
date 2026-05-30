@@ -1,8 +1,10 @@
 /*
  * TinyTU Precision Module — Implementation
+ * D6: Configurable rounding modes wired into all conversion paths.
  */
 
 #include "tu_precision.h"
+#include "rounding.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,20 +37,23 @@ fp16_t tu_fp32_to_fp16(fp32_t v) {
             return sign << 15;  /* Flush subnormal to zero */
         int shift = -14 - exp;
         uint32_t m = (mant | 0x800000) >> shift;
-        if (shift > 0 && ((mant >> (shift - 1)) & 1)) {
-            uint32_t round_bit = (mant >> (shift - 1)) & 1;
-            uint32_t sticky = 0;
-            if (shift > 1) sticky = (mant & ((1u << (shift - 1)) - 1)) != 0;
-            if (round_bit && (sticky || (m & 1))) m++;
+        if (shift > 0) {
+            uint32_t discarded = mant & ((1u << shift) - 1);
+            int carry;
+            uint32_t rounding_val = (m << shift) | discarded;
+            m = tu_round_apply(rounding_val, 10, &carry);
+            if (carry) m = 0x200;
         }
         h = (sign << 15) | (m & 0x3FF);
     } else {
+        /* Normal path: round 23-bit mantissa to 10-bit FP16 mantissa */
+        int carry;
+        uint32_t m_rounded = tu_round_fp32_to_mantissa(mant, exp, 10, &carry);
         uint16_t e = (uint16_t)(exp + 15);
-        uint32_t round_bit = (mant >> 12) & 1;
-        uint32_t sticky = (mant & 0xFFF) != 0;
-        uint32_t m_rounded = (mant >> 13);
-        if (round_bit && (sticky || (m_rounded & 1))) m_rounded++;
-        if (m_rounded >= 0x400) { m_rounded = 0; e++; }
+        if (carry) {
+            m_rounded = 0;
+            e++;
+        }
         if (e > 31) return (sign << 15) | 0x7C00;
         h = (sign << 15) | (e << 10) | (m_rounded & 0x3FF);
     }
@@ -99,10 +104,36 @@ static fp32_t prec_bf16_to_fp32(const void *src) {
 static void prec_bf16_from_fp32(fp32_t v, void *dst) {
     uint32_t bits;
     memcpy(&bits, &v, 4);
-    uint32_t rounded = bits + 0x7FFF + ((bits >> 16) & 1);
-    if ((rounded & 0x7F800000) > 0x7F800000)
-        rounded = (rounded & 0x80000000) | 0x7F800000;
-    *(uint16_t *)dst = (uint16_t)(rounded >> 16);
+    int32_t exp = ((bits >> 23) & 0xFF) - 127;
+    uint32_t mant = bits & 0x7FFFFF;
+
+    /* Handle NaN/Inf: pass through */
+    if ((bits & 0x7F800000) == 0x7F800000) {
+        *(uint16_t *)dst = (uint16_t)(bits >> 16);
+        return;
+    }
+
+    /* BF16 has 7 mantissa bits. Use rounding module. */
+    int carry;
+    uint32_t r_mant = tu_round_fp32_to_mantissa(mant, exp, 7, &carry);
+    uint16_t sign = (bits >> 31) & 1;
+    int16_t e = exp + 127;  /* BF16 uses same exponent bias as FP32 */
+
+    if (carry) {
+        r_mant = 0;
+        e++;
+    }
+
+    if (e >= 255) {  /* Infinity */
+        *(uint16_t *)dst = (sign << 15) | 0x7F80;
+        return;
+    }
+    if (e <= 0) {  /* Zero or subnormal */
+        *(uint16_t *)dst = sign << 15;
+        return;
+    }
+
+    *(uint16_t *)dst = (sign << 15) | ((uint16_t)e << 7) | (r_mant & 0x7F);
 }
 
 /* Convert BF16 → FP32 (exact: BF16 is FP32 with truncated mantissa).
@@ -113,8 +144,7 @@ fp32_t tu_bf16_to_fp32(bf16_t h) {
     return prec_bf16_to_fp32(&h);
 }
 
-/* Convert FP32 → BF16 with round-to-nearest-even.
- * This is the standard bfloat16 conversion used in TPU and NVIDIA hardware. */
+/* Convert FP32 → BF16 with configurable rounding. */
 bf16_t tu_fp32_to_bf16(fp32_t v) {
     bf16_t result;
     prec_bf16_from_fp32(v, &result);
