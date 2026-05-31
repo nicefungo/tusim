@@ -7,6 +7,7 @@
 
 #include "tu_sram.h"
 #include "memory/double_buffer.h"
+#include "tu_status.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -129,7 +130,8 @@ static void bounds_check(const tu_sram_region_t *r, uint32_t addr, uint32_t size
     if (addr + size > r->total_size) {
         fprintf(stderr, "SRAM %s overflow: addr=%u size=%u max=%u\n",
                 r->name, addr, size, r->total_size);
-        abort();
+        TU_REPORT_ERR(TU_ERR_SRAM_OVERFLOW, "SRAM bounds check failed");
+        return;
     }
 }
 

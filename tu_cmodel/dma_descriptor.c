@@ -11,6 +11,7 @@
  */
 
 #include "dma_descriptor.h"
+#include "tu_status.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -610,7 +611,8 @@ void tu_dma_load(tu_dma_channel_t ch, tu_sram_region_t *dst,
     if (offset + bytes > dst->total_size) {
         fprintf(stderr, "DMA load overflow: ch=%d off=%u size=%u/%u\n",
                 ch, offset, bytes, dst->total_size);
-        abort();
+        TU_REPORT_ERR(TU_ERR_DMA_OVERFLOW, "DMA load exceeds SRAM capacity");
+        return;
     }
     memcpy(dst->banks.data + offset, host, bytes);
     g_tu_dma.total_bytes += bytes;
@@ -626,7 +628,8 @@ void tu_dma_store(tu_dma_channel_t ch, tu_sram_region_t *src,
     if (offset + bytes > src->total_size) {
         fprintf(stderr, "DMA store overflow: ch=%d off=%u size=%u/%u\n",
                 ch, offset, bytes, src->total_size);
-        abort();
+        TU_REPORT_ERR(TU_ERR_DMA_OVERFLOW, "DMA store exceeds SRAM capacity");
+        return;
     }
     memcpy(host, src->banks.data + offset, bytes);
     g_tu_dma.total_bytes += bytes;

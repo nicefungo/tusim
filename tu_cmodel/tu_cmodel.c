@@ -9,6 +9,7 @@
  * DMA goes through the tu_dma_engine_t module.
  */
 #include "tu_cmodel.h"
+#include "tu_status.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -119,7 +120,8 @@ static void check_sram_bounds(const tu_sram_region_t *r, uint32_t offset, uint32
     if (offset + size_bytes > r->total_size) {
         TU_LOG_ERR(TU_COMP_MEM, "%s overflow: offset=%u size=%u max=%u",
                 r->name, offset, size_bytes, r->total_size);
-        abort();
+        TU_REPORT_ERR(TU_ERR_SRAM_OVERFLOW, "SRAM bounds check failed in DMA path");
+        return;
     }
 }
 
@@ -159,7 +161,11 @@ void tu_dma_load_o(const void *host_ptr, uint32_t tu_offset, uint32_t size_bytes
 void tu_mma(uint16_t M, uint16_t N, uint16_t K,
             uint32_t w_offset, uint32_t a_offset, uint32_t o_offset,
             bool has_bias) {
-    if (!g_tu.initialized) { TU_LOG_ERR(TU_COMP_CORE, "not initialized"); abort(); }
+    if (!g_tu.initialized) {
+        TU_LOG_ERR(TU_COMP_CORE, "tu_mma: not initialized");
+        TU_REPORT_ERR(TU_ERR_NOT_INITIALIZED, "tu_mma called before tu_init");
+        return;
+    }
 
     uint16_t pe_rows = g_tu.rt_cfg.pe_rows;
     uint16_t pe_cols = g_tu.rt_cfg.pe_cols;

@@ -33,7 +33,8 @@ TU_OBJS = $(TU_DIR)/tu_cmodel.o $(TU_DIR)/tu_asm.o $(TU_DIR)/tu_precision.o \
           $(TU_DIR)/compute/dataflow/dataflow_dispatcher.o \
           $(TU_DIR)/compute/dataflow/weight_stationary.o \
           $(TU_DIR)/compute/dataflow/output_stationary.o \
-          $(TU_DIR)/tu_core.o $(TU_DIR)/tu_cluster.o
+          $(TU_DIR)/tu_core.o $(TU_DIR)/tu_cluster.o \
+          $(TU_DIR)/tu_status.o
 
 libtucmodel.a: $(TU_OBJS)
 	$(AR) rcs $@ $^
@@ -138,6 +139,10 @@ $(TU_DIR)/tu_core.o: $(TU_DIR)/tu_core.c $(TU_DIR)/tu_core.h $(TU_DIR)/tu_cmodel
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
 $(TU_DIR)/tu_cluster.o: $(TU_DIR)/tu_cluster.c $(TU_DIR)/tu_cluster.h $(TU_DIR)/tu_core.h $(TU_DIR)/tu_config.h $(TU_DIR)/tu_sram.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
+# ---- Exception handling (E5) ----
+$(TU_DIR)/tu_status.o: $(TU_DIR)/tu_status.c $(TU_DIR)/tu_status.h
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
 # ---- Test: cmodel correctness ----
@@ -249,6 +254,11 @@ test-agen: tests/test_address_gen.c libtucmodel.a
 test-multicore: tests/test_multicore.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-multicore
+
+# ---- Test: Error Handling (E5) ----
+test-errors: tests/test_error_handling.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	./test-errors
 
 test-golden-full: tests/test_golden.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)
