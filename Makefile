@@ -8,7 +8,7 @@ LDFLAGS ?= -lm
 TU_DIR     = tu_cmodel
 COMPILER   = compiler/onnx_to_tu.py
 
-.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool
+.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline
 
 all: libtucmodel.a
 
@@ -17,7 +17,7 @@ TU_OBJS = $(TU_DIR)/tu_cmodel.o $(TU_DIR)/tu_asm.o $(TU_DIR)/tu_precision.o \
           $(TU_DIR)/tu_sram.o $(TU_DIR)/tu_dma.o $(TU_DIR)/dma_descriptor.o \
           $(TU_DIR)/rounding.o $(TU_DIR)/fp8.o \
           $(TU_DIR)/command_queue.o $(TU_DIR)/memory/dram_model.o \
-          $(TU_DIR)/memory/memory_hierarchy.o \
+          $(TU_DIR)/memory/memory_hierarchy.o $(TU_DIR)/memory/double_buffer.o \
           $(TU_DIR)/isa/tu_isa.o $(TU_DIR)/compute/elementwise_pipeline.o \
           $(TU_DIR)/compute/normalization_engine.o \
           $(TU_DIR)/compute/softmax_engine.o \
@@ -27,6 +27,7 @@ TU_OBJS = $(TU_DIR)/tu_cmodel.o $(TU_DIR)/tu_asm.o $(TU_DIR)/tu_precision.o \
           $(TU_DIR)/infra/logging.o \
           $(TU_DIR)/tu_int_quant.o \
           $(TU_DIR)/perf/performance_counters.o \
+          $(TU_DIR)/compute/pipeline_controller.o \
           $(TU_DIR)/compute/dataflow/dataflow_registry.o \
           $(TU_DIR)/compute/dataflow/dataflow_dispatcher.o \
           $(TU_DIR)/compute/dataflow/weight_stationary.o \
@@ -68,6 +69,10 @@ $(TU_DIR)/memory/dram_model.o: $(TU_DIR)/memory/dram_model.c $(TU_DIR)/memory/dr
 $(TU_DIR)/memory/memory_hierarchy.o: $(TU_DIR)/memory/memory_hierarchy.c $(TU_DIR)/memory/memory_hierarchy.h $(TU_DIR)/memory/dram_model.h $(TU_DIR)/tu_config.h $(TU_DIR)/tu_sram.h
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
+# ---- Memory: Double Buffering (A7) ----
+$(TU_DIR)/memory/double_buffer.o: $(TU_DIR)/memory/double_buffer.c $(TU_DIR)/memory/double_buffer.h $(TU_DIR)/tu_config.h $(TU_DIR)/tu_sram.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
 $(TU_DIR)/isa/tu_isa.o: $(TU_DIR)/isa/tu_isa.c $(TU_DIR)/isa/tu_isa.h $(TU_DIR)/tu_config.h $(TU_DIR)/tu_precision.h
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
@@ -103,6 +108,10 @@ $(TU_DIR)/infra/logging.o: $(TU_DIR)/infra/logging.c $(TU_DIR)/infra/logging.h
 
 # ---- Perf: Performance Counters (E4, P2.5 foundation) ----
 $(TU_DIR)/perf/performance_counters.o: $(TU_DIR)/perf/performance_counters.c $(TU_DIR)/perf/performance_counters.h $(TU_DIR)/tu_config.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
+# ---- Pipeline Controller (E2) — Software pipelining for DMA/compute overlap ----
+$(TU_DIR)/compute/pipeline_controller.o: $(TU_DIR)/compute/pipeline_controller.c $(TU_DIR)/compute/pipeline_controller.h $(TU_DIR)/tu_config.h $(TU_DIR)/tu_sram.h $(TU_DIR)/dma_descriptor.h $(TU_DIR)/command_queue.h $(TU_DIR)/memory/double_buffer.h
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
 # ---- Dataflow plugins (A4) ----
@@ -213,6 +222,11 @@ test-pool: tests/test_pooling.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -Itests -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-pool
 
+# ---- Test: Software Pipelining Controller (E2) ----
+test-pipeline: tests/test_pipeline.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	./test-pipeline
+
 test-golden-full: tests/test_golden.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-golden
@@ -241,7 +255,7 @@ test-asm: libtucmodel.a
 test: test-cmodel test-cmdq test-dma test-dram test-isa test-golden \
       test-elementwise test-bf16 test-memhier test-norm test-dataflow \
       test-logging test-int-quant test-conv test-asm test-rounding test-fp8 \
-      test-attention test-perf test-pool
+      test-attention test-perf test-pool test-pipeline
 	@echo ""
 	@echo "═══════════════════════════════════════════"
 	@echo "  ✅ All tests complete"
@@ -277,5 +291,6 @@ clean:
 	rm -f test-attention
 	rm -f test-perf
 	rm -f test-pool
+	rm -f test-pipeline
 	rm -f /tmp/gpt_block_tu /tmp/gpt_block_tu.c /tmp/test_asm
 	rm -rf build/ci_reports
