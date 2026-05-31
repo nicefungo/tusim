@@ -8,7 +8,7 @@ LDFLAGS ?= -lm
 TU_DIR     = tu_cmodel
 COMPILER   = compiler/onnx_to_tu.py
 
-.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline
+.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline test-agen test-multicore
 
 all: libtucmodel.a
 
@@ -18,6 +18,7 @@ TU_OBJS = $(TU_DIR)/tu_cmodel.o $(TU_DIR)/tu_asm.o $(TU_DIR)/tu_precision.o \
           $(TU_DIR)/rounding.o $(TU_DIR)/fp8.o \
           $(TU_DIR)/command_queue.o $(TU_DIR)/memory/dram_model.o \
           $(TU_DIR)/memory/memory_hierarchy.o $(TU_DIR)/memory/double_buffer.o \
+          $(TU_DIR)/memory/address_generator.o \
           $(TU_DIR)/isa/tu_isa.o $(TU_DIR)/compute/elementwise_pipeline.o \
           $(TU_DIR)/compute/normalization_engine.o \
           $(TU_DIR)/compute/softmax_engine.o \
@@ -31,7 +32,8 @@ TU_OBJS = $(TU_DIR)/tu_cmodel.o $(TU_DIR)/tu_asm.o $(TU_DIR)/tu_precision.o \
           $(TU_DIR)/compute/dataflow/dataflow_registry.o \
           $(TU_DIR)/compute/dataflow/dataflow_dispatcher.o \
           $(TU_DIR)/compute/dataflow/weight_stationary.o \
-          $(TU_DIR)/compute/dataflow/output_stationary.o
+          $(TU_DIR)/compute/dataflow/output_stationary.o \
+          $(TU_DIR)/tu_core.o $(TU_DIR)/tu_cluster.o
 
 libtucmodel.a: $(TU_OBJS)
 	$(AR) rcs $@ $^
@@ -71,6 +73,10 @@ $(TU_DIR)/memory/memory_hierarchy.o: $(TU_DIR)/memory/memory_hierarchy.c $(TU_DI
 
 # ---- Memory: Double Buffering (A7) ----
 $(TU_DIR)/memory/double_buffer.o: $(TU_DIR)/memory/double_buffer.c $(TU_DIR)/memory/double_buffer.h $(TU_DIR)/tu_config.h $(TU_DIR)/tu_sram.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
+# ---- Memory: Address Generator (M3) ----
+$(TU_DIR)/memory/address_generator.o: $(TU_DIR)/memory/address_generator.c $(TU_DIR)/memory/address_generator.h $(TU_DIR)/tu_config.h $(TU_DIR)/dma_descriptor.h
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
 $(TU_DIR)/isa/tu_isa.o: $(TU_DIR)/isa/tu_isa.c $(TU_DIR)/isa/tu_isa.h $(TU_DIR)/tu_config.h $(TU_DIR)/tu_precision.h
@@ -125,6 +131,13 @@ $(TU_DIR)/compute/dataflow/weight_stationary.o: $(TU_DIR)/compute/dataflow/weigh
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
 $(TU_DIR)/compute/dataflow/output_stationary.o: $(TU_DIR)/compute/dataflow/output_stationary.c $(TU_DIR)/compute/dataflow/dataflow_interface.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
+# ---- Multi-core: tu_core and tu_cluster (A5) ----
+$(TU_DIR)/tu_core.o: $(TU_DIR)/tu_core.c $(TU_DIR)/tu_core.h $(TU_DIR)/tu_cmodel.h $(TU_DIR)/tu_config.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
+$(TU_DIR)/tu_cluster.o: $(TU_DIR)/tu_cluster.c $(TU_DIR)/tu_cluster.h $(TU_DIR)/tu_core.h $(TU_DIR)/tu_config.h $(TU_DIR)/tu_sram.h
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
 # ---- Test: cmodel correctness ----
@@ -227,6 +240,16 @@ test-pipeline: tests/test_pipeline.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-pipeline
 
+# ---- Test: Address Generator (M3) ----
+test-agen: tests/test_address_gen.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	./test-agen
+
+# ---- Test: Multi-core Cluster (A5) ----
+test-multicore: tests/test_multicore.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	./test-multicore
+
 test-golden-full: tests/test_golden.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-golden
@@ -255,7 +278,7 @@ test-asm: libtucmodel.a
 test: test-cmodel test-cmdq test-dma test-dram test-isa test-golden \
       test-elementwise test-bf16 test-memhier test-norm test-dataflow \
       test-logging test-int-quant test-conv test-asm test-rounding test-fp8 \
-      test-attention test-perf test-pool test-pipeline
+      test-attention test-perf test-pool test-pipeline test-agen test-multicore
 	@echo ""
 	@echo "═══════════════════════════════════════════"
 	@echo "  ✅ All tests complete"
@@ -292,5 +315,6 @@ clean:
 	rm -f test-perf
 	rm -f test-pool
 	rm -f test-pipeline
+	rm -f test-multicore
 	rm -f /tmp/gpt_block_tu /tmp/gpt_block_tu.c /tmp/test_asm
 	rm -rf build/ci_reports
