@@ -8,7 +8,7 @@ LDFLAGS ?= -lm
 TU_DIR     = tu_cmodel
 COMPILER   = compiler/onnx_to_tu.py
 
-.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf
+.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool
 
 all: libtucmodel.a
 
@@ -23,6 +23,7 @@ TU_OBJS = $(TU_DIR)/tu_cmodel.o $(TU_DIR)/tu_asm.o $(TU_DIR)/tu_precision.o \
           $(TU_DIR)/compute/softmax_engine.o \
           $(TU_DIR)/compute/convolution_engine.o \
           $(TU_DIR)/compute/attention_engine.o \
+          $(TU_DIR)/compute/pooling_engine.o \
           $(TU_DIR)/infra/logging.o \
           $(TU_DIR)/tu_int_quant.o \
           $(TU_DIR)/perf/performance_counters.o \
@@ -86,6 +87,10 @@ $(TU_DIR)/compute/convolution_engine.o: $(TU_DIR)/compute/convolution_engine.c $
 
 # ---- Compute: Attention Engine (O3) ----
 $(TU_DIR)/compute/attention_engine.o: $(TU_DIR)/compute/attention_engine.c $(TU_DIR)/compute/attention_engine.h $(TU_DIR)/tu_config.h $(TU_DIR)/tu_cmodel.h $(TU_DIR)/compute/dataflow/dataflow_interface.h $(TU_DIR)/compute/elementwise_pipeline.h $(TU_DIR)/compute/softmax_engine.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
+# ---- Compute: Pooling Engine (O6) ----
+$(TU_DIR)/compute/pooling_engine.o: $(TU_DIR)/compute/pooling_engine.c $(TU_DIR)/compute/pooling_engine.h $(TU_DIR)/tu_config.h $(TU_DIR)/tu_sram.h $(TU_DIR)/tu_precision.h
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
 # ---- Precision: INT8 Quantization (D2) ----
@@ -203,6 +208,11 @@ test-perf: tests/test_perf_counters.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -Itests -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-perf
 
+# ---- Test: Pooling Engine (O6) ----
+test-pool: tests/test_pooling.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -Itests -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	./test-pool
+
 test-golden-full: tests/test_golden.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-golden
@@ -231,7 +241,7 @@ test-asm: libtucmodel.a
 test: test-cmodel test-cmdq test-dma test-dram test-isa test-golden \
       test-elementwise test-bf16 test-memhier test-norm test-dataflow \
       test-logging test-int-quant test-conv test-asm test-rounding test-fp8 \
-      test-attention test-perf
+      test-attention test-perf test-pool
 	@echo ""
 	@echo "═══════════════════════════════════════════"
 	@echo "  ✅ All tests complete"
@@ -266,5 +276,6 @@ clean:
 	rm -f test-fp8
 	rm -f test-attention
 	rm -f test-perf
+	rm -f test-pool
 	rm -f /tmp/gpt_block_tu /tmp/gpt_block_tu.c /tmp/test_asm
 	rm -rf build/ci_reports
