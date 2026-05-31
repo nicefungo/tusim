@@ -8,7 +8,7 @@ LDFLAGS ?= -lm
 TU_DIR     = tu_cmodel
 COMPILER   = compiler/onnx_to_tu.py
 
-.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention
+.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf
 
 all: libtucmodel.a
 
@@ -25,6 +25,7 @@ TU_OBJS = $(TU_DIR)/tu_cmodel.o $(TU_DIR)/tu_asm.o $(TU_DIR)/tu_precision.o \
           $(TU_DIR)/compute/attention_engine.o \
           $(TU_DIR)/infra/logging.o \
           $(TU_DIR)/tu_int_quant.o \
+          $(TU_DIR)/perf/performance_counters.o \
           $(TU_DIR)/compute/dataflow/dataflow_registry.o \
           $(TU_DIR)/compute/dataflow/dataflow_dispatcher.o \
           $(TU_DIR)/compute/dataflow/weight_stationary.o \
@@ -93,6 +94,10 @@ $(TU_DIR)/tu_int_quant.o: $(TU_DIR)/tu_int_quant.c $(TU_DIR)/tu_int_quant.h
 
 # ---- Infrastructure: Logging (Q2) ----
 $(TU_DIR)/infra/logging.o: $(TU_DIR)/infra/logging.c $(TU_DIR)/infra/logging.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
+# ---- Perf: Performance Counters (E4, P2.5 foundation) ----
+$(TU_DIR)/perf/performance_counters.o: $(TU_DIR)/perf/performance_counters.c $(TU_DIR)/perf/performance_counters.h $(TU_DIR)/tu_config.h
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
 # ---- Dataflow plugins (A4) ----
@@ -193,6 +198,11 @@ test-attention: tests/test_attention.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-attention
 
+# ---- Test: Performance Counters (E4, P2.5) ----
+test-perf: tests/test_perf_counters.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -Itests -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	./test-perf
+
 test-golden-full: tests/test_golden.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-golden
@@ -221,7 +231,7 @@ test-asm: libtucmodel.a
 test: test-cmodel test-cmdq test-dma test-dram test-isa test-golden \
       test-elementwise test-bf16 test-memhier test-norm test-dataflow \
       test-logging test-int-quant test-conv test-asm test-rounding test-fp8 \
-      test-attention
+      test-attention test-perf
 	@echo ""
 	@echo "═══════════════════════════════════════════"
 	@echo "  ✅ All tests complete"
@@ -248,12 +258,13 @@ test-full: test-compiler libtucmodel.a
 
 # ---- Clean ----
 clean:
-	rm -f $(TU_DIR)/*.o $(TU_DIR)/memory/*.o $(TU_DIR)/isa/*.o $(TU_DIR)/compute/*.o $(TU_DIR)/compute/dataflow/*.o $(TU_DIR)/infra/*.o libtucmodel.a
+	rm -f $(TU_DIR)/*.o $(TU_DIR)/memory/*.o $(TU_DIR)/isa/*.o $(TU_DIR)/compute/*.o $(TU_DIR)/compute/dataflow/*.o $(TU_DIR)/infra/*.o $(TU_DIR)/perf/*.o libtucmodel.a
 	rm -f test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-golden-full
 	rm -f test-dataflow test-elementwise test-bf16 test-memhier test-norm test-logging
 	rm -f test-int-quant test-conv test-random
 	rm -f test-rounding
 	rm -f test-fp8
 	rm -f test-attention
+	rm -f test-perf
 	rm -f /tmp/gpt_block_tu /tmp/gpt_block_tu.c /tmp/test_asm
 	rm -rf build/ci_reports

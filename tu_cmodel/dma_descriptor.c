@@ -218,6 +218,56 @@ tu_dma_descriptor_t *tu_dma_desc_chain(tu_dma_descriptor_t *head,
     return head;
 }
 
+/* DM3: Scatter — contiguous host → scattered SRAM via index list */
+tu_dma_descriptor_t *tu_dma_desc_create_scatter(
+    uint8_t channel, tu_sram_region_t *dst_region,
+    const void *src_host, const uint32_t *index_list,
+    uint32_t elem_count, uint32_t elem_size)
+{
+    tu_dma_descriptor_t *desc = (tu_dma_descriptor_t *)calloc(1, sizeof(*desc));
+    if (!desc) return NULL;
+
+    static uint32_t next_id = 1000;
+    desc->desc_id         = next_id++;
+    desc->type            = TU_DMA_XFER_SCATTER;
+    desc->direction       = TU_DMA_DIR_HOST_TO_TU;
+    desc->channel         = channel;
+    desc->dst_region      = dst_region;
+    desc->src_host        = src_host;
+    desc->index_list      = index_list;
+    desc->index_count     = elem_count;
+    desc->index_elem_size = elem_size;
+    desc->elem_size       = elem_size;
+    desc->total_bytes     = elem_count * elem_size;
+
+    return desc;
+}
+
+/* DM3: Gather — scattered SRAM via index list → contiguous host */
+tu_dma_descriptor_t *tu_dma_desc_create_gather(
+    uint8_t channel, tu_sram_region_t *src_region,
+    void *dst_host, const uint32_t *index_list,
+    uint32_t elem_count, uint32_t elem_size)
+{
+    tu_dma_descriptor_t *desc = (tu_dma_descriptor_t *)calloc(1, sizeof(*desc));
+    if (!desc) return NULL;
+
+    static uint32_t next_id = 2000;
+    desc->desc_id         = next_id++;
+    desc->type            = TU_DMA_XFER_GATHER;
+    desc->direction       = TU_DMA_DIR_TU_TO_HOST;
+    desc->channel         = channel;
+    desc->src_region      = src_region;
+    desc->dst_host        = dst_host;
+    desc->index_list      = index_list;
+    desc->index_count     = elem_count;
+    desc->index_elem_size = elem_size;
+    desc->elem_size       = elem_size;
+    desc->total_bytes     = elem_count * elem_size;
+
+    return desc;
+}
+
 void tu_dma_desc_destroy(tu_dma_descriptor_t *desc) {
     while (desc) {
         tu_dma_descriptor_t *next = desc->next;
@@ -286,6 +336,28 @@ static void execute_strided_3d(const tu_dma_descriptor_t *desc,
         }
         src += src_depth_stride;
         dst += dst_depth_stride;
+    }
+}
+
+/* DM3: Execute scatter — src contiguous → dst scattered via index list */
+static void execute_scatter(const tu_dma_descriptor_t *desc,
+                            const uint8_t *src, uint8_t *dst_base)
+{
+    uint32_t elem_size = desc->elem_size;
+    for (uint32_t i = 0; i < desc->index_count; i++) {
+        uint32_t off = desc->index_list[i];
+        memcpy(dst_base + off, src + i * elem_size, elem_size);
+    }
+}
+
+/* DM3: Execute gather — src scattered via index list → dst contiguous */
+static void execute_gather(const tu_dma_descriptor_t *desc,
+                           const uint8_t *src_base, uint8_t *dst)
+{
+    uint32_t elem_size = desc->elem_size;
+    for (uint32_t i = 0; i < desc->index_count; i++) {
+        uint32_t off = desc->index_list[i];
+        memcpy(dst + i * elem_size, src_base + off, elem_size);
     }
 }
 
@@ -368,6 +440,12 @@ void tu_dma_execute_desc(tu_dma_descriptor_t *desc) {
         break;
     case TU_DMA_XFER_STRIDED_3D:
         execute_strided_3d(desc, src_ptr, dst_ptr);
+        break;
+    case TU_DMA_XFER_SCATTER:
+        execute_scatter(desc, src_ptr, dst_ptr);
+        break;
+    case TU_DMA_XFER_GATHER:
+        execute_gather(desc, src_ptr, dst_ptr);
         break;
     default:
         fprintf(stderr, "DMA: unknown transfer type %d\n", desc->type);
