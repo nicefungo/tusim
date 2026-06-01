@@ -203,8 +203,8 @@ extern "C" {
  * Sparsity
  * ================================================================ */
 
-#define TU_SPARSITY_ENABLED           0
-#define TU_SPARSITY_2OF4              0
+#define TU_SPARSITY_ENABLED           1
+#define TU_SPARSITY_2OF4              1
 #define TU_SPARSITY_UNSTRUCTURED      0
 
 /* ================================================================
