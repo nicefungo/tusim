@@ -54,7 +54,7 @@ static const uint16_t mma_dims[][3] = {
 static void run_cmodel_mma_fp16(const fp16_t *W, const fp16_t *A, fp32_t *O,
                                   uint16_t M, uint16_t N, uint16_t K)
 {
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     tu_init_with_config(&cfg);
 
     tu_dma_load_w(W, 0, (uint32_t)M * K * sizeof(fp16_t));
@@ -267,7 +267,7 @@ static void test_elementwise_relu_random(int num_iters) {
         tu_golden_relu(in_fp32, ref, count);
 
         /* Cmodel elementwise ReLU via SRAM */
-        tu_runtime_config_t cfg = tu_config_default();
+        tu_runtime_config_t cfg = tu_runtime_config_default();
         tu_init_with_config(&cfg);
 
         /* Copy input to O-buffer SRAM */
@@ -375,7 +375,7 @@ static void test_mma_edge_cases(void) {
         fp16_t W[256] = {0}, A[256] = {0};
         fp32_t O[256], ref[256] = {0};
 
-        tu_runtime_config_t cfg = tu_config_default();
+        tu_runtime_config_t cfg = tu_runtime_config_default();
         tu_init_with_config(&cfg);
         tu_dma_load_w(W, 0, sizeof(W));
         tu_dma_load_a(A, 0, sizeof(A));
@@ -399,7 +399,7 @@ static void test_mma_edge_cases(void) {
             ref[i * 16 + i] = 1.0f;
         }
 
-        tu_runtime_config_t cfg = tu_config_default();
+        tu_runtime_config_t cfg = tu_runtime_config_default();
         tu_init_with_config(&cfg);
         tu_dma_load_w(W, 0, sizeof(W));
         tu_dma_load_a(A, 0, sizeof(A));
@@ -421,7 +421,7 @@ static void test_mma_edge_cases(void) {
                         fp32_to_fp16(0.0f),     fp32_to_fp16(1.0f)};
         fp32_t O[4];
 
-        tu_runtime_config_t cfg = tu_config_default();
+        tu_runtime_config_t cfg = tu_runtime_config_default();
         tu_init_with_config(&cfg);
         tu_dma_load_w(W, 0, sizeof(W));
         tu_dma_load_a(A, 0, sizeof(A));
@@ -442,7 +442,7 @@ static void test_mma_edge_cases(void) {
         fp16_t w = fp32_to_fp16(3.0f), a = fp32_to_fp16(7.0f);
         fp32_t o;
 
-        tu_runtime_config_t cfg = tu_config_default();
+        tu_runtime_config_t cfg = tu_runtime_config_default();
         tu_init_with_config(&cfg);
         tu_dma_load_w(&w, 0, sizeof(fp16_t));
         tu_dma_load_a(&a, 0, sizeof(fp16_t));
@@ -469,7 +469,7 @@ static void test_mma_edge_cases(void) {
         for (uint32_t i = 0; i < ac; i++) Ah[i] = fp32_to_fp16(1.0f);
         for (uint32_t i = 0; i < oc; i++) ref[i] = (float)K;
 
-        tu_runtime_config_t cfg = tu_config_default();
+        tu_runtime_config_t cfg = tu_runtime_config_default();
         tu_init_with_config(&cfg);
         tu_dma_load_w(Wh, 0, wc * sizeof(fp16_t));
         tu_dma_load_a(Ah, 0, ac * sizeof(fp16_t));

@@ -10,6 +10,7 @@
  */
 #include "tu_cmodel.h"
 #include "tu_status.h"
+#include "infra/config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,8 +31,36 @@ tu_state_t g_tu = {0};
 /* ---- Lifecycle ---- */
 
 void tu_init(void) {
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     tu_init_with_config(&cfg);
+}
+
+/* ---- A1: JSON config loading ---- */
+
+int tu_init_from_file(const char *config_path,
+                      char *error_buf, size_t error_size) {
+    tu_config_t cfg;
+    tu_config_default(&cfg);
+
+    int err = tu_config_load(config_path, &cfg, error_buf, error_size);
+    if (err != 0) return err;
+
+    return tu_init_from_config(&cfg);
+}
+
+int tu_init_from_config(const struct tu_config_t *cfg) {
+    if (!cfg) {
+        TU_LOG_ERR(TU_COMP_CORE, "tu_init_from_config: null config");
+        return -1;
+    }
+
+    tu_runtime_config_t rt = tu_config_to_runtime(cfg);
+    tu_init_with_config(&rt);
+
+    TU_LOG_INFO(TU_COMP_CORE, "TU initialized from config: %u×%u PE, %u KB SRAM",
+                cfg->pe_rows, cfg->pe_cols,
+                cfg->sram_w_size_kb + cfg->sram_a_size_kb + cfg->sram_o_size_kb);
+    return 0;
 }
 
 void tu_init_with_config(const tu_runtime_config_t *cfg) {

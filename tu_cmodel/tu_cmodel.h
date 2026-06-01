@@ -63,10 +63,13 @@ static inline fp16_t fp32_to_fp16(fp32_t v) { return tu_fp32_to_fp16(v); }
 static inline fp32_t fp16_to_fp32(fp16_t h) { return tu_fp16_to_fp32(h); }
 
 /* ---- TU Configuration ---- */
-/* Configuration is driven entirely by tu_config.h.
+/* Configuration is driven by compile-time defaults (tu_config.h)
+ * with runtime overrides via tu_config_t (from config JSON).
  * PE array dimensions, SRAM sizes, and all hardware parameters
- * are compile-time configurable with runtime overrides available
- * via tu_runtime_config_t. */
+ * are configurable at both compile-time and runtime. */
+
+/* Forward declare tu_config_t — full definition in infra/config.h */
+struct tu_config_t;
 
 /* ---- TU State ---- */
 typedef struct tu_dataflow_plugin_t tu_dataflow_plugin_t;
@@ -109,6 +112,20 @@ void tu_init_with_config(const tu_runtime_config_t *cfg);
 
 /* Initialize TU — reset SRAM, clear stats. Call once at startup. */
 void tu_init(void);
+
+/* Initialize TU from a JSON config file (Gap A1).
+ * Reads config at the given path, validates, and initializes the TU.
+ * Returns 0 on success, non-zero on failure. On failure, error_buf
+ * (if non-NULL) is populated with a diagnostic message.
+ *
+ * After this call, use the normal API (tu_dma_*, tu_mma, etc.).
+ */
+int tu_init_from_file(const char *config_path,
+                      char *error_buf, size_t error_size);
+
+/* Re-initialize from a fully-populated tu_config_t struct.
+ * The config_t is converted to a runtime config internally. */
+int tu_init_from_config(const struct tu_config_t *cfg);
 
 /* Print accumulated performance counters to stderr. */
 void tu_print_stats(void);

@@ -96,7 +96,7 @@ void tu_core_destroy(tu_core_t *core) {
 
 tu_core_t *tu_core_default(void) {
     if (!g_default_core) {
-        tu_runtime_config_t cfg = tu_config_default();
+        tu_runtime_config_t cfg = tu_runtime_config_default();
         g_default_core = tu_core_create(&cfg);
     }
     return g_default_core;

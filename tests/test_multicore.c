@@ -52,7 +52,7 @@ static int tests_total = 0;
 /* ---- Test 1: Core lifecycle ---- */
 static void test_core_lifecycle(void) {
     TEST("core lifecycle");
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     tu_core_t *core = tu_core_create(&cfg);
     CHECK(core != NULL, "create failed");
     CHECK(core->initialized, "not initialized");
@@ -65,7 +65,7 @@ static void test_core_lifecycle(void) {
 /* ---- Test 2: Core DMA ---- */
 static void test_core_dma(void) {
     TEST("core DMA load/store");
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     tu_core_t *core = tu_core_create(&cfg);
     CHECK(core != NULL, "create failed");
 
@@ -96,7 +96,7 @@ static void test_core_dma(void) {
 /* ---- Test 3: Core MMA (direct SRAM verification) ---- */
 static void test_core_mma(void) {
     TEST("core MMA (identity)");
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     tu_core_t *core = tu_core_create(&cfg);
     CHECK(core != NULL, "create failed");
 
@@ -157,7 +157,7 @@ static void test_core_mma(void) {
 /* ---- Test 4: Core state isolation ---- */
 static void test_core_isolation(void) {
     TEST("core state isolation");
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     tu_core_t *c1 = tu_core_create_with_id(1, &cfg);
     tu_core_t *c2 = tu_core_create_with_id(2, &cfg);
     CHECK(c1 != NULL && c2 != NULL, "create failed");
@@ -203,7 +203,7 @@ static void test_core_isolation(void) {
 /* ---- Test 5: Cluster creation (ring) ---- */
 static void test_cluster_ring(void) {
     TEST("cluster ring creation");
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     tu_cluster_t *cl = tu_cluster_create(4, TU_TOPOLOGY_RING, 0, &cfg);
     CHECK(cl != NULL, "create failed");
     CHECK(cl->num_cores == 4, "wrong num_cores");
@@ -225,7 +225,7 @@ static void test_cluster_ring(void) {
 /* ---- Test 6: Cluster creation (mesh) ---- */
 static void test_cluster_mesh(void) {
     TEST("cluster mesh creation");
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     tu_cluster_t *cl = tu_cluster_create(6, TU_TOPOLOGY_MESH, 2, &cfg);
     CHECK(cl != NULL, "create failed");
     CHECK(cl->num_cores == 6, "wrong num_cores");
@@ -242,7 +242,7 @@ static void test_hop_distance(void) {
     TEST("hop distance");
 
     /* Ring: 4 cores */
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     tu_cluster_t *ring = tu_cluster_create(4, TU_TOPOLOGY_RING, 0, &cfg);
     CHECK(ring != NULL, "ring create failed");
 
@@ -279,7 +279,7 @@ static void test_hop_distance(void) {
 static void test_neighbors(void) {
     TEST("neighbor discovery");
 
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     tu_cluster_t *ring = tu_cluster_create(4, TU_TOPOLOGY_RING, 0, &cfg);
     CHECK(ring != NULL, "ring create failed");
 
@@ -311,7 +311,7 @@ static void test_neighbors(void) {
 /* ---- Test 9: ICC send ---- */
 static void test_icc_send(void) {
     TEST("ICC send");
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     tu_cluster_t *cl = tu_cluster_create(2, TU_TOPOLOGY_RING, 0, &cfg);
     CHECK(cl != NULL, "create failed");
 
@@ -355,7 +355,7 @@ static void test_icc_send(void) {
 /* ---- Test 10: ICC broadcast ---- */
 static void test_icc_broadcast(void) {
     TEST("ICC broadcast");
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     tu_cluster_t *cl = tu_cluster_create(4, TU_TOPOLOGY_RING, 0, &cfg);
     CHECK(cl != NULL, "create failed");
 
@@ -384,7 +384,7 @@ static void test_icc_broadcast(void) {
 /* ---- Test 11: All-reduce sum ---- */
 static void test_allreduce_sum(void) {
     TEST("all-reduce sum");
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     tu_cluster_t *cl = tu_cluster_create(4, TU_TOPOLOGY_RING, 0, &cfg);
     CHECK(cl != NULL, "create failed");
 
@@ -415,7 +415,7 @@ static void test_allreduce_sum(void) {
 /* ---- Test 12: Barrier ---- */
 static void test_barrier(void) {
     TEST("barrier sync");
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     tu_cluster_t *cl = tu_cluster_create(4, TU_TOPOLOGY_RING, 0, &cfg);
     CHECK(cl != NULL, "create failed");
 
@@ -441,7 +441,7 @@ static void test_barrier(void) {
 /* ---- Test 13: SPMD execution ---- */
 static void test_spmd_execution(void) {
     TEST("SPMD execution");
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     tu_cluster_t *cl = tu_cluster_create(2, TU_TOPOLOGY_RING, 0, &cfg);
     CHECK(cl != NULL, "create failed");
 

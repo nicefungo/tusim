@@ -40,7 +40,7 @@ static void test_cmdq_create(void) {
 static void test_cmdq_mma_sync(void) {
     TEST("CMDQ MMA identity 16×16×16");
 
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     tu_init_with_config(&cfg);
 
     /* Load identity matrices */
@@ -91,7 +91,7 @@ static void test_cmdq_mma_sync(void) {
 static void test_cmdq_monotonic_ids(void) {
     TEST("Command ID monotonicity");
 
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     tu_init_with_config(&cfg);
 
     int id1 = tu_cmdq_submit_mma(16, 16, 16, 0, 0, 0, false);
@@ -108,7 +108,7 @@ static void test_cmdq_monotonic_ids(void) {
 static void test_cmdq_barrier(void) {
     TEST("Command queue barrier");
 
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     tu_init_with_config(&cfg);
 
     /* Submit commands, barrier between them */
@@ -135,7 +135,7 @@ static void test_cmdq_barrier(void) {
 static void test_cmdq_overflow(void) {
     TEST("Command queue overflow");
 
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     tu_init_with_config(&cfg);
 
     /* Fill the queue */
@@ -157,7 +157,7 @@ static void test_cmdq_overflow(void) {
 static void test_cmdq_dma(void) {
     TEST("CMDQ DMA load + MMA");
 
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     tu_init_with_config(&cfg);
 
     fp16_t W[16 * 16];
@@ -226,7 +226,7 @@ static void test_cmdq_standalone(void) {
 static void test_cmdq_reset(void) {
     TEST("Command queue reset");
 
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     tu_init_with_config(&cfg);
 
     /* Submit some commands */

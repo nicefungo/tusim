@@ -95,7 +95,7 @@ static void run_mma_identity_test(const mma_dim_config_t *d) {
              d->M, d->N, d->pe_rows, d->pe_cols);
     TEST(name);
 
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     cfg.pe_rows = d->pe_rows;
     cfg.pe_cols = d->pe_cols;
     tu_init_with_config(&cfg);
@@ -152,7 +152,7 @@ static void test_mma_identity_param(void) {
 static void test_mma_known_value(void) {
     TEST("MMA 32×8 (all-0.5 W, all-2.0 A → 16.0)");
 
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     cfg.pe_rows = 16;
     cfg.pe_cols = 16;
     tu_init_with_config(&cfg);
@@ -192,7 +192,7 @@ static void test_mma_known_value(void) {
 static void test_mma_bias(void) {
     TEST("MMA 16×16×16 with bias (zero W/A)");
 
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     cfg.pe_rows = 16;
     cfg.pe_cols = 16;
     tu_init_with_config(&cfg);
@@ -234,7 +234,7 @@ static void test_mma_bias(void) {
 static void test_config_override(void) {
     TEST("Runtime config: 32×32 PE array");
 
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     cfg.pe_rows = 32;
     cfg.pe_cols = 32;
     tu_init_with_config(&cfg);
@@ -249,7 +249,7 @@ static void test_config_override(void) {
 static void test_mma_2x2_pe(void) {
     TEST("MMA 4×4×4 with 2×2 PE array");
 
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     cfg.pe_rows = 2;
     cfg.pe_cols = 2;
     cfg.sram_w_size = 1024;
@@ -298,7 +298,7 @@ static void test_mma_2x2_pe(void) {
 static void test_mma_edge_tiles(void) {
     TEST("MMA 7×5×9 (non-multiple-of-tile, 4×3 PE)");
 
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     cfg.pe_rows = 4;
     cfg.pe_cols = 3;
     cfg.sram_w_size = 4096;

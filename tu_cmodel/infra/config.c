@@ -1,0 +1,507 @@
+/*
+ * TU Configuration Loader — Implementation (Gap A1)
+ * ==================================================
+ * JSON-driven runtime configuration for all TU cmodel parameters.
+ */
+
+#define _POSIX_C_SOURCE 200809L  /* for strdup */
+#include "config.h"
+#include "json_reader.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/* ---- Helper: read entire file ---- */
+
+static char *read_file(const char *path, char *error_buf, size_t error_size) {
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size, "cannot open config file: %s", path);
+        return NULL;
+    }
+    fseek(f, 0, SEEK_END);
+    long sz = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if (sz < 0 || sz > 10 * 1024 * 1024) {
+        fclose(f);
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size, "config file too large: %s", path);
+        return NULL;
+    }
+    char *buf = (char *)malloc((size_t)sz + 1);
+    if (!buf) { fclose(f); return NULL; }
+    size_t n = fread(buf, 1, (size_t)sz, f);
+    fclose(f);
+    buf[n] = '\0';
+    return buf;
+}
+
+/* ---- JSON value helpers ---- */
+
+static bool parse_opt_string(const tu_json_value_t *obj, const char *key,
+                             char *out, size_t out_size) {
+    const tu_json_value_t *v = tu_json_get(obj, key);
+    if (!v || v->type != TU_JSON_STRING) return false;
+    uint32_t len; const char *s = tu_json_as_string(v, &len);
+    if (!s) return false;
+    size_t copy = len < out_size - 1 ? len : out_size - 1;
+    memcpy(out, s, copy); out[copy] = '\0';
+    return true;
+}
+
+static bool parse_opt_int64(const tu_json_value_t *obj, const char *key, int64_t *out) {
+    const tu_json_value_t *v = tu_json_get(obj, key);
+    if (!v) return false;
+    if (v->type == TU_JSON_INT || v->type == TU_JSON_DOUBLE || v->type == TU_JSON_BOOL) {
+        *out = tu_json_as_int(v); return true;
+    }
+    return false;
+}
+
+static bool parse_opt_uint(const tu_json_value_t *obj, const char *key,
+                           uint32_t *out, uint32_t dflt) {
+    const tu_json_value_t *v = tu_json_get(obj, key);
+    if (!v) return false;
+    if (v->type == TU_JSON_INT || v->type == TU_JSON_DOUBLE) {
+        int64_t iv = tu_json_as_int(v);
+        *out = iv < 0 ? dflt : (uint32_t)(iv & 0xFFFFFFFF);
+        return true;
+    }
+    return false;
+}
+
+static bool parse_opt_uint16(const tu_json_value_t *obj, const char *key,
+                             uint16_t *out, uint16_t dflt) {
+    const tu_json_value_t *v = tu_json_get(obj, key);
+    if (!v) return false;
+    if (v->type == TU_JSON_INT || v->type == TU_JSON_DOUBLE) {
+        int64_t iv = tu_json_as_int(v);
+        *out = (iv < 1 || iv > 65535) ? dflt : (uint16_t)iv;
+        return true;
+    }
+    return false;
+}
+
+static bool parse_opt_double(const tu_json_value_t *obj, const char *key, double *out) {
+    const tu_json_value_t *v = tu_json_get(obj, key);
+    if (!v) return false;
+    if (v->type == TU_JSON_DOUBLE || v->type == TU_JSON_INT) {
+        *out = tu_json_as_double(v); return true;
+    }
+    return false;
+}
+
+static bool parse_opt_bool(const tu_json_value_t *obj, const char *key, bool *out) {
+    const tu_json_value_t *v = tu_json_get(obj, key);
+    if (!v) return false;
+    *out = tu_json_as_bool(v); return true;
+}
+
+static int parse_dataflow_str(const char *s) {
+    if (!s) return 0;
+    if (strcmp(s, "weight_stationary") == 0) return 0;
+    if (strcmp(s, "output_stationary") == 0) return 1;
+    if (strcmp(s, "row_stationary") == 0) return 2;
+    if (strcmp(s, "no_local_reuse") == 0) return 3;
+    return 0;
+}
+
+static int parse_dram_type_str(const char *s) {
+    if (!s) return 0;
+    if (strcmp(s, "ideal") == 0) return 0;
+    if (strcmp(s, "hbm2") == 0) return 1;
+    if (strcmp(s, "hbm2e") == 0) return 2;
+    if (strcmp(s, "hbm3") == 0) return 3;
+    if (strcmp(s, "ddr4") == 0) return 4;
+    if (strcmp(s, "ddr5") == 0) return 5;
+    if (strcmp(s, "lpddr5") == 0) return 6;
+    return 0;
+}
+
+static int parse_cycle_model_str(const char *s) {
+    if (!s) return 2;
+    if (strcmp(s, "functional") == 0) return 0;
+    if (strcmp(s, "estimated") == 0) return 1;
+    if (strcmp(s, "cycle_accurate") == 0) return 2;
+    return 2;
+}
+
+static int parse_rounding_str(const char *s) {
+    if (!s) return 0;
+    if (strcmp(s, "round_nearest_even") == 0) return 0;
+    if (strcmp(s, "round_toward_zero") == 0) return 1;
+    if (strcmp(s, "stochastic") == 0) return 2;
+    return 0;
+}
+
+static int parse_conflict_str(const char *s) {
+    if (!s) return 1;
+    if (strcmp(s, "none") == 0) return 0;
+    if (strcmp(s, "detect") == 0) return 1;
+    if (strcmp(s, "stall_cycle") == 0) return 2;
+    return 1;
+}
+
+/* ---- Default configuration ---- */
+
+void tu_config_default(struct tu_config_t *cfg) {
+    memset(cfg, 0, sizeof(*cfg));
+    cfg->pe_rows             = 16;
+    cfg->pe_cols             = 16;
+    cfg->pe_pipeline_depth   = 2;
+    cfg->mac_units_per_pe    = 1;
+    cfg->dataflow_mode       = 0;
+    cfg->dataflow_via_plugin = true;
+
+    cfg->fp16_enabled        = true;
+    cfg->fp32_enabled        = true;
+    cfg->bf16_enabled        = false;
+    cfg->fp8_e4m3_enabled    = false;
+    cfg->fp8_e5m2_enabled    = false;
+    cfg->int8_enabled        = true;
+    cfg->int4_enabled        = true;
+    cfg->rounding_mode       = 0;
+    cfg->subnormal_flush     = true;
+    cfg->saturate            = true;
+
+    cfg->sram_w_size_kb      = 128;
+    cfg->sram_a_size_kb      = 64;
+    cfg->sram_o_size_kb      = 64;
+    cfg->sram_num_banks      = 32;
+    cfg->sram_bank_width     = 4;
+    cfg->sram_words_per_cycle = 1;
+    cfg->sram_arb_mode       = 1;
+    cfg->sram_conflict_mode  = 1;
+    cfg->sram_stall_penalty  = 2;
+    cfg->sram_bw_window_cycles = 4;
+    cfg->sram_bw_modeling    = true;
+
+    cfg->gbuf_size_kb        = 1024;
+    cfg->gbuf_banks          = 16;
+    cfg->gbuf_bank_width     = 8;
+
+    cfg->dram_type           = 0;
+    cfg->dram_bandwidth_gbps = 256.0;
+    cfg->dram_channels       = 8;
+    cfg->dram_model_row_conflicts = false;
+    cfg->dram_latency_read   = 50;
+    cfg->dram_latency_write  = 50;
+
+    cfg->dma_bus_width_bits  = 256;
+    cfg->dma_max_burst_bytes = 64;
+    cfg->dma_num_channels    = 3;
+    cfg->dma_max_outstanding = 4;
+    cfg->dma_async_mode      = false;
+
+    cfg->isa_instr_width_bits = 96;
+    cfg->isa_queue_depth     = 16;
+    cfg->isa_dep_checking    = false;
+
+    cfg->multicore_enabled   = false;
+    cfg->num_cores           = 1;
+    cfg->interconnect_mode   = 0;
+
+    cfg->cycle_model         = 2;
+    cfg->counters_enabled    = true;
+    cfg->detailed_stalls     = false;
+    cfg->trace_enabled       = false;
+    cfg->trace_file[0]       = '\0';
+    cfg->trace_max_events    = 65536;
+
+    cfg->sparsity_enabled    = false;
+    cfg->sparsity_2of4       = false;
+    cfg->sparsity_unstructured = false;
+    cfg->sparsity_metadata_format = 0;
+
+    cfg->golden_reference    = 1;
+    cfg->random_test_iters   = 1000;
+    cfg->error_tolerance     = 1e-5;
+
+    cfg->log_level           = 3;
+}
+
+/* ---- Convert to legacy ---- */
+
+tu_runtime_config_t tu_config_to_runtime(const struct tu_config_t *cfg) {
+    tu_runtime_config_t rt; memset(&rt, 0, sizeof(rt));
+    rt.pe_rows          = cfg->pe_rows;
+    rt.pe_cols          = cfg->pe_cols;
+    rt.sram_w_size      = cfg->sram_w_size_kb * 1024;
+    rt.sram_a_size      = cfg->sram_a_size_kb * 1024;
+    rt.sram_o_size      = cfg->sram_o_size_kb * 1024;
+    rt.counters_enabled = cfg->counters_enabled;
+    rt.detailed_stalls  = cfg->detailed_stalls;
+    rt.trace_enabled    = cfg->trace_enabled;
+    memcpy(rt.trace_file, cfg->trace_file, sizeof(rt.trace_file));
+    rt.verify_enabled   = cfg->golden_reference >= 0;
+    rt.verify_tolerance = cfg->error_tolerance;
+    return rt;
+}
+
+/* ---- Load from JSON string ---- */
+
+int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
+                          char *error_buf, size_t error_size) {
+    if (!json_str || !cfg) {
+        if (error_buf && error_size > 0) snprintf(error_buf, error_size, "null input");
+        return -1;
+    }
+    tu_config_default(cfg);
+
+    char *copy = strdup(json_str);
+    if (!copy) return -1;
+
+    tu_json_value_t root;
+    tu_json_error_t err = tu_json_parse(copy, &root, error_buf, error_size);
+    if (err != TU_JSON_OK) { free(copy); return -1; }
+
+    const tu_json_value_t *tu = tu_json_get(&root, "tu");
+    if (!tu) tu = &root;
+
+    /* Compute */
+    const tu_json_value_t *c = tu_json_get(tu, "compute");
+    if (c) {
+        const tu_json_value_t *pe = tu_json_get(c, "pe_array");
+        if (pe) {
+            parse_opt_uint16(pe, "rows", &cfg->pe_rows, 16);
+            parse_opt_uint16(pe, "cols", &cfg->pe_cols, 16);
+            const tu_json_value_t *df = tu_json_get(pe, "dataflow");
+            if (df && df->type == TU_JSON_STRING)
+                cfg->dataflow_mode = parse_dataflow_str(tu_json_as_string(df, NULL));
+            parse_opt_uint16(pe, "pipeline_depth", &cfg->pe_pipeline_depth, 16);
+        }
+        parse_opt_uint16(c, "mac_units_per_pe", &cfg->mac_units_per_pe, 16);
+        const tu_json_value_t *sp = tu_json_get(c, "supported_precisions");
+        if (sp && sp->type == TU_JSON_ARRAY) {
+            cfg->fp16_enabled = false; cfg->fp32_enabled = false;
+            cfg->bf16_enabled = false; cfg->fp8_e4m3_enabled = false; cfg->fp8_e5m2_enabled = false;
+            for (uint32_t i = 0; i < sp->array.count; i++) {
+                const char *s = tu_json_as_string(&sp->array.items[i], NULL);
+                if (!s) continue;
+                if (strcmp(s, "fp16") == 0) cfg->fp16_enabled = true;
+                else if (strcmp(s, "fp32") == 0) cfg->fp32_enabled = true;
+                else if (strcmp(s, "bf16") == 0) cfg->bf16_enabled = true;
+                else if (strcmp(s, "fp8_e4m3") == 0) cfg->fp8_e4m3_enabled = true;
+                else if (strcmp(s, "fp8_e5m2") == 0) cfg->fp8_e5m2_enabled = true;
+            }
+        }
+    }
+
+    /* Memory */
+    const tu_json_value_t *m = tu_json_get(tu, "memory");
+    if (m) {
+        const tu_json_value_t *sram = tu_json_get(m, "sram");
+        if (sram) {
+            int64_t iv;
+            if (parse_opt_int64(sram, "w_buffer_kb", &iv)) cfg->sram_w_size_kb = (uint32_t)iv;
+            if (parse_opt_int64(sram, "a_buffer_kb", &iv)) cfg->sram_a_size_kb = (uint32_t)iv;
+            if (parse_opt_int64(sram, "o_buffer_kb", &iv)) cfg->sram_o_size_kb = (uint32_t)iv;
+        }
+        const tu_json_value_t *bank = tu_json_get(m, "banking");
+        if (bank) {
+            int64_t iv;
+            if (parse_opt_int64(bank, "banks", &iv)) cfg->sram_num_banks = (uint32_t)iv;
+            if (parse_opt_int64(bank, "bank_width_bytes", &iv)) cfg->sram_bank_width = (uint32_t)iv;
+            const tu_json_value_t *cm = tu_json_get(bank, "conflict_model");
+            if (cm && cm->type == TU_JSON_STRING)
+                cfg->sram_conflict_mode = parse_conflict_str(tu_json_as_string(cm, NULL));
+        }
+        const tu_json_value_t *lat = tu_json_get(m, "latency");
+        if (lat) {
+            parse_opt_double(lat, "dram_read", &cfg->dram_latency_read);
+            parse_opt_double(lat, "dram_write", &cfg->dram_latency_write);
+        }
+        const tu_json_value_t *dram = tu_json_get(m, "dram");
+        if (dram) {
+            const tu_json_value_t *dt = tu_json_get(dram, "type");
+            if (dt && dt->type == TU_JSON_STRING)
+                cfg->dram_type = parse_dram_type_str(tu_json_as_string(dt, NULL));
+            parse_opt_double(dram, "bandwidth_gbps", &cfg->dram_bandwidth_gbps);
+            parse_opt_bool(dram, "model_row_conflicts", &cfg->dram_model_row_conflicts);
+        }
+    }
+
+    /* DMA */
+    const tu_json_value_t *d = tu_json_get(tu, "dma");
+    if (d) {
+        int64_t iv;
+        if (parse_opt_int64(d, "bus_width_bits", &iv)) cfg->dma_bus_width_bits = (uint32_t)iv;
+        if (parse_opt_int64(d, "max_burst_bytes", &iv)) cfg->dma_max_burst_bytes = (uint32_t)iv;
+        if (parse_opt_int64(d, "channels", &iv)) cfg->dma_num_channels = (uint32_t)iv;
+        if (parse_opt_int64(d, "max_outstanding", &iv)) cfg->dma_max_outstanding = (uint32_t)iv;
+        parse_opt_bool(d, "async_mode", &cfg->dma_async_mode);
+    }
+
+    /* ISA */
+    const tu_json_value_t *isa = tu_json_get(tu, "isa");
+    if (isa) {
+        int64_t iv;
+        if (parse_opt_int64(isa, "instruction_width_bits", &iv)) cfg->isa_instr_width_bits = (uint32_t)iv;
+        if (parse_opt_int64(isa, "queue_depth", &iv)) cfg->isa_queue_depth = (uint32_t)iv;
+        parse_opt_bool(isa, "dependency_checking", &cfg->isa_dep_checking);
+    }
+
+    /* Multicore */
+    const tu_json_value_t *mc = tu_json_get(tu, "multicore");
+    if (mc) {
+        parse_opt_bool(mc, "enabled", &cfg->multicore_enabled);
+        int64_t iv;
+        if (parse_opt_int64(mc, "num_cores", &iv)) cfg->num_cores = (uint32_t)iv;
+        const tu_json_value_t *ic = tu_json_get(mc, "interconnect");
+        if (ic && ic->type == TU_JSON_STRING) {
+            const char *s = tu_json_as_string(ic, NULL);
+            if (strcmp(s, "none") == 0) cfg->interconnect_mode = 0;
+            else if (strcmp(s, "ring") == 0) cfg->interconnect_mode = 1;
+            else if (strcmp(s, "mesh") == 0) cfg->interconnect_mode = 2;
+        }
+    }
+
+    /* Performance */
+    const tu_json_value_t *p = tu_json_get(tu, "performance");
+    if (p) {
+        const tu_json_value_t *cm = tu_json_get(p, "cycle_model");
+        if (cm && cm->type == TU_JSON_STRING)
+            cfg->cycle_model = parse_cycle_model_str(tu_json_as_string(cm, NULL));
+        const tu_json_value_t *cnt = tu_json_get(p, "counters");
+        if (cnt) {
+            parse_opt_bool(cnt, "enabled", &cfg->counters_enabled);
+            parse_opt_bool(cnt, "detailed_stalls", &cfg->detailed_stalls);
+        }
+        const tu_json_value_t *trc = tu_json_get(p, "tracing");
+        if (trc) {
+            parse_opt_bool(trc, "enabled", &cfg->trace_enabled);
+            parse_opt_string(trc, "output_file", cfg->trace_file, sizeof(cfg->trace_file));
+        }
+    }
+
+    /* Precision */
+    const tu_json_value_t *pr = tu_json_get(tu, "precision");
+    if (pr) {
+        const tu_json_value_t *fp = tu_json_get(pr, "fp16");
+        if (fp) {
+            const tu_json_value_t *rm = tu_json_get(fp, "rounding");
+            if (rm && rm->type == TU_JSON_STRING)
+                cfg->rounding_mode = parse_rounding_str(tu_json_as_string(rm, NULL));
+            const tu_json_value_t *sn = tu_json_get(fp, "subnormal");
+            if (sn && sn->type == TU_JSON_STRING)
+                cfg->subnormal_flush = (strcmp(tu_json_as_string(sn, NULL), "flush_to_zero") == 0);
+            parse_opt_bool(fp, "saturate", &cfg->saturate);
+        }
+    }
+
+    /* Sparsity */
+    const tu_json_value_t *sp = tu_json_get(tu, "sparsity");
+    if (sp) {
+        parse_opt_bool(sp, "enabled", &cfg->sparsity_enabled);
+        parse_opt_bool(sp, "structured_2of4", &cfg->sparsity_2of4);
+        parse_opt_bool(sp, "unstructured", &cfg->sparsity_unstructured);
+    }
+
+    /* Verification */
+    const tu_json_value_t *v = tu_json_get(tu, "verification");
+    if (v) {
+        const tu_json_value_t *gr = tu_json_get(v, "golden_reference");
+        if (gr && gr->type == TU_JSON_STRING) {
+            const char *s = tu_json_as_string(gr, NULL);
+            if (strcmp(s, "numpy") == 0) cfg->golden_reference = 0;
+            else if (strcmp(s, "pytorch") == 0) cfg->golden_reference = 1;
+        }
+        int64_t iv;
+        if (parse_opt_int64(v, "random_test_iterations", &iv)) cfg->random_test_iters = (uint32_t)iv;
+        parse_opt_double(v, "error_tolerance", &cfg->error_tolerance);
+    }
+
+    tu_json_free(&root);
+    free(copy);
+    return tu_config_validate(cfg, error_buf, error_size);
+}
+
+/* ---- Load from file ---- */
+
+int tu_config_load(const char *path, struct tu_config_t *cfg,
+                   char *error_buf, size_t error_size) {
+    char *json_str = read_file(path, error_buf, error_size);
+    if (!json_str) return -1;
+    int r = tu_config_load_string(json_str, cfg, error_buf, error_size);
+    free(json_str);
+    return r;
+}
+
+/* ---- Validation ---- */
+
+int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t error_size) {
+    if (!cfg) return -1;
+    if (cfg->pe_rows < 1 || cfg->pe_rows > 1024) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size, "pe_rows must be [1,1024], got %u", cfg->pe_rows);
+        return -1;
+    }
+    if (cfg->pe_cols < 1 || cfg->pe_cols > 1024) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size, "pe_cols must be [1,1024], got %u", cfg->pe_cols);
+        return -1;
+    }
+    if (cfg->sram_w_size_kb == 0 || cfg->sram_a_size_kb == 0 || cfg->sram_o_size_kb == 0) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size, "SRAM buffers must be > 0 KB");
+        return -1;
+    }
+    if (cfg->sram_bank_width != 1 && cfg->sram_bank_width != 2 &&
+        cfg->sram_bank_width != 4 && cfg->sram_bank_width != 8) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size, "bank_width must be 1/2/4/8, got %u", cfg->sram_bank_width);
+        return -1;
+    }
+    if (cfg->sram_num_banks < 1 || cfg->sram_num_banks > 1024) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size, "num_banks must be [1,1024], got %u", cfg->sram_num_banks);
+        return -1;
+    }
+    uint32_t bw = cfg->dma_bus_width_bits;
+    if (bw < 32 || bw > 1024 || (bw & (bw - 1)) != 0) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size, "dma_bus_width must be power of 2 [32,1024], got %u", bw);
+        return -1;
+    }
+    if (cfg->isa_queue_depth == 0) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size, "queue_depth must be > 0");
+        return -1;
+    }
+    return 0;
+}
+
+/* ---- Dump ---- */
+
+void tu_config_dump(const struct tu_config_t *cfg) {
+    if (!cfg) return;
+    fprintf(stderr,
+        "════ TU Config ════\n"
+        "  PE: %u×%u, depth=%u, dataflow=%d, plugin=%s\n"
+        "  Prec: FP16=%s BF16=%s FP8e4=%s FP8e5=%s INT8=%s INT4=%s\n"
+        "  SRAM: W=%uK A=%uK O=%uK, banks=%u×%uB\n"
+        "  DRAM: type=%d BW=%.1f GB/s\n"
+        "  DMA: bus=%ub, ch=%u, async=%s\n"
+        "  ISA: instr=%ub, qdepth=%u\n"
+        "  Multi-core: %s, cores=%u\n"
+        "  Cycle: model=%d, counters=%s, trace=%s\n"
+        "  Sparsity: %s 2:4=%s\n"
+        "══════════════════════\n",
+        cfg->pe_rows, cfg->pe_cols, cfg->pe_pipeline_depth, cfg->dataflow_mode,
+        cfg->dataflow_via_plugin ? "yes" : "no",
+        cfg->fp16_enabled ? "on" : "off", cfg->bf16_enabled ? "on" : "off",
+        cfg->fp8_e4m3_enabled ? "on" : "off", cfg->fp8_e5m2_enabled ? "on" : "off",
+        cfg->int8_enabled ? "on" : "off", cfg->int4_enabled ? "on" : "off",
+        cfg->sram_w_size_kb, cfg->sram_a_size_kb, cfg->sram_o_size_kb,
+        cfg->sram_num_banks, cfg->sram_bank_width,
+        cfg->dram_type, cfg->dram_bandwidth_gbps,
+        cfg->dma_bus_width_bits, cfg->dma_num_channels,
+        cfg->dma_async_mode ? "yes" : "no",
+        cfg->isa_instr_width_bits, cfg->isa_queue_depth,
+        cfg->multicore_enabled ? "on" : "off", cfg->num_cores,
+        cfg->cycle_model, cfg->counters_enabled ? "on" : "off",
+        cfg->trace_enabled ? "on" : "off",
+        cfg->sparsity_enabled ? "on" : "off",
+        cfg->sparsity_2of4 ? "on" : "off");
+}

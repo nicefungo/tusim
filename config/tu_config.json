@@ -1,0 +1,116 @@
+{
+  "tu": {
+    "name": "TinyTU",
+    "version": "2.0-dev",
+
+    "compute": {
+      "pe_array": {
+        "rows": 16,
+        "cols": 16,
+        "dataflow": "weight_stationary",
+        "pipeline_depth": 2
+      },
+      "mac_units_per_pe": 1,
+      "supported_precisions": ["fp16", "fp32"],
+      "accumulator_precision": "fp32",
+      "max_tile_rows": 0,
+      "max_tile_cols": 0,
+      "max_tile_inner": 0
+    },
+
+    "memory": {
+      "sram": {
+        "w_buffer_kb": 128,
+        "a_buffer_kb": 64,
+        "o_buffer_kb": 64
+      },
+      "banking": {
+        "banks": 32,
+        "bank_width_bytes": 4,
+        "conflict_model": "detect"
+      },
+      "latency": {
+        "sram_read": 1,
+        "sram_write": 1,
+        "dram_read": 50,
+        "dram_write": 50
+      },
+      "dram": {
+        "type": "ideal",
+        "bandwidth_gbps": 256.0,
+        "model_row_conflicts": false,
+        "core_clock_ghz": 1.0
+      }
+    },
+
+    "dma": {
+      "bus_width_bits": 256,
+      "max_burst_bytes": 64,
+      "channels": 3,
+      "max_outstanding": 4,
+      "async_mode": false
+    },
+
+    "isa": {
+      "instruction_width_bits": 96,
+      "queue_depth": 16,
+      "dependency_checking": false
+    },
+
+    "multicore": {
+      "enabled": false,
+      "num_cores": 1,
+      "interconnect": "none",
+      "cache_coherence": false
+    },
+
+    "performance": {
+      "cycle_model": "cycle_accurate",
+      "counters": {
+        "enabled": true,
+        "detailed_stalls": false
+      },
+      "tracing": {
+        "enabled": false,
+        "format": "none",
+        "output_file": ""
+      }
+    },
+
+    "power": {
+      "enabled": false,
+      "model": "none"
+    },
+
+    "precision": {
+      "fp16": {
+        "rounding": "round_nearest_even",
+        "subnormal": "flush_to_zero",
+        "saturate": true
+      },
+      "fp32": {
+        "rounding": "round_nearest_even"
+      },
+      "int8": {
+        "quantization": "symmetric",
+        "per_channel": false
+      },
+      "bf16": {
+        "rounding": "round_nearest_even"
+      }
+    },
+
+    "sparsity": {
+      "enabled": false,
+      "structured_2of4": false,
+      "unstructured": false,
+      "metadata_format": "bitmask"
+    },
+
+    "verification": {
+      "golden_reference": "pytorch",
+      "random_test_iterations": 1000,
+      "error_tolerance": 1e-05
+    }
+  }
+}

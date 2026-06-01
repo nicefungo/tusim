@@ -213,7 +213,7 @@ static void test_fixed_configs(void) {
         char label[64];
         snprintf(label, sizeof(label), "%s", configs[i].name);
 
-        tu_runtime_config_t cfg = tu_config_default();
+        tu_runtime_config_t cfg = tu_runtime_config_default();
         tu_init_with_config(&cfg);
 
         float max_err, mean_err;
@@ -246,7 +246,7 @@ static void test_fixed_configs(void) {
 static void test_random_bulk(int num_tests) {
     printf("\n--- Random Tensor Differential Testing (%d tests) ---\n", num_tests);
 
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     tu_init_with_config(&cfg);
 
     /* Dimension configurations to cycle through */
@@ -323,7 +323,7 @@ static void test_random_bulk(int num_tests) {
 static void test_bias_golden(void) {
     TEST("Bias golden: zero W/A, sequential bias");
 
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     tu_init_with_config(&cfg);
 
     uint16_t M = 8, N = 8, K = 8;
@@ -369,7 +369,7 @@ static void test_bias_golden(void) {
 static void test_precision_boundaries(void) {
     TEST("Precision: max FP16 values (65504)");
 
-    tu_runtime_config_t cfg = tu_config_default();
+    tu_runtime_config_t cfg = tu_runtime_config_default();
     tu_init_with_config(&cfg);
 
     fp16_t W[4], A[4];

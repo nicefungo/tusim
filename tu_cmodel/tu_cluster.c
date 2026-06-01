@@ -59,7 +59,7 @@ tu_cluster_t *tu_cluster_create(uint32_t num_cores,
     if (base_config) {
         cfg = *base_config;
     } else {
-        cfg = tu_config_default();
+        cfg = tu_runtime_config_default();
     }
 
     for (uint32_t i = 0; i < num_cores; i++) {

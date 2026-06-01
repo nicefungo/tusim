@@ -235,7 +235,7 @@ typedef struct {
     double   verify_tolerance;
 } tu_runtime_config_t;
 
-static inline tu_runtime_config_t tu_config_default(void) {
+static inline tu_runtime_config_t tu_runtime_config_default(void) {
     return (tu_runtime_config_t){
         .pe_rows           = TU_PE_ROWS,
         .pe_cols           = TU_PE_COLS,
