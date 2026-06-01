@@ -1261,7 +1261,7 @@ void tu_config_emit_docs(const tu_config_t *config, FILE *output);
 | **P2.4** | **Compiler: full ONNX op coverage** | 5 days | P1.1-P1.7 | All op handlers mapped to TU ops or host fallback; shape inference for all ops |
 | **P2.5** | **Cycle-accurate model** | 5 days | P0.4 | `perf/cycle_model.c`; pipelined execution with hazards; bank conflict delays; DMA bandwidth contention; DRAM row buffer hit/miss |
 | **P2.6** | **Power/energy model** | 3 days | P2.5 | `perf/power_model.c`; per-component energy counters; CACTI-based SRAM energy; configurable technology node |
-| **P2.7** | **Event tracing (VCD/FST)** | 3 days | P2.5 | `perf/event_trace.c`; per-cycle signal traces; compatible with GTKWave/Surfer |
+| **P2.7** | **Event tracing (VCD/FST)** ✅ COMPLETE | 3 days | P2.5 | `perf/event_trace.c` (215 LOC), `perf/event_trace.h` (136 LOC); IEEE 1364-2001 VCD; per-cycle signal traces with change detection; 31 tests; `docs/event-tracing-vcd.md` |
 | **P2.8** | **Exception handling model** | 2 days | P0.3 | Precise exceptions; error injection for testability; configurable fault behavior |
 | **P2.9** | **Comparative benchmarking** | 4 days | P2.5 | MLPerf Tiny benchmarks; compare against Gemmini, SCALE-Sim; performance/power Pareto analysis |
 | **P2.10** | **Python bindings** | 3 days | P0.2 | pybind11 bindings for `tu_core_t`; NumPy tensor interop; Jupyter notebook examples |

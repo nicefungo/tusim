@@ -8,7 +8,7 @@ LDFLAGS ?= -lm
 TU_DIR     = tu_cmodel
 COMPILER   = compiler/onnx_to_tu.py
 
-.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline test-agen test-multicore test-multicast test-errors test-config test-dataflow test-logging test-rounding test-fp8 test-softmax test-double test-random test-full
+.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline test-agen test-multicore test-multicast test-trace test-errors test-config test-dataflow test-logging test-rounding test-fp8 test-softmax test-double test-random test-full
 
 all: libtucmodel.a
 
@@ -30,6 +30,7 @@ TU_OBJS = $(TU_DIR)/tu_cmodel.o $(TU_DIR)/tu_asm.o $(TU_DIR)/tu_precision.o \
           $(TU_DIR)/infra/config.o \
           $(TU_DIR)/tu_int_quant.o \
           $(TU_DIR)/perf/performance_counters.o \
+          $(TU_DIR)/perf/event_trace.o \
           $(TU_DIR)/compute/pipeline_controller.o \
           $(TU_DIR)/compute/dataflow/dataflow_registry.o \
           $(TU_DIR)/compute/dataflow/dataflow_dispatcher.o \
@@ -127,6 +128,10 @@ $(TU_DIR)/infra/config.o: $(TU_DIR)/infra/config.c $(TU_DIR)/infra/config.h $(TU
 
 # ---- Perf: Performance Counters (E4, P2.5 foundation) ----
 $(TU_DIR)/perf/performance_counters.o: $(TU_DIR)/perf/performance_counters.c $(TU_DIR)/perf/performance_counters.h $(TU_DIR)/tu_config.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
+# ---- Perf: Event Tracing (P2.7) — VCD waveform generation for GTKWave ----
+$(TU_DIR)/perf/event_trace.o: $(TU_DIR)/perf/event_trace.c $(TU_DIR)/perf/event_trace.h $(TU_DIR)/tu_config.h
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
 # ---- Pipeline Controller (E2) — Software pipelining for DMA/compute overlap ----
@@ -272,6 +277,11 @@ test-multicast: tests/test_multicast.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-multicast
 
+# ---- Test: Event Tracing (P2.7) — VCD waveform generation ----
+test-trace: tests/test_trace.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	./test-trace
+
 # ---- Test: Error Handling (E5) ----
 test-errors: tests/test_error_handling.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
@@ -311,7 +321,7 @@ test: test-cmodel test-cmdq test-dma test-dram test-isa test-golden \
       test-elementwise test-bf16 test-memhier test-norm test-dataflow \
       test-logging test-int-quant test-conv test-asm test-rounding test-fp8 \
       test-attention test-perf test-pool test-pipeline test-agen test-multicore \
-      test-multicast test-config
+      test-multicast test-trace test-config
 	@echo ""
 	@echo "═══════════════════════════════════════════"
 	@echo "  ✅ All tests complete"
