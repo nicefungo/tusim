@@ -160,7 +160,7 @@ extern "C" {
 #define TU_CYCLE_MODEL_FUNCTIONAL    0
 #define TU_CYCLE_MODEL_ESTIMATED     1
 #define TU_CYCLE_MODEL_CYCLE_ACCURATE 2
-#define TU_CYCLE_MODEL               0
+#define TU_CYCLE_MODEL               2
 
 #define TU_COUNTERS_ENABLED           1
 #define TU_COUNTERS_DETAILED_STALLS   0
