@@ -27,6 +27,7 @@ typedef enum {
     TU_DMA_XFER_STRIDED_3D  = 2,  /* 3D with depth and row strides */
     TU_DMA_XFER_SCATTER     = 3,  /* 1-to-N: src contiguous → dst via index list (DM3) */
     TU_DMA_XFER_GATHER      = 4,  /* N-to-1: src via index list → dst contiguous (DM3) */
+    TU_DMA_XFER_MULTICAST   = 5,  /* 1-to-N: single src → multiple SRAM dst regions (DM4) */
     TU_DMA_XFER_COUNT
 } tu_dma_transfer_type_t;
 
@@ -85,6 +86,13 @@ typedef struct tu_dma_descriptor_t {
     const uint32_t         *index_list;     /* Array of byte offsets (NULL for non-S/G) */
     uint32_t                index_count;    /* Number of entries in index_list */
     uint32_t                index_elem_size;/* Bytes per element in scatter/gather */
+
+    /* DM4: Multicast destination list */
+    struct {
+        tu_sram_region_t  **regions;        /* Array of destination SRAM regions */
+        uint32_t           *offsets;        /* Array of destination offsets */
+        uint32_t            count;          /* Number of multicast targets */
+    } multicast;
 
     /* Status (set by engine) */
     bool                    completed;
@@ -153,6 +161,13 @@ tu_dma_descriptor_t *tu_dma_desc_create_gather(
     uint8_t channel, tu_sram_region_t *src_region,
     void *dst_host, const uint32_t *index_list,
     uint32_t elem_count, uint32_t elem_size);
+
+/* DM4: Multicast — single src → multiple SRAM destinations (1-to-N broadcast) */
+tu_dma_descriptor_t *tu_dma_desc_create_multicast(
+    uint8_t channel,
+    const void *src_host,
+    tu_sram_region_t **dst_regions, uint32_t *dst_offsets,
+    uint32_t num_destinations, uint32_t elem_size, uint32_t elem_count);
 
 void tu_dma_desc_destroy(tu_dma_descriptor_t *desc);
 tu_dma_descriptor_t *tu_dma_desc_chain(tu_dma_descriptor_t *head, tu_dma_descriptor_t *tail);

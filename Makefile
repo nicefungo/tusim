@@ -8,7 +8,7 @@ LDFLAGS ?= -lm
 TU_DIR     = tu_cmodel
 COMPILER   = compiler/onnx_to_tu.py
 
-.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline test-agen test-multicore test-errors test-config test-dataflow test-logging test-rounding test-fp8 test-softmax test-double test-random test-full
+.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline test-agen test-multicore test-multicast test-errors test-config test-dataflow test-logging test-rounding test-fp8 test-softmax test-double test-random test-full
 
 all: libtucmodel.a
 
@@ -267,6 +267,11 @@ test-multicore: tests/test_multicore.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-multicore
 
+# ---- Test: Multicast/Broadcast DMA (DM4) ----
+test-multicast: tests/test_multicast.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	./test-multicast
+
 # ---- Test: Error Handling (E5) ----
 test-errors: tests/test_error_handling.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
@@ -306,7 +311,7 @@ test: test-cmodel test-cmdq test-dma test-dram test-isa test-golden \
       test-elementwise test-bf16 test-memhier test-norm test-dataflow \
       test-logging test-int-quant test-conv test-asm test-rounding test-fp8 \
       test-attention test-perf test-pool test-pipeline test-agen test-multicore \
-      test-config
+      test-multicast test-config
 	@echo ""
 	@echo "═══════════════════════════════════════════"
 	@echo "  ✅ All tests complete"

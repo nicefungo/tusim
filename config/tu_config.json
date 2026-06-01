@@ -48,7 +48,8 @@
       "max_burst_bytes": 64,
       "channels": 3,
       "max_outstanding": 4,
-      "async_mode": false
+      "async_mode": false,
+      "multicast_enabled": false
     },
 
     "isa": {

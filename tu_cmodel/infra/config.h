@@ -86,6 +86,7 @@ typedef struct tu_config_t {
     uint32_t dma_num_channels;
     uint32_t dma_max_outstanding;
     bool     dma_async_mode;
+    bool     dma_multicast_enabled;  /* DM4: multicast/broadcast DMA */
 
     /* ---- ISA / Command Queue ---- */
     uint32_t isa_instr_width_bits;

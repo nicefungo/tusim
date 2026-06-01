@@ -193,6 +193,7 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->dma_num_channels    = 3;
     cfg->dma_max_outstanding = 4;
     cfg->dma_async_mode      = false;
+    cfg->dma_multicast_enabled = false;
 
     cfg->isa_instr_width_bits = 96;
     cfg->isa_queue_depth     = 16;
@@ -331,6 +332,7 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
         if (parse_opt_int64(d, "channels", &iv)) cfg->dma_num_channels = (uint32_t)iv;
         if (parse_opt_int64(d, "max_outstanding", &iv)) cfg->dma_max_outstanding = (uint32_t)iv;
         parse_opt_bool(d, "async_mode", &cfg->dma_async_mode);
+        parse_opt_bool(d, "multicast_enabled", &cfg->dma_multicast_enabled);
     }
 
     /* ISA */

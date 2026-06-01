@@ -269,9 +269,52 @@ tu_dma_descriptor_t *tu_dma_desc_create_gather(
     return desc;
 }
 
+/* DM4: Multicast — single contiguous host source → multiple SRAM destinations */
+tu_dma_descriptor_t *tu_dma_desc_create_multicast(
+    uint8_t channel,
+    const void *src_host,
+    tu_sram_region_t **dst_regions, uint32_t *dst_offsets,
+    uint32_t num_destinations, uint32_t elem_size, uint32_t elem_count)
+{
+    if (!dst_regions || !dst_offsets || num_destinations == 0 || !src_host)
+        return NULL;
+
+    tu_dma_descriptor_t *desc = calloc(1, sizeof(*desc));
+    if (!desc) return NULL;
+
+    static uint32_t next_id = 3000;
+    desc->desc_id            = next_id++;
+    desc->type               = TU_DMA_XFER_MULTICAST;
+    desc->direction          = TU_DMA_DIR_HOST_TO_TU;
+    desc->channel            = channel;
+    desc->src_host           = src_host;
+    desc->elem_size          = elem_size;
+    desc->dims[0]            = elem_count;
+    desc->dims[1]            = num_destinations;
+    desc->dims[2]            = 1;
+    desc->total_bytes        = elem_count * elem_size * num_destinations;
+
+    /* Allocate destination arrays */
+    desc->multicast.count  = num_destinations;
+    desc->multicast.regions = calloc(num_destinations, sizeof(tu_sram_region_t*));
+    desc->multicast.offsets = calloc(num_destinations, sizeof(uint32_t));
+    if (!desc->multicast.regions || !desc->multicast.offsets) {
+        free(desc->multicast.regions);
+        free(desc->multicast.offsets);
+        free(desc);
+        return NULL;
+    }
+    memcpy(desc->multicast.regions, dst_regions, num_destinations * sizeof(tu_sram_region_t*));
+    memcpy(desc->multicast.offsets, dst_offsets, num_destinations * sizeof(uint32_t));
+
+    return desc;
+}
+
 void tu_dma_desc_destroy(tu_dma_descriptor_t *desc) {
     while (desc) {
         tu_dma_descriptor_t *next = desc->next;
+        free(desc->multicast.regions);
+        free(desc->multicast.offsets);
         free(desc);
         desc = next;
     }
@@ -362,14 +405,43 @@ static void execute_gather(const tu_dma_descriptor_t *desc,
     }
 }
 
+/* DM4: Execute multicast — single src → multiple SRAM destinations */
+static void execute_multicast(const tu_dma_descriptor_t *desc)
+{
+    const uint8_t *src = (const uint8_t *)desc->src_host;
+    uint32_t chunk_bytes = desc->dims[0] * desc->elem_size; /* elem_count * elem_size */
+
+    for (uint32_t d = 0; d < desc->multicast.count; d++) {
+        tu_sram_region_t *region = desc->multicast.regions[d];
+        uint32_t offset = desc->multicast.offsets[d];
+        if (!region) continue;
+
+        /* Validate bounds per destination */
+        if (offset + chunk_bytes > region->total_size) {
+            fprintf(stderr, "DMA multicast overflow: dst=%s target[%u] offset=%u + %u > %u\n",
+                    region->name, d, offset, chunk_bytes, region->total_size);
+            continue;
+        }
+
+        uint8_t *dst = tu_sram_raw_ptr(region) + offset;
+        memcpy(dst, src, chunk_bytes);
+    }
+}
+
 void tu_dma_execute_desc(tu_dma_descriptor_t *desc) {
     if (!desc || desc->completed) return;
 
-    /* Determine source and destination pointers */
+    /* Determine source and destination pointers — declare before any goto */
     const uint8_t *src_ptr = NULL;
     uint8_t       *dst_ptr = NULL;
     tu_sram_region_t *sram_region = NULL;
     bool sram_read = false, sram_write = false;
+
+    /* DM4: Multicast has its own resolution path */
+    if (desc->type == TU_DMA_XFER_MULTICAST) {
+        execute_multicast(desc);
+        goto accounting;
+    }
 
     switch (desc->direction) {
     case TU_DMA_DIR_HOST_TO_TU:
@@ -448,12 +520,17 @@ void tu_dma_execute_desc(tu_dma_descriptor_t *desc) {
     case TU_DMA_XFER_GATHER:
         execute_gather(desc, src_ptr, dst_ptr);
         break;
+    case TU_DMA_XFER_MULTICAST:
+        /* Handled above via early-exit; should not reach here */
+        break;
     default:
         fprintf(stderr, "DMA: unknown transfer type %d\n", desc->type);
         return;
     }
 
     /* Update accounting */
+accounting:
+    /* For multicast, account fanout cost: N× the per-destination transfer */
     uint64_t transfer_cycles = TU_LATENCY_DRAM_READ;  /* base latency */
     transfer_cycles += (desc->total_bytes + TU_DMA_BUS_WIDTH_BYTES - 1) / TU_DMA_BUS_WIDTH_BYTES;
 

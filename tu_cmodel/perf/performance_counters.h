@@ -45,6 +45,7 @@ typedef struct {
     uint64_t dma_transfers_strided_3d;  /* Count: 3D strided */
     uint64_t dma_transfers_scatter;     /* Count: scatter (DM3) */
     uint64_t dma_transfers_gather;      /* Count: gather (DM3) */
+    uint64_t dma_transfers_multicast;   /* Count: multicast (DM4) */
     uint64_t dma_channel_stalls[8];     /* Per-channel stall cycles */
     uint64_t dma_channel_bytes[8];      /* Per-channel bytes transferred */
 } tu_dma_counters_t;

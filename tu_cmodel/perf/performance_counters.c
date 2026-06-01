@@ -84,6 +84,7 @@ void tu_perf_dma_record_read(tu_perf_counters_t *c, uint32_t bytes,
     case 2: c->dma.dma_transfers_strided_3d++; break;
     case 3: c->dma.dma_transfers_scatter++; break;
     case 4: c->dma.dma_transfers_gather++; break;
+    case 5: c->dma.dma_transfers_multicast++; break;
     }
 
     tu_perf_tick(c, active_cycles + stall_cycles);
@@ -361,6 +362,7 @@ tu_perf_counters_t tu_perf_diff(const tu_perf_snapshot_t *before,
     diff.dma.dma_transfers_strided_3d= sub_nonneg(a->dma.dma_transfers_strided_3d, b->dma.dma_transfers_strided_3d);
     diff.dma.dma_transfers_scatter   = sub_nonneg(a->dma.dma_transfers_scatter, b->dma.dma_transfers_scatter);
     diff.dma.dma_transfers_gather    = sub_nonneg(a->dma.dma_transfers_gather, b->dma.dma_transfers_gather);
+    diff.dma.dma_transfers_multicast = sub_nonneg(a->dma.dma_transfers_multicast, b->dma.dma_transfers_multicast);
     for (int i = 0; i < 8; i++) {
         diff.dma.dma_channel_stalls[i] = sub_nonneg(a->dma.dma_channel_stalls[i], b->dma.dma_channel_stalls[i]);
         diff.dma.dma_channel_bytes[i]  = sub_nonneg(a->dma.dma_channel_bytes[i], b->dma.dma_channel_bytes[i]);
@@ -443,6 +445,7 @@ void tu_perf_merge(tu_perf_counters_t *dst, const tu_perf_counters_t *src) {
     dst->dma.dma_transfers_strided_3d += src->dma.dma_transfers_strided_3d;
     dst->dma.dma_transfers_scatter    += src->dma.dma_transfers_scatter;
     dst->dma.dma_transfers_gather     += src->dma.dma_transfers_gather;
+    dst->dma.dma_transfers_multicast  += src->dma.dma_transfers_multicast;
     for (int i = 0; i < 8; i++) {
         dst->dma.dma_channel_stalls[i] += src->dma.dma_channel_stalls[i];
         dst->dma.dma_channel_bytes[i]  += src->dma.dma_channel_bytes[i];
@@ -607,8 +610,10 @@ void tu_perf_print_report(const tu_perf_counters_t *c) {
            (unsigned long)c->dma.dma_transfers_linear, (unsigned long)c->dma.dma_transfers_strided_2d);
     printf("│   Strided 3D:    %15lu │  Scatter:     %14lu │\n",
            (unsigned long)c->dma.dma_transfers_strided_3d, (unsigned long)c->dma.dma_transfers_scatter);
-    printf("│   Gather:        %15lu │  BW:        %10.3f GB/s │\n",
-           (unsigned long)c->dma.dma_transfers_gather, m.dma_bandwidth_gbps);
+    printf("│   Gather:        %15lu │  Multicast:   %14lu │\n",
+           (unsigned long)c->dma.dma_transfers_gather, (unsigned long)c->dma.dma_transfers_multicast);
+    printf("│   BW:            %12.3f GB/s │                           │\n",
+           m.dma_bandwidth_gbps);
     printf("├──────────────────────────────────┼───────────────────────────┤\n");
     printf("│ Compute Engine                   │                           │\n");
     printf("│   Total MACs:    %15lu │  Utilization:%12.1f %%   │\n",
