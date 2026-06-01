@@ -21,18 +21,19 @@ tu_core_t *tu_core_create_with_id(uint32_t core_id,
     core->core_id = core_id;
 
     /* Initialize the core's state from config.
-     * We reuse tu_init_with_config by temporarily swapping g_tu. */
-    tu_state_t saved;
-    memcpy(&saved, &g_tu, sizeof(tu_state_t));
-
+     * We reuse tu_init_with_config which operates on the global g_tu,
+     * then move the initialized state into our core struct. */
     tu_init_with_config(cfg);
 
     /* Move the initialized state into our core */
     memcpy(&core->state, &g_tu, sizeof(tu_state_t));
     core->initialized = true;
 
-    /* Restore previous g_tu */
-    memcpy(&g_tu, &saved, sizeof(tu_state_t));
+    /* Clear g_tu to prevent dangling pointers on next tu_init().
+     * The saved g_tu had its heap allocations freed by tu_init_with_config()
+     * above, so restoring it would create use-after-free. Instead, mark g_tu
+     * as clean — the next tu_init() will start fresh. */
+    memset(&g_tu, 0, sizeof(tu_state_t));
 
     TU_LOG_INFO(TU_COMP_CORE, "tu_core_t [%u] created", core_id);
 
@@ -64,8 +65,9 @@ void tu_core_init(tu_core_t *core) {
     memcpy(&core->state, &g_tu, sizeof(tu_state_t));
     core->initialized = true;
 
-    /* Restore */
-    memcpy(&g_tu, &saved, sizeof(tu_state_t));
+    /* Clear g_tu to prevent dangling pointers (tu_init() freed the old
+     * g_tu allocations; the saved pointers are now invalid). */
+    memset(&g_tu, 0, sizeof(tu_state_t));
 
     TU_LOG_INFO(TU_COMP_CORE, "tu_core_t [%u] re-initialized", core->core_id);
 }
