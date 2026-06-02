@@ -8,7 +8,7 @@ LDFLAGS ?= -lm
 TU_DIR     = tu_cmodel
 COMPILER   = compiler/onnx_to_tu.py
 
-.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline test-agen test-multicore test-multicast test-trace test-errors test-config test-dataflow test-logging test-rounding test-fp8 test-softmax test-double test-random test-full test-context test-compress
+.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline test-agen test-multicore test-multicast test-trace test-errors test-config test-dataflow test-logging test-rounding test-fp8 test-softmax test-double test-random test-full test-context test-compress test-scheduler test-tf32
 
 all: libtucmodel.a
 
@@ -38,7 +38,8 @@ TU_OBJS = $(TU_DIR)/tu_cmodel.o $(TU_DIR)/tu_asm.o $(TU_DIR)/tu_precision.o \
           $(TU_DIR)/compute/dataflow/output_stationary.o \
           $(TU_DIR)/tu_core.o $(TU_DIR)/tu_cluster.o \
           $(TU_DIR)/tu_status.o $(TU_DIR)/infra/tu_context.o \
-          $(TU_DIR)/memory/weight_compress.o
+          $(TU_DIR)/memory/weight_compress.o \
+          $(TU_DIR)/isa/tu_scheduler.o
 
 libtucmodel.a: $(TU_OBJS)
 	$(AR) rcs $@ $^
@@ -174,6 +175,10 @@ $(TU_DIR)/infra/tu_context.o: $(TU_DIR)/infra/tu_context.c $(TU_DIR)/infra/tu_co
 $(TU_DIR)/memory/weight_compress.o: $(TU_DIR)/memory/weight_compress.c $(TU_DIR)/memory/weight_compress.h $(TU_DIR)/tu_config.h $(TU_DIR)/tu_precision.h
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
+# ---- Compiler: Scheduling Pass (C2) ----
+$(TU_DIR)/isa/tu_scheduler.o: $(TU_DIR)/isa/tu_scheduler.c $(TU_DIR)/isa/tu_scheduler.h $(TU_DIR)/isa/tu_isa.h $(TU_DIR)/tu_config.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
 # ---- Test: cmodel correctness ----
 test-cmodel: tests/test_cmodel.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)
@@ -299,6 +304,11 @@ test-compress: tests/test_compress.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -Itests -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-compress
 
+# ---- Test: Compiler Scheduling Pass (C2) ----
+test-scheduler: tests/test_scheduler.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	./test-scheduler
+
 # ---- Test: Multi-context Execution (E3) ----
 test-context: tests/test_context.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
@@ -348,7 +358,7 @@ test: test-cmodel test-cmdq test-dma test-dram test-isa test-golden \
       test-elementwise test-bf16 test-memhier test-norm test-dataflow \
       test-logging test-int-quant test-conv test-asm test-rounding test-fp8 \
       test-attention test-perf test-pool test-pipeline test-agen test-multicore \
-      test-multicast test-trace test-config
+      test-multicast test-trace test-config test-scheduler
 	@echo ""
 	@echo "═══════════════════════════════════════════"
 	@echo "  ✅ All tests complete"
@@ -380,6 +390,6 @@ clean:
 	rm -f test-dataflow test-elementwise test-bf16 test-memhier test-norm test-logging
 	rm -f test-int-quant test-conv test-random
 	rm -f test-rounding test-fp8 test-attention test-perf test-pool test-pipeline
-	rm -f test-agen test-multicore test-compress test-errors test-config test-softmax test-double test-context test-compress
+	rm -f test-agen test-multicore test-compress test-errors test-config test-softmax test-double test-context test-compress test-scheduler
 	rm -f /tmp/gpt_block_tu /tmp/gpt_block_tu.c /tmp/test_asm
 	rm -rf build/ci_reports
