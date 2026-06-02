@@ -2,7 +2,7 @@
 # ================================
 
 CC      ?= gcc
-CFLAGS  ?= -O2 -Wall -Wextra -std=c11
+CFLAGS  ?= -O2 -Wall -Wextra -std=c11 -fPIC
 LDFLAGS ?= -lm
 
 TU_DIR     = tu_cmodel
@@ -10,7 +10,7 @@ COMPILER   = compiler/onnx_to_tu.py
 
 .PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline test-agen test-multicore test-multicast test-scatter-gather test-trace test-errors test-config test-dataflow test-logging test-rounding test-fp8 test-softmax test-double test-random test-full test-context test-compress test-scheduler test-liveness test-tf32 test-bench test-power
 
-all: libtucmodel.a
+all: libtucmodel.a libtucmodel.so
 
 # ---- TU CModel library ----
 TU_OBJS = $(TU_DIR)/tu_cmodel.o $(TU_DIR)/tu_asm.o $(TU_DIR)/tu_precision.o \
@@ -45,6 +45,9 @@ TU_OBJS = $(TU_DIR)/tu_cmodel.o $(TU_DIR)/tu_asm.o $(TU_DIR)/tu_precision.o \
 
 libtucmodel.a: $(TU_OBJS)
 	$(AR) rcs $@ $^
+
+libtucmodel.so: $(TU_OBJS)
+	$(CC) -shared -o $@ $^ $(LDFLAGS)
 
 $(TU_DIR)/tu_cmodel.o: $(TU_DIR)/tu_cmodel.c $(TU_DIR)/tu_cmodel.h $(TU_DIR)/tu_precision.h $(TU_DIR)/tu_config.h $(TU_DIR)/tu_sram.h $(TU_DIR)/tu_dma.h $(TU_DIR)/command_queue.h
 	$(CC) $(CFLAGS) -c -o $@ $<
@@ -415,7 +418,7 @@ test-full: test-compiler libtucmodel.a
 
 # ---- Clean ----
 clean:
-	rm -f $(TU_DIR)/*.o $(TU_DIR)/memory/*.o $(TU_DIR)/isa/*.o $(TU_DIR)/compute/*.o $(TU_DIR)/compute/dataflow/*.o $(TU_DIR)/infra/*.o $(TU_DIR)/perf/*.o libtucmodel.a
+	rm -f $(TU_DIR)/*.o $(TU_DIR)/memory/*.o $(TU_DIR)/isa/*.o $(TU_DIR)/compute/*.o $(TU_DIR)/compute/dataflow/*.o $(TU_DIR)/infra/*.o $(TU_DIR)/perf/*.o libtucmodel.a libtucmodel.so
 	rm -f test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-golden-full
 	rm -f test-dataflow test-elementwise test-bf16 test-memhier test-norm test-logging
 	rm -f test-int-quant test-conv test-random

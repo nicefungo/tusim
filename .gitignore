@@ -50,3 +50,4 @@ test-cycle
 # Experiments / temp
 experiments/tu_bench
 test-power
+libtucmodel.so
