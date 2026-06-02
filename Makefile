@@ -15,7 +15,7 @@ all: libtucmodel.a
 # ---- TU CModel library ----
 TU_OBJS = $(TU_DIR)/tu_cmodel.o $(TU_DIR)/tu_asm.o $(TU_DIR)/tu_precision.o \
           $(TU_DIR)/tu_sram.o $(TU_DIR)/tu_dma.o $(TU_DIR)/dma_descriptor.o \
-          $(TU_DIR)/rounding.o $(TU_DIR)/fp8.o \
+          $(TU_DIR)/rounding.o $(TU_DIR)/fp8.o $(TU_DIR)/tf32.o \
           $(TU_DIR)/command_queue.o $(TU_DIR)/memory/dram_model.o \
           $(TU_DIR)/memory/memory_hierarchy.o $(TU_DIR)/memory/double_buffer.o \
           $(TU_DIR)/memory/address_generator.o \
@@ -65,6 +65,9 @@ $(TU_DIR)/rounding.o: $(TU_DIR)/rounding.c $(TU_DIR)/rounding.h
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
 $(TU_DIR)/fp8.o: $(TU_DIR)/fp8.c $(TU_DIR)/fp8.h $(TU_DIR)/rounding.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
+$(TU_DIR)/tf32.o: $(TU_DIR)/tf32.c $(TU_DIR)/tf32.h $(TU_DIR)/rounding.h $(TU_DIR)/tu_precision.h
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
 $(TU_DIR)/command_queue.o: $(TU_DIR)/command_queue.c $(TU_DIR)/command_queue.h $(TU_DIR)/tu_cmodel.h $(TU_DIR)/compute/elementwise_pipeline.h
@@ -250,6 +253,11 @@ test-rounding: tests/test_rounding.c libtucmodel.a
 test-fp8: tests/test_fp8.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-fp8
+
+# ---- Test: TF32 (D3) ----
+test-tf32: tests/test_tf32.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	./test-tf32
 
 # ---- Test: Attention Engine (O3) ----
 test-attention: tests/test_attention.c libtucmodel.a

@@ -6,6 +6,7 @@
 #include "tu_precision.h"
 #include "rounding.h"
 #include "fp8.h"
+#include "tf32.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -225,6 +226,14 @@ static void prec_int4_from_fp32(fp32_t v, void *dst) {
     *(uint8_t*)dst = tu_fp32_to_uint4_nibble(v, &qp);
 }
 
+/* ---- TF32 precision registry entries (D3) ---- */
+static fp32_t prec_tf32_to_fp32(const void *src) {
+    return tu_tf32_to_fp32(*(const tf32_t*)src);
+}
+static void prec_tf32_from_fp32(fp32_t v, void *dst) {
+    *(tf32_t*)dst = tu_fp32_to_tf32(v);
+}
+
 static tu_precision_desc_t builtin_precisions[] = {
     { TU_PREC_FP16, 2, "fp16", prec_fp16_to_fp32, prec_fp16_from_fp32 },
     { TU_PREC_FP32, 4, "fp32", prec_fp32_to_fp32, prec_fp32_from_fp32 },
@@ -233,6 +242,7 @@ static tu_precision_desc_t builtin_precisions[] = {
     { TU_PREC_FP8_E5M2, 1, "fp8_e5m2", prec_fp8_e5m2_to_fp32, prec_fp8_e5m2_from_fp32 },
     { TU_PREC_INT8, 1, "int8", prec_int8_to_fp32, prec_int8_from_fp32 },
     { TU_PREC_INT4, 1, "int4", prec_int4_to_fp32, prec_int4_from_fp32 },
+    { TU_PREC_TF32, 4, "tf32", prec_tf32_to_fp32, prec_tf32_from_fp32 },
 };
 
 static tu_precision_desc_t *custom_precisions = NULL;
