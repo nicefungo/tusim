@@ -1,6 +1,12 @@
-libtucmodel.a
+*.o
+*.a
+__pycache__/
+build/
+
+# Test binaries
 test-cmodel
 test-cmdq
+test-cmdq-dbg
 test-dma
 test-dram
 test-isa
@@ -24,10 +30,22 @@ test-pipeline
 test-agen
 test-multicore
 test-multicast
+test-multicast-debug
 test-trace
 test-errors
 test-config
 test-softmax
 test-double
 test-context
-*.o
+test-liveness
+test-scheduler
+test-tf32
+test-compress
+test-compiler
+test-full
+test-asm
+test-quick
+test-cycle
+
+# Experiments / temp
+experiments/tu_bench
