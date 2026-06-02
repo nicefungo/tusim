@@ -78,4 +78,4 @@ Load with `tu_init_from_file("config.json", ...)`.
 
 ## License
 
-TBD
+MIT © 2026 nicefungo
