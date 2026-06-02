@@ -309,6 +309,11 @@ test-scatter-gather: tests/test_scatter_gather.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-scatter-gather
 
+# ---- Benchmark: Comparative Performance (P2.9/V5) ----
+test-bench: tests/test_benchmark.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	./test-bench
+
 # ---- Test: Weight Compression (M5) ----
 test-compress: tests/test_compress.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -Itests -o $@ $< -L. -ltucmodel $(LDFLAGS)
