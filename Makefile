@@ -8,7 +8,7 @@ LDFLAGS ?= -lm
 TU_DIR     = tu_cmodel
 COMPILER   = compiler/onnx_to_tu.py
 
-.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline test-agen test-multicore test-multicast test-trace test-errors test-config test-dataflow test-logging test-rounding test-fp8 test-softmax test-double test-random test-full test-context test-compress test-scheduler test-liveness test-tf32
+.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline test-agen test-multicore test-multicast test-scatter-gather test-trace test-errors test-config test-dataflow test-logging test-rounding test-fp8 test-softmax test-double test-random test-full test-context test-compress test-scheduler test-liveness test-tf32 test-bench
 
 all: libtucmodel.a
 
@@ -304,6 +304,11 @@ test-multicast: tests/test_multicast.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-multicast
 
+# ---- Test: Scatter/Gather DMA (DM3) ----
+test-scatter-gather: tests/test_scatter_gather.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	./test-scatter-gather
+
 # ---- Test: Weight Compression (M5) ----
 test-compress: tests/test_compress.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -Itests -o $@ $< -L. -ltucmodel $(LDFLAGS)
@@ -368,7 +373,7 @@ test: test-cmodel test-cmdq test-dma test-dram test-isa test-golden \
       test-elementwise test-bf16 test-memhier test-norm test-dataflow \
       test-logging test-int-quant test-conv test-asm test-rounding test-fp8 \
       test-attention test-perf test-pool test-pipeline test-agen test-multicore \
-      test-multicast test-trace test-config test-scheduler test-liveness
+      test-multicast test-scatter-gather test-trace test-config test-scheduler test-liveness
 	@echo ""
 	@echo "═══════════════════════════════════════════"
 	@echo "  ✅ All tests complete"
