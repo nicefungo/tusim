@@ -8,7 +8,7 @@ LDFLAGS ?= -lm
 TU_DIR     = tu_cmodel
 COMPILER   = compiler/onnx_to_tu.py
 
-.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline test-agen test-multicore test-multicast test-trace test-errors test-config test-dataflow test-logging test-rounding test-fp8 test-softmax test-double test-random test-full test-context
+.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline test-agen test-multicore test-multicast test-trace test-errors test-config test-dataflow test-logging test-rounding test-fp8 test-softmax test-double test-random test-full test-context test-compress
 
 all: libtucmodel.a
 
@@ -37,7 +37,8 @@ TU_OBJS = $(TU_DIR)/tu_cmodel.o $(TU_DIR)/tu_asm.o $(TU_DIR)/tu_precision.o \
           $(TU_DIR)/compute/dataflow/weight_stationary.o \
           $(TU_DIR)/compute/dataflow/output_stationary.o \
           $(TU_DIR)/tu_core.o $(TU_DIR)/tu_cluster.o \
-          $(TU_DIR)/tu_status.o $(TU_DIR)/infra/tu_context.o
+          $(TU_DIR)/tu_status.o $(TU_DIR)/infra/tu_context.o \
+          $(TU_DIR)/memory/weight_compress.o
 
 libtucmodel.a: $(TU_OBJS)
 	$(AR) rcs $@ $^
@@ -166,6 +167,10 @@ $(TU_DIR)/tu_status.o: $(TU_DIR)/tu_status.c $(TU_DIR)/tu_status.h
 $(TU_DIR)/infra/tu_context.o: $(TU_DIR)/infra/tu_context.c $(TU_DIR)/infra/tu_context.h $(TU_DIR)/tu_core.h $(TU_DIR)/infra/config.h $(TU_DIR)/tu_status.h $(TU_DIR)/tu_precision.h $(TU_DIR)/rounding.h $(TU_DIR)/perf/performance_counters.h
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
+# ---- Memory: Weight Compression (M5) ----
+$(TU_DIR)/memory/weight_compress.o: $(TU_DIR)/memory/weight_compress.c $(TU_DIR)/memory/weight_compress.h $(TU_DIR)/tu_config.h $(TU_DIR)/tu_precision.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
 # ---- Test: cmodel correctness ----
 test-cmodel: tests/test_cmodel.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)
@@ -281,10 +286,15 @@ test-multicast: tests/test_multicast.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-multicast
 
+# ---- Test: Weight Compression (M5) ----
+test-compress: tests/test_compress.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -Itests -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	./test-compress
+
 # ---- Test: Multi-context Execution (E3) ----
 test-context: tests/test_context.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
-	./test-context
+	./test-context test-compress
 
 # ---- Test: Event Tracing (P2.7) — VCD waveform generation ----
 test-trace: tests/test_trace.c libtucmodel.a
@@ -362,6 +372,6 @@ clean:
 	rm -f test-dataflow test-elementwise test-bf16 test-memhier test-norm test-logging
 	rm -f test-int-quant test-conv test-random
 	rm -f test-rounding test-fp8 test-attention test-perf test-pool test-pipeline
-	rm -f test-agen test-multicore test-errors test-config test-softmax test-double test-context
+	rm -f test-agen test-multicore test-compress test-errors test-config test-softmax test-double test-context test-compress
 	rm -f /tmp/gpt_block_tu /tmp/gpt_block_tu.c /tmp/test_asm
 	rm -rf build/ci_reports

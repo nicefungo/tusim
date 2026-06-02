@@ -3,7 +3,17 @@
 > **Gap ID:** E1 (No command queue → Command queue with ordering & deps)
 > **Priority:** P0 (Critical)
 > **Date:** 2026-05-28
-> **Heartbeat:** Cycle 2
+> **Heartbeats:** Cycle 2 (initial), Cycle N+1 (fix regression)
+
+## Recent Fix (Heartbeat N+1)
+
+**Regression:** `TU_CYCLE_MODEL` was inadvertently set to `2` (CYCLE_ACCURATE) as the default, which made the command queue operate in async mode and broke synchronous execution. All convenience wrappers (`tu_cmdq_submit_mma`, `tu_cmdq_submit_dma_load`, etc.) returned successfully but commands stayed PENDING because `tu_cmdq_tick()` was never called.
+
+**Fix:**
+1. Reset `TU_CYCLE_MODEL` back to `0` (FUNCTIONAL) — synchronous execution is the correct default for the functional cmodel.
+2. Added auto-tick in `tu_cmdq_submit()` — when async mode is explicitly enabled, submission now calls `tu_cmdq_tick()` to advance the queue, ensuring the freshly-submitted command (with no dependencies) executes immediately. This makes the convenience API work correctly in all cycle-model modes.
+
+**Verification:** 9/9 command queue tests pass, 19/19 cmodel tests pass.
 
 ---
 

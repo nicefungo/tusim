@@ -257,9 +257,15 @@ int tu_cmdq_submit(tu_command_queue_t *cq,
 
     if (cmd_id_out) *cmd_id_out = cmd->cmd_id;
 
-    /* In synchronous mode, execute immediately */
+    /* In synchronous mode, execute immediately.
+     * In async mode, tick once to advance the queue (picks up this
+     * command if its dependencies are satisfied). This ensures
+     * tu_cmdq_submit_mma() and other convenience wrappers work
+     * correctly in all cycle-model modes. */
     if (cq->synchronous) {
         execute_command(cq, cmd);
+    } else {
+        tu_cmdq_tick(cq);
     }
 
     return (int)cmd->cmd_id;  /* Return command ID on success */
