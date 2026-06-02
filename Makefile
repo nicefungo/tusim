@@ -8,7 +8,7 @@ LDFLAGS ?= -lm
 TU_DIR     = tu_cmodel
 COMPILER   = compiler/onnx_to_tu.py
 
-.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline test-agen test-multicore test-multicast test-scatter-gather test-trace test-errors test-config test-dataflow test-logging test-rounding test-fp8 test-softmax test-double test-random test-full test-context test-compress test-scheduler test-liveness test-tf32 test-bench
+.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline test-agen test-multicore test-multicast test-scatter-gather test-trace test-errors test-config test-dataflow test-logging test-rounding test-fp8 test-softmax test-double test-random test-full test-context test-compress test-scheduler test-liveness test-tf32 test-bench test-power
 
 all: libtucmodel.a
 
@@ -31,6 +31,7 @@ TU_OBJS = $(TU_DIR)/tu_cmodel.o $(TU_DIR)/tu_asm.o $(TU_DIR)/tu_precision.o \
           $(TU_DIR)/tu_int_quant.o \
           $(TU_DIR)/perf/performance_counters.o \
           $(TU_DIR)/perf/event_trace.o \
+          $(TU_DIR)/perf/power_model.o \
           $(TU_DIR)/compute/pipeline_controller.o \
           $(TU_DIR)/compute/dataflow/dataflow_registry.o \
           $(TU_DIR)/compute/dataflow/dataflow_dispatcher.o \
@@ -138,6 +139,10 @@ $(TU_DIR)/perf/performance_counters.o: $(TU_DIR)/perf/performance_counters.c $(T
 
 # ---- Perf: Event Tracing (P2.7) — VCD waveform generation for GTKWave ----
 $(TU_DIR)/perf/event_trace.o: $(TU_DIR)/perf/event_trace.c $(TU_DIR)/perf/event_trace.h $(TU_DIR)/tu_config.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
+# ---- Perf: Power/Energy Model (E4) — configurable technology nodes, CACTI-derived energy tables
+$(TU_DIR)/perf/power_model.o: $(TU_DIR)/perf/power_model.c $(TU_DIR)/perf/power_model.h $(TU_DIR)/tu_config.h
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
 # ---- Pipeline Controller (E2) — Software pipelining for DMA/compute overlap ----
@@ -294,6 +299,11 @@ test-agen: tests/test_address_gen.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-agen
 
+# ---- Test: Power/Energy Model (E4) ----
+test-power: tests/test_power_model.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	./test-power
+
 # ---- Test: Multi-core Cluster (A5) ----
 test-multicore: tests/test_multicore.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
@@ -410,6 +420,6 @@ clean:
 	rm -f test-dataflow test-elementwise test-bf16 test-memhier test-norm test-logging
 	rm -f test-int-quant test-conv test-random
 	rm -f test-rounding test-fp8 test-attention test-perf test-pool test-pipeline
-	rm -f test-agen test-multicore test-compress test-errors test-config test-softmax test-double test-context test-compress test-scheduler test-liveness
+	rm -f test-agen test-multicore test-compress test-errors test-config test-softmax test-double test-context test-compress test-scheduler test-liveness test-power
 	rm -f /tmp/gpt_block_tu /tmp/gpt_block_tu.c /tmp/test_asm
 	rm -rf build/ci_reports
