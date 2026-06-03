@@ -8,7 +8,7 @@ LDFLAGS ?= -lm
 TU_DIR     = tu_cmodel
 COMPILER   = compiler/onnx_to_tu.py
 
-.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline test-agen test-multicore test-multicast test-scatter-gather test-trace test-errors test-config test-dataflow test-logging test-rounding test-fp8 test-softmax test-double test-random test-full test-context test-compress test-scheduler test-liveness test-tf32 test-bench test-power
+.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline test-agen test-multicore test-multicast test-scatter-gather test-trace test-errors test-config test-dataflow test-logging test-rounding test-fp8 test-softmax test-double test-random test-full test-context test-compress test-scheduler test-liveness test-tf32 test-bench test-power test-debug
 
 all: libtucmodel.a libtucmodel.so
 
@@ -41,7 +41,8 @@ TU_OBJS = $(TU_DIR)/tu_cmodel.o $(TU_DIR)/tu_asm.o $(TU_DIR)/tu_precision.o \
           $(TU_DIR)/tu_status.o $(TU_DIR)/infra/tu_context.o \
           $(TU_DIR)/memory/weight_compress.o \
           $(TU_DIR)/isa/tu_scheduler.o \
-          $(TU_DIR)/isa/tu_liveness.o
+          $(TU_DIR)/isa/tu_liveness.o \
+          $(TU_DIR)/infra/tu_debug.o
 
 libtucmodel.a: $(TU_OBJS)
 	$(AR) rcs $@ $^
@@ -192,6 +193,10 @@ $(TU_DIR)/isa/tu_scheduler.o: $(TU_DIR)/isa/tu_scheduler.c $(TU_DIR)/isa/tu_sche
 $(TU_DIR)/isa/tu_liveness.o: $(TU_DIR)/isa/tu_liveness.c $(TU_DIR)/isa/tu_liveness.h $(TU_DIR)/isa/tu_scheduler.h $(TU_DIR)/isa/tu_isa.h $(TU_DIR)/tu_config.h
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
+# ---- Debug/Observability (I3) ----
+$(TU_DIR)/infra/tu_debug.o: $(TU_DIR)/infra/tu_debug.c $(TU_DIR)/infra/tu_debug.h $(TU_DIR)/tu_core.h $(TU_DIR)/tu_cmodel.h $(TU_DIR)/tu_sram.h $(TU_DIR)/tu_dma.h $(TU_DIR)/command_queue.h $(TU_DIR)/perf/performance_counters.h $(TU_DIR)/infra/config.h $(TU_DIR)/infra/logging.h $(TU_DIR)/tu_status.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
 # ---- Test: cmodel correctness ----
 test-cmodel: tests/test_cmodel.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)
@@ -306,6 +311,11 @@ test-agen: tests/test_address_gen.c libtucmodel.a
 test-power: tests/test_power_model.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-power
+
+# ---- Test: Debug & Observability (I3) ----
+test-debug: tests/test_debug.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	./test-debug
 
 # ---- Test: Multi-core Cluster (A5) ----
 test-multicore: tests/test_multicore.c libtucmodel.a
