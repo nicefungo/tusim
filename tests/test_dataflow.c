@@ -26,6 +26,8 @@ tu_dataflow_plugin_t *tu_dataflow_ws_create(void);
 void tu_dataflow_ws_destroy(tu_dataflow_plugin_t *p);
 tu_dataflow_plugin_t *tu_dataflow_os_create(void);
 void tu_dataflow_os_destroy(tu_dataflow_plugin_t *p);
+tu_dataflow_plugin_t *tu_dataflow_rs_create(void);
+void tu_dataflow_rs_destroy(tu_dataflow_plugin_t *p);
 
 static int tests_passed = 0;
 static int tests_failed = 0;
@@ -51,14 +53,17 @@ static void test_registry_api(void) {
     /* Create and register plugins */
     tu_dataflow_plugin_t *ws = tu_dataflow_ws_create();
     tu_dataflow_plugin_t *os = tu_dataflow_os_create();
+    tu_dataflow_plugin_t *rs = tu_dataflow_rs_create();
 
     ASSERT(ws != NULL, "WS create failed");
     ASSERT(os != NULL, "OS create failed");
+    ASSERT(rs != NULL, "RS create failed");
 
     tu_dataflow_register(ws);
     tu_dataflow_register(os);
+    tu_dataflow_register(rs);
 
-    ASSERT_EQ(tu_dataflow_registry_count(), 2, "registry count != 2");
+    ASSERT_EQ(tu_dataflow_registry_count(), 3, "registry count != 3");
 
     tu_dataflow_plugin_t *found;
 
@@ -155,6 +160,117 @@ static void test_os_identity(void) {
 
     ASSERT(strcmp(tu_get_dataflow_name(), "output_stationary") == 0,
            "dataflow name mismatch");
+    PASS;
+}
+
+/* ---- Test 3b: RS identity MMA ---- */
+
+static void test_rs_identity(void) {
+    TEST("RS identity 16x16");
+    tu_init();
+    tu_set_dataflow(TU_DATAFLOW_ROW_STATIONARY);
+
+    uint16_t N = 16;
+    fill_identity_fp16(tu_sram_raw_ptr(&g_tu.sram_w), N);
+    fill_identity_fp16(tu_sram_raw_ptr(&g_tu.sram_a), N);
+    memset(tu_sram_raw_ptr(&g_tu.sram_o), 0, N * N * 4);
+
+    tu_mma(N, N, N, 0, 0, 0, false);
+
+    /* Verify output = identity */
+    float *O = (float *)tu_sram_raw_ptr(&g_tu.sram_o);
+    for (uint16_t i = 0; i < N; i++) {
+        for (uint16_t j = 0; j < N; j++) {
+            float expected = (i == j) ? 1.0f : 0.0f;
+            float got = O[i * N + j];
+            if (fabsf(got - expected) > 1e-5f) {
+                char msg[128];
+                snprintf(msg, sizeof(msg), "O[%u][%u] = %f, expected %f", i, j, got, expected);
+                FAIL(msg);
+                return;
+            }
+        }
+    }
+
+    ASSERT(strcmp(tu_get_dataflow_name(), "row_stationary") == 0,
+           "dataflow name mismatch");
+    PASS;
+}
+
+/* ---- Test 3c: RS-vs-WS equivalence ---- */
+
+static void test_rs_vs_ws_equivalence(void) {
+    TEST("RS-vs-WS equivalence (32x16 random)");
+
+    uint16_t M = 32, N = 32, K = 16;
+
+    /* Run WS */
+    tu_init();
+    tu_set_dataflow(TU_DATAFLOW_WEIGHT_STATIONARY);
+
+    uint16_t *W_ws = (uint16_t *)tu_sram_raw_ptr(&g_tu.sram_w);
+    uint16_t *A_ws = (uint16_t *)tu_sram_raw_ptr(&g_tu.sram_a);
+    for (uint32_t i = 0; i < (uint32_t)M * K; i++)
+        W_ws[i] = 0x3C00 + (i & 0xFF);
+    for (uint32_t i = 0; i < (uint32_t)K * N; i++)
+        A_ws[i] = 0x3800 + ((i * 3) & 0xFF);
+
+    memset(tu_sram_raw_ptr(&g_tu.sram_o), 0, M * N * 4);
+    tu_mma(M, N, K, 0, 0, 0, false);
+    float *O_ws = (float *)malloc(M * N * sizeof(float));
+    memcpy(O_ws, tu_sram_raw_ptr(&g_tu.sram_o), M * N * 4);
+
+    /* Run RS with same data */
+    tu_init();
+    tu_set_dataflow(TU_DATAFLOW_ROW_STATIONARY);
+
+    uint16_t *W_rs = (uint16_t *)tu_sram_raw_ptr(&g_tu.sram_w);
+    uint16_t *A_rs = (uint16_t *)tu_sram_raw_ptr(&g_tu.sram_a);
+    for (uint32_t i = 0; i < (uint32_t)M * K; i++)
+        W_rs[i] = 0x3C00 + (i & 0xFF);
+    for (uint32_t i = 0; i < (uint32_t)K * N; i++)
+        A_rs[i] = 0x3800 + ((i * 3) & 0xFF);
+
+    memset(tu_sram_raw_ptr(&g_tu.sram_o), 0, M * N * 4);
+    tu_mma(M, N, K, 0, 0, 0, false);
+    float *O_rs = (float *)tu_sram_raw_ptr(&g_tu.sram_o);
+
+    /* Compare bit-exact */
+    for (uint32_t i = 0; i < (uint32_t)M * N; i++) {
+        if (fabsf(O_ws[i] - O_rs[i]) > 1e-6f) {
+            char msg[128];
+            snprintf(msg, sizeof(msg),
+                     "Mismatch at [%u]: WS=%f RS=%f diff=%e",
+                     i, O_ws[i], O_rs[i], fabsf(O_ws[i] - O_rs[i]));
+            FAIL(msg);
+            free(O_ws);
+            return;
+        }
+    }
+
+    free(O_ws);
+    PASS;
+}
+
+/* ---- Test 3d: RS name lookup in registry ---- */
+
+static void test_rs_registry_lookup(void) {
+    TEST("RS registry lookup by ID and name");
+    tu_init(); /* re-initializes registry with WS+OS+RS */
+
+    tu_dataflow_plugin_t *found;
+
+    found = tu_dataflow_lookup(TU_DATAFLOW_ROW_STATIONARY);
+    ASSERT(found != NULL, "RS lookup by ID failed");
+    ASSERT(found->id == TU_DATAFLOW_ROW_STATIONARY, "RS ID mismatch");
+    ASSERT(strcmp(found->name, "row_stationary") == 0, "RS name mismatch");
+
+    found = tu_dataflow_lookup_by_name("row_stationary");
+    ASSERT(found != NULL, "RS lookup by name failed");
+    ASSERT(found->id == TU_DATAFLOW_ROW_STATIONARY, "RS name→ID mismatch");
+
+    ASSERT_EQ(tu_dataflow_registry_count(), 3, "registry should have 3 plugins");
+
     PASS;
 }
 
@@ -335,6 +451,9 @@ int main(void) {
     test_registry_api();       /* Must run first — destroys registry */
     test_ws_identity();
     test_os_identity();
+    test_rs_identity();
+    test_rs_registry_lookup();
+    test_rs_vs_ws_equivalence();
     test_ws_vs_os_equivalence();
     test_dataflow_switch();
     test_edge_tiles();

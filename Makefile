@@ -37,6 +37,7 @@ TU_OBJS = $(TU_DIR)/tu_cmodel.o $(TU_DIR)/tu_asm.o $(TU_DIR)/tu_precision.o \
           $(TU_DIR)/compute/dataflow/dataflow_dispatcher.o \
           $(TU_DIR)/compute/dataflow/weight_stationary.o \
           $(TU_DIR)/compute/dataflow/output_stationary.o \
+          $(TU_DIR)/compute/dataflow/row_stationary.o \
           $(TU_DIR)/tu_core.o $(TU_DIR)/tu_cluster.o \
           $(TU_DIR)/tu_status.o $(TU_DIR)/infra/tu_context.o \
           $(TU_DIR)/memory/weight_compress.o \
@@ -164,6 +165,9 @@ $(TU_DIR)/compute/dataflow/weight_stationary.o: $(TU_DIR)/compute/dataflow/weigh
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
 $(TU_DIR)/compute/dataflow/output_stationary.o: $(TU_DIR)/compute/dataflow/output_stationary.c $(TU_DIR)/compute/dataflow/dataflow_interface.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
+$(TU_DIR)/compute/dataflow/row_stationary.o: $(TU_DIR)/compute/dataflow/row_stationary.c $(TU_DIR)/compute/dataflow/dataflow_interface.h
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
 # ---- Multi-core: tu_core and tu_cluster (A5) ----

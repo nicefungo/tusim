@@ -25,6 +25,8 @@ tu_dataflow_plugin_t *tu_dataflow_ws_create(void);
 void tu_dataflow_ws_destroy(tu_dataflow_plugin_t *p);
 tu_dataflow_plugin_t *tu_dataflow_os_create(void);
 void tu_dataflow_os_destroy(tu_dataflow_plugin_t *p);
+tu_dataflow_plugin_t *tu_dataflow_rs_create(void);
+void tu_dataflow_rs_destroy(tu_dataflow_plugin_t *p);
 
 tu_state_t g_tu = {0};
 
@@ -95,6 +97,7 @@ void tu_init_with_config(const tu_runtime_config_t *cfg) {
     tu_dataflow_registry_init();
     tu_dataflow_register(tu_dataflow_ws_create());
     tu_dataflow_register(tu_dataflow_os_create());
+    tu_dataflow_register(tu_dataflow_rs_create());
     tu_set_dataflow(TU_DATAFLOW_MODE);  /* Default from tu_config.h */
 
     TU_LOG_INFO(TU_COMP_CORE, "Initialized: %u×%u PE, %u KB SRAM, dataflow=%s",
