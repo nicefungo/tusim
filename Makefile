@@ -426,6 +426,23 @@ test-full: test-compiler libtucmodel.a
 	@echo "=== Running on TU CModel ==="
 	/tmp/gpt_block_tu 2>&1 || true
 
+# ---- Documentation ----#
+# Generate Doxygen API documentation
+docs-api:
+	@command -v doxygen >/dev/null 2>&1 || { echo "doxygen not found. Install: sudo apt install doxygen graphviz"; exit 1; }
+	@mkdir -p docs/api
+	doxygen Doxyfile 2>&1 | grep -v "^$$" || true
+	@echo "Docs generated in docs/api/html/index.html"
+
+# Generate auto-config reference markdown
+config-docs: libtucmodel.a
+	@echo "Generating config reference documentation..."
+	@printf '#include "tu_cmodel/infra/config.h"\nint main(void) { tu_config_t cfg; tu_config_default(&cfg); tu_config_emit_docs(&cfg, stdout); return 0; }\n' > /tmp/tu_config_docs.c
+	@$(CC) $(CFLAGS) -I. -Itu_cmodel -o /tmp/tu_config_docs /tmp/tu_config_docs.c -L. -ltucmodel $(LDFLAGS)
+	/tmp/tu_config_docs > docs/CONFIG_REFERENCE.md
+	@rm -f /tmp/tu_config_docs /tmp/tu_config_docs.c
+	@echo "Config reference written to docs/CONFIG_REFERENCE.md"
+
 # ---- Clean ----
 clean:
 	rm -f $(TU_DIR)/*.o $(TU_DIR)/memory/*.o $(TU_DIR)/isa/*.o $(TU_DIR)/compute/*.o $(TU_DIR)/compute/dataflow/*.o $(TU_DIR)/infra/*.o $(TU_DIR)/perf/*.o libtucmodel.a libtucmodel.so

@@ -507,3 +507,200 @@ void tu_config_dump(const struct tu_config_t *cfg) {
         cfg->sparsity_enabled ? "on" : "off",
         cfg->sparsity_2of4 ? "on" : "off");
 }
+
+/* ---- Markdown documentation generator (Gap Q4) ---- */
+
+static const char *fmt_bool(bool v) { return v ? "`true`" : "`false`"; }
+
+void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
+    tu_config_t def;
+    if (!cfg) {
+        tu_config_default(&def);
+        cfg = &def;
+    }
+
+    fprintf(out,
+        "# TU CModel Configuration Reference\n\n"
+        "> Auto-generated from current configuration.\n"
+        "> Each field shows its **value**, type, and description.\n\n"
+        "---\n\n");
+
+    /* ---- Compute Engine ---- */
+    fprintf(out, "## 1. Compute Engine\n\n");
+    fprintf(out, "| Field | Value | Type | Description |\n");
+    fprintf(out, "|-------|-------|------|-------------|\n");
+    fprintf(out, "| `pe_rows` | %u | uint16 | PE array height (rows) |\n",
+            cfg->pe_rows);
+    fprintf(out, "| `pe_cols` | %u | uint16 | PE array width (columns) |\n",
+            cfg->pe_cols);
+    fprintf(out, "| `pe_pipeline_depth` | %u | uint16 | Pipeline stages per MAC |\n",
+            cfg->pe_pipeline_depth);
+    fprintf(out, "| `mac_units_per_pe` | %u | uint16 | MAC units per PE |\n",
+            cfg->mac_units_per_pe);
+    fprintf(out, "| `dataflow_mode` | %d | int | 0=WS, 1=OS, 2=RS, 3=NLR |\n",
+            cfg->dataflow_mode);
+    fprintf(out, "| `dataflow_via_plugin` | %s | bool | Use pluggable dataflow dispatcher |\n\n",
+            fmt_bool(cfg->dataflow_via_plugin));
+
+    /* ---- Precision ---- */
+    fprintf(out, "## 2. Precision & Data Types\n\n");
+    fprintf(out, "| Field | Value | Type | Description |\n");
+    fprintf(out, "|-------|-------|------|-------------|\n");
+    fprintf(out, "| `fp16_enabled` | %s | bool | IEEE 754 half-precision (1-5-10) |\n",
+            fmt_bool(cfg->fp16_enabled));
+    fprintf(out, "| `fp32_enabled` | %s | bool | IEEE 754 single-precision (accumulator) |\n",
+            fmt_bool(cfg->fp32_enabled));
+    fprintf(out, "| `bf16_enabled` | %s | bool | Brain Float 16 (1-8-7) |\n",
+            fmt_bool(cfg->bf16_enabled));
+    fprintf(out, "| `fp8_e4m3_enabled` | %s | bool | FP8 E4M3 (OCP, forward pass) |\n",
+            fmt_bool(cfg->fp8_e4m3_enabled));
+    fprintf(out, "| `fp8_e5m2_enabled` | %s | bool | FP8 E5M2 (OCP, backward pass) |\n",
+            fmt_bool(cfg->fp8_e5m2_enabled));
+    fprintf(out, "| `int8_enabled` | %s | bool | INT8 symmetric quantization |\n",
+            fmt_bool(cfg->int8_enabled));
+    fprintf(out, "| `int4_enabled` | %s | bool | INT4 packed quantization |\n",
+            fmt_bool(cfg->int4_enabled));
+    fprintf(out, "| `rounding_mode` | %d | int | 0=RNE, 1=RTZ, 2=Stochastic |\n",
+            cfg->rounding_mode);
+    fprintf(out, "| `subnormal_flush` | %s | bool | Flush-to-zero (FTZ) for subnormals |\n",
+            fmt_bool(cfg->subnormal_flush));
+    fprintf(out, "| `saturate` | %s | bool | Saturate on overflow |\n\n",
+            fmt_bool(cfg->saturate));
+
+    /* ---- Memory ---- */
+    fprintf(out, "## 3. Memory System\n\n");
+    fprintf(out, "| Field | Value | Type | Description |\n");
+    fprintf(out, "|-------|-------|------|-------------|\n");
+    fprintf(out, "| `sram_w_size_kb` | %u | uint32 | Weight buffer size (KB) |\n",
+            cfg->sram_w_size_kb);
+    fprintf(out, "| `sram_a_size_kb` | %u | uint32 | Activation buffer size (KB) |\n",
+            cfg->sram_a_size_kb);
+    fprintf(out, "| `sram_o_size_kb` | %u | uint32 | Output/accumulator buffer size (KB) |\n",
+            cfg->sram_o_size_kb);
+    fprintf(out, "| `sram_num_banks` | %u | uint32 | Number of SRAM banks |\n",
+            cfg->sram_num_banks);
+    fprintf(out, "| `sram_bank_width` | %u | uint32 | Bytes per bank word |\n",
+            cfg->sram_bank_width);
+    fprintf(out, "| `sram_words_per_cycle` | %u | uint32 | Max words per bank per cycle |\n",
+            cfg->sram_words_per_cycle);
+    fprintf(out, "| `sram_arb_mode` | %d | int | Arbitration: 0=None, 1=RR, 2=Priority |\n",
+            cfg->sram_arb_mode);
+    fprintf(out, "| `sram_conflict_mode` | %d | int | Conflict: 0=None, 1=Detect, 2=Stall |\n",
+            cfg->sram_conflict_mode);
+    fprintf(out, "| `sram_stall_penalty` | %u | uint8 | Stall penalty cycles |\n",
+            cfg->sram_stall_penalty);
+    fprintf(out, "| `sram_bw_window_cycles` | %lu | uint64 | Bandwidth refill window |\n",
+            (unsigned long)cfg->sram_bw_window_cycles);
+    fprintf(out, "| `sram_bw_modeling` | %s | bool | Enable bandwidth modeling |\n",
+            fmt_bool(cfg->sram_bw_modeling));
+    fprintf(out, "| `gbuf_size_kb` | %u | uint32 | Global buffer size (KB), 0=disabled |\n",
+            cfg->gbuf_size_kb);
+    fprintf(out, "| `gbuf_banks` | %u | uint32 | Global buffer banks |\n",
+            cfg->gbuf_banks);
+    fprintf(out, "| `dram_type` | %d | int | 0=Ideal, 1=HBM2, 2=HBM2e, 3=HBM3, 4=DDR4, 5=DDR5, 6=LPDDR5 |\n",
+            cfg->dram_type);
+    fprintf(out, "| `dram_bandwidth_gbps` | %.1f | double | DRAM bandwidth (GB/s) |\n",
+            cfg->dram_bandwidth_gbps);
+    fprintf(out, "| `dram_channels` | %u | uint32 | DRAM channel count |\n",
+            cfg->dram_channels);
+    fprintf(out, "| `dram_model_row_conflicts` | %s | bool | Model row buffer hit/miss |\n\n",
+            fmt_bool(cfg->dram_model_row_conflicts));
+
+    /* ---- DMA ---- */
+    fprintf(out, "## 4. DMA Engine\n\n");
+    fprintf(out, "| Field | Value | Type | Description |\n");
+    fprintf(out, "|-------|-------|------|-------------|\n");
+    fprintf(out, "| `dma_bus_width_bits` | %u | uint32 | AXI bus width |\n",
+            cfg->dma_bus_width_bits);
+    fprintf(out, "| `dma_max_burst_bytes` | %u | uint32 | Max burst size |\n",
+            cfg->dma_max_burst_bytes);
+    fprintf(out, "| `dma_num_channels` | %u | uint32 | DMA channel count |\n",
+            cfg->dma_num_channels);
+    fprintf(out, "| `dma_max_outstanding` | %u | uint32 | Max outstanding descriptors |\n",
+            cfg->dma_max_outstanding);
+    fprintf(out, "| `dma_async_mode` | %s | bool | Async DMA with descriptor queues |\n",
+            fmt_bool(cfg->dma_async_mode));
+    fprintf(out, "| `dma_multicast_enabled` | %s | bool | Multicast/broadcast DMA |\n\n",
+            fmt_bool(cfg->dma_multicast_enabled));
+
+    /* ---- ISA ---- */
+    fprintf(out, "## 5. ISA & Command Queue\n\n");
+    fprintf(out, "| Field | Value | Type | Description |\n");
+    fprintf(out, "|-------|-------|------|-------------|\n");
+    fprintf(out, "| `isa_instr_width_bits` | %u | uint32 | Instruction encoding width |\n",
+            cfg->isa_instr_width_bits);
+    fprintf(out, "| `isa_queue_depth` | %u | uint32 | Command queue depth |\n",
+            cfg->isa_queue_depth);
+    fprintf(out, "| `isa_dep_checking` | %s | bool | Dependency checking |\n\n",
+            fmt_bool(cfg->isa_dep_checking));
+
+    /* ---- Multi-Core ---- */
+    fprintf(out, "## 6. Multi-Core\n\n");
+    fprintf(out, "| Field | Value | Type | Description |\n");
+    fprintf(out, "|-------|-------|------|-------------|\n");
+    fprintf(out, "| `multicore_enabled` | %s | bool | Multi-core TU cluster |\n",
+            fmt_bool(cfg->multicore_enabled));
+    fprintf(out, "| `num_cores` | %u | uint32 | Core count |\n",
+            cfg->num_cores);
+    fprintf(out, "| `interconnect_mode` | %d | int | 0=None, 1=Ring, 2=Mesh |\n\n",
+            cfg->interconnect_mode);
+
+    /* ---- Performance ---- */
+    fprintf(out, "## 7. Performance Model\n\n");
+    fprintf(out, "| Field | Value | Type | Description |\n");
+    fprintf(out, "|-------|-------|------|-------------|\n");
+    fprintf(out, "| `cycle_model` | %d | int | 0=Functional, 1=Estimated, 2=Cycle-Accurate |\n",
+            cfg->cycle_model);
+    fprintf(out, "| `counters_enabled` | %s | bool | Performance counters |\n",
+            fmt_bool(cfg->counters_enabled));
+    fprintf(out, "| `detailed_stalls` | %s | bool | Detailed stall breakdown |\n",
+            fmt_bool(cfg->detailed_stalls));
+    fprintf(out, "| `trace_enabled` | %s | bool | VCD execution trace |\n",
+            fmt_bool(cfg->trace_enabled));
+    fprintf(out, "| `trace_max_events` | %u | uint32 | Max trace events |\n\n",
+            cfg->trace_max_events);
+
+    /* ---- Sparsity ---- */
+    fprintf(out, "## 8. Sparsity\n\n");
+    fprintf(out, "| Field | Value | Type | Description |\n");
+    fprintf(out, "|-------|-------|------|-------------|\n");
+    fprintf(out, "| `sparsity_enabled` | %s | bool | Sparsity support |\n",
+            fmt_bool(cfg->sparsity_enabled));
+    fprintf(out, "| `sparsity_2of4` | %s | bool | 2:4 structured sparsity |\n",
+            fmt_bool(cfg->sparsity_2of4));
+    fprintf(out, "| `sparsity_unstructured` | %s | bool | Unstructured sparsity |\n",
+            fmt_bool(cfg->sparsity_unstructured));
+    fprintf(out, "| `sparsity_metadata_format` | %d | int | 0=Bitmask, 1=CSR, 2=Coord |\n\n",
+            cfg->sparsity_metadata_format);
+
+    /* ---- Verification ---- */
+    fprintf(out, "## 9. Verification\n\n");
+    fprintf(out, "| Field | Value | Type | Description |\n");
+    fprintf(out, "|-------|-------|------|-------------|\n");
+    fprintf(out, "| `golden_reference` | %d | int | 0=NumPy, 1=PyTorch |\n",
+            cfg->golden_reference);
+    fprintf(out, "| `random_test_iters` | %u | uint32 | Random test iterations |\n",
+            cfg->random_test_iters);
+    fprintf(out, "| `error_tolerance` | %e | double | Golden comparison tolerance |\n\n",
+            cfg->error_tolerance);
+
+    /* ---- Derived Values ---- */
+    fprintf(out, "## 10. Derived Values\n\n");
+    fprintf(out, "| Metric | Value | Formula |\n");
+    fprintf(out, "|--------|-------|--------|\n");
+    uint32_t total_sram = cfg->sram_w_size_kb + cfg->sram_a_size_kb +
+                          cfg->sram_o_size_kb;
+    fprintf(out, "| Total SRAM | %u KB | W + A + O |\n", total_sram);
+    uint32_t total_macs = cfg->pe_rows * cfg->pe_cols * cfg->mac_units_per_pe;
+    fprintf(out, "| Total MACs | %u | rows × cols × mac_units_per_pe |\n",
+            total_macs);
+    uint64_t peak_ops = (uint64_t)total_macs * 2; /* multiply + add */
+    fprintf(out, "| Peak Ops/cycle | %lu | MACs × 2 |\n",
+            (unsigned long)peak_ops);
+    fprintf(out, "| DMA bandwidth | %.1f GB/s | bus_width / 8 × frequency |\n",
+            cfg->dma_bus_width_bits / 8.0);
+
+    fprintf(out, "\n---\n\n"
+            "*Generated by `tu_config_emit_docs()`. "
+            "Regenerate with `make config-docs` to reflect current settings.*\n");
+}

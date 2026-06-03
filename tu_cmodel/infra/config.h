@@ -20,6 +20,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -171,6 +172,16 @@ int tu_config_validate(const tu_config_t *cfg,
  * Print configuration to stderr (for debugging).
  */
 void tu_config_dump(const tu_config_t *cfg);
+
+/*
+ * Generate a markdown configuration reference from a tu_config_t.
+ * Writes a self-contained markdown document describing every config
+ * field with its current value, type, and description.
+ *
+ * cfg:  the config to document (NULL = use defaults)
+ * out:  output stream
+ */
+void tu_config_emit_docs(const tu_config_t *cfg, FILE *out);
 
 #ifdef __cplusplus
 }
