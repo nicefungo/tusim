@@ -43,7 +43,8 @@ TU_OBJS = $(TU_DIR)/tu_cmodel.o $(TU_DIR)/tu_asm.o $(TU_DIR)/tu_precision.o \
           $(TU_DIR)/memory/weight_compress.o \
           $(TU_DIR)/isa/tu_scheduler.o \
           $(TU_DIR)/isa/tu_liveness.o \
-          $(TU_DIR)/infra/tu_debug.o
+          $(TU_DIR)/infra/tu_debug.o \
+          $(TU_DIR)/bindings/tu_dpi.o
 
 libtucmodel.a: $(TU_OBJS)
 	$(AR) rcs $@ $^
@@ -201,6 +202,10 @@ $(TU_DIR)/isa/tu_liveness.o: $(TU_DIR)/isa/tu_liveness.c $(TU_DIR)/isa/tu_livene
 $(TU_DIR)/infra/tu_debug.o: $(TU_DIR)/infra/tu_debug.c $(TU_DIR)/infra/tu_debug.h $(TU_DIR)/tu_core.h $(TU_DIR)/tu_cmodel.h $(TU_DIR)/tu_sram.h $(TU_DIR)/tu_dma.h $(TU_DIR)/command_queue.h $(TU_DIR)/perf/performance_counters.h $(TU_DIR)/infra/config.h $(TU_DIR)/infra/logging.h $(TU_DIR)/tu_status.h
 	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
 
+# ---- DPI-C Bindings (I1) ----
+$(TU_DIR)/bindings/tu_dpi.o: $(TU_DIR)/bindings/tu_dpi.c $(TU_DIR)/bindings/tu_dpi.h $(TU_DIR)/tu_cmodel.h $(TU_DIR)/tu_precision.h $(TU_DIR)/tu_sram.h $(TU_DIR)/compute/elementwise_pipeline.h $(TU_DIR)/compute/softmax_engine.h $(TU_DIR)/compute/normalization_engine.h $(TU_DIR)/infra/logging.h
+	$(CC) $(CFLAGS) -I$(TU_DIR) -c -o $@ $<
+
 # ---- Test: cmodel correctness ----
 test-cmodel: tests/test_cmodel.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)
@@ -321,6 +326,11 @@ test-debug: tests/test_debug.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-debug
 
+# ---- Test: DPI-C Integration (I1) ----
+test-dpi: tests/test_dpi.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	./test-dpi
+
 # ---- Test: Multi-core Cluster (A5) ----
 test-multicore: tests/test_multicore.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
@@ -405,7 +415,7 @@ test: test-cmodel test-cmdq test-dma test-dram test-isa test-golden \
       test-elementwise test-bf16 test-memhier test-norm test-dataflow \
       test-logging test-int-quant test-conv test-asm test-rounding test-fp8 \
       test-attention test-perf test-pool test-pipeline test-agen test-multicore \
-      test-multicast test-scatter-gather test-trace test-config test-scheduler test-liveness
+      test-multicast test-scatter-gather test-trace test-config test-scheduler test-liveness test-dpi
 	@echo ""
 	@echo "═══════════════════════════════════════════"
 	@echo "  ✅ All tests complete"
@@ -449,11 +459,11 @@ config-docs: libtucmodel.a
 
 # ---- Clean ----
 clean:
-	rm -f $(TU_DIR)/*.o $(TU_DIR)/memory/*.o $(TU_DIR)/isa/*.o $(TU_DIR)/compute/*.o $(TU_DIR)/compute/dataflow/*.o $(TU_DIR)/infra/*.o $(TU_DIR)/perf/*.o libtucmodel.a libtucmodel.so
+	rm -f $(TU_DIR)/*.o $(TU_DIR)/memory/*.o $(TU_DIR)/isa/*.o $(TU_DIR)/compute/*.o $(TU_DIR)/compute/dataflow/*.o $(TU_DIR)/infra/*.o $(TU_DIR)/perf/*.o $(TU_DIR)/bindings/*.o libtucmodel.a libtucmodel.so
 	rm -f test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-golden-full
 	rm -f test-dataflow test-elementwise test-bf16 test-memhier test-norm test-logging
 	rm -f test-int-quant test-conv test-random
 	rm -f test-rounding test-fp8 test-attention test-perf test-pool test-pipeline
-	rm -f test-agen test-multicore test-compress test-errors test-config test-softmax test-double test-context test-compress test-scheduler test-liveness test-power
+	rm -f test-agen test-multicore test-compress test-errors test-config test-softmax test-double test-context test-compress test-scheduler test-liveness test-power test-dpi
 	rm -f /tmp/gpt_block_tu /tmp/gpt_block_tu.c /tmp/test_asm
 	rm -rf build/ci_reports
