@@ -46,6 +46,11 @@ test-full
 test-asm
 test-quick
 test-cycle
+test-dpi
+test-bench
+test-debug
+test-scatter-gather
+test-power
 
 # Experiments / temp
 experiments/tu_bench
