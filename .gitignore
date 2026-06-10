@@ -13,6 +13,7 @@ test-isa
 test-golden
 test-golden-full
 test-dataflow
+test-dataflow-sweep
 test-elementwise
 test-bf16
 test-memhier
