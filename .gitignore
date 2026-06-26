@@ -15,7 +15,8 @@ test-golden-full
 test-dataflow
 test-dataflow-sweep
 test-rounding-sweep
-test-elementwise
+test-attention-sweep
+test-attention
 test-bf16
 test-memhier
 test-norm
