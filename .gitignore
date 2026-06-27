@@ -16,6 +16,7 @@ test-dataflow
 test-dataflow-sweep
 test-rounding-sweep
 test-attention-sweep
+test-pooling-sweep
 test-attention
 test-bf16
 test-memhier
