@@ -18,6 +18,7 @@ test-rounding-sweep
 test-attention-sweep
 test-pooling-sweep
 test-softmax-sweep
+test-conv-sweep
 test-attention
 test-bf16
 test-memhier
