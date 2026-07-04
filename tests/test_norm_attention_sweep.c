@@ -1,0 +1,189 @@
+/*
+ * Norm-After-Attention Pipeline Sweep
+ * ===================================
+ * Cross-engine interaction: measures the cycle-cost of running LayerNorm
+ * or RMSNorm on attention output (O-buffer), simulating the norm-after-
+ * attention pattern in transformer blocks.
+ *
+ * Question: "What fraction of transformer block latency does normalization add
+ * after attention, across PE array sizes?"
+ *
+ * Approach: Run attention on single-Q-tile workloads (contiguous O-buffer
+ * output), then run LayerNorm/RMSNorm in-place on the O-buffer FP32 data.
+ * The O-buffer data persists after attention's DMA-to-host (read-only).
+ */
+
+#include "tu_cmodel/tu_cmodel.h"
+#include "tu_cmodel/tu_config.h"
+#include "tu_cmodel/tu_precision.h"
+#include "tu_cmodel/tu_sram.h"
+#include "tu_cmodel/compute/attention_engine.h"
+#include "tu_cmodel/compute/normalization_engine.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+
+/* ---- PE Configs (SRAM scaled with PE) ---- */
+typedef struct {
+    const char *label;
+    uint16_t pr, pc;
+    uint32_t wa_sz, aa_sz, oo_sz;
+} pe_t;
+
+static pe_t pes[] = {
+    {"8x8 (128K)",    8,   8,  64*1024, 32*1024, 32*1024},
+    {"16x16 (256K)", 16,  16, 128*1024, 64*1024, 64*1024},
+    {"32x32 (512K)", 32,  32, 256*1024, 128*1024, 128*1024},
+};
+#define N_PE (sizeof(pes)/sizeof(pes[0]))
+
+/* ---- Workloads (single-Q-tile to keep O-buffer contiguous) ---- */
+typedef struct {
+    const char *label;
+    uint32_t sq, skv, hd;
+} wk_t;
+
+static wk_t wks[] = {
+    {"prefill-32x64",   32,  64, 64},
+    {"prefill-64x64",   64,  64, 64},
+    {"prefill-128x64", 128,  64, 64},
+    {"prefill-32x128",  32,  64, 128},
+    {"prefill-64x128",  64,  64, 128},
+};
+#define N_WK (sizeof(wks)/sizeof(wks[0]))
+
+static void fill_f16(fp16_t *b, uint32_t n, unsigned s) {
+    for (uint32_t i = 0; i < n; i++) {
+        float v = ((float)(((i*1103515245+12345)^(s*2654435761U)) & 0x7FFFFF) / 8388608.0f) - 0.5f;
+        b[i] = tu_fp32_to_fp16(v);
+    }
+}
+
+int main(void) {
+    printf("Norm-After-Attention Pipeline Sweep\n");
+    printf("====================================\n");
+    printf("Question: What fraction of transformer block latency does norm add?\n\n");
+
+    printf("%-22s %-14s %8s %10s %13s %13s %8s %8s\n",
+           "Workload", "PE", "AttnCyc", "LNstalCyc", "LNoverhead%", "RMSoverhead%", "LNc/e", "RMSc/e");
+    printf("------------------------------------------------------------------------------------------------------------\n");
+
+    for (int pi = 0; pi < (int)N_PE; pi++) {
+        pe_t *p = &pes[pi];
+        tu_runtime_config_t rt = tu_runtime_config_default();
+        rt.pe_rows = p->pr; rt.pe_cols = p->pc;
+        rt.sram_w_size = p->wa_sz; rt.sram_a_size = p->aa_sz; rt.sram_o_size = p->oo_sz;
+        tu_init_with_config(&rt);
+
+        for (int wi = 0; wi < (int)N_WK; wi++) {
+            wk_t *w = &wks[wi];
+
+            /* Check SRAM capacity for Q and KV tile */
+            uint32_t q_bytes  = w->sq * w->hd * sizeof(fp16_t);
+            uint32_t kv_bytes = w->skv * w->hd * sizeof(fp16_t);
+            if (q_bytes > p->aa_sz || kv_bytes > p->wa_sz) {
+                printf("%-22s %-14s %8s %10s %13s %13s %8s %8s  (SRAM skip)\n",
+                       w->label, p->label, "-", "-", "-", "-", "-", "-");
+                continue;
+            }
+
+            /* Check if output fits in O-buffer as a single tile */
+            uint32_t O_bytes = w->sq * w->hd * sizeof(fp32_t);
+            /* Softmax S also needs space: tile_m × tile_n × 4.
+             * With tile_n=skv and tile_m=sq: */
+            uint32_t S_bytes = w->sq * w->skv * sizeof(fp32_t);
+            if (O_bytes + S_bytes > p->oo_sz) {
+                printf("%-22s %-14s %8s %10s %13s %13s %8s %8s  (O-buf skip)\n",
+                       w->label, p->label, "-", "-", "-", "-", "-", "-");
+                continue;
+            }
+
+            fp16_t *Q = (fp16_t *)malloc(q_bytes);
+            fp16_t *K = (fp16_t *)malloc(kv_bytes);
+            fp16_t *V = (fp16_t *)malloc(kv_bytes);
+            fp16_t *O = (fp16_t *)calloc(w->sq * w->hd, sizeof(fp16_t));
+            if (!Q || !K || !V || !O) {
+                printf("%-22s %-14s %8s (alloc fail)\n", w->label, p->label);
+                free(Q); free(K); free(V); free(O);
+                continue;
+            }
+            fill_f16(Q, w->sq * w->hd, (pi << 16) | (wi << 8) | 0);
+            fill_f16(K, w->skv * w->hd, (pi << 16) | (wi << 8) | 1);
+            fill_f16(V, w->skv * w->hd, (pi << 16) | (wi << 8) | 2);
+
+            float sc = 1.0f / sqrtf((float)w->hd);
+
+            /* Use OS dataflow (most efficient for attention) */
+            tu_set_dataflow(TU_DATAFLOW_MODE_OS);
+
+            tu_attention_desc_t d = {0};
+            d.Q = Q; d.K = K; d.V = V; d.output = O;
+            d.batch_size = 1; d.num_heads = 1;
+            d.seq_len_q = w->sq; d.seq_len_kv = w->skv; d.head_dim = w->hd;
+            d.softmax_scale = sc;
+            d.mask_type = TU_ATTN_MASK_NONE;
+            d.tile_m = 0; d.tile_n = 0;
+            d.dataflow = TU_DATAFLOW_MODE_OS;
+            tu_attention_auto_tile(&d);
+
+            tu_attention_stats_t st = {0};
+            int rc = tu_attention_execute(&d, &st);
+            if (rc != 0) {
+                printf("%-22s %-14s %8s (attn fail)\n", w->label, p->label);
+                free(Q); free(K); free(V); free(O);
+                continue;
+            }
+
+            /* After attention, O-buffer at offset 0 has FP32 output:
+             * M=sq rows, N=hd cols, row-major. Run norm in-place. */
+            uint64_t ln_stall = tu_layernorm_2d(&g_tu.sram_o, 0,
+                                                 w->sq, w->hd,
+                                                 NULL, NULL, 1e-5f);
+
+            /* Need to re-run attention to get fresh O-buffer for RMSNorm.
+             * Re-init and re-execute with same params. */
+            tu_init_with_config(&rt);
+            tu_set_dataflow(TU_DATAFLOW_MODE_OS);
+            {
+                tu_attention_desc_t d2 = {0};
+                d2.Q = Q; d2.K = K; d2.V = V; d2.output = O;
+                d2.batch_size = 1; d2.num_heads = 1;
+                d2.seq_len_q = w->sq; d2.seq_len_kv = w->skv; d2.head_dim = w->hd;
+                d2.softmax_scale = sc;
+                d2.mask_type = TU_ATTN_MASK_NONE;
+                d2.tile_m = 0; d2.tile_n = 0;
+                d2.dataflow = TU_DATAFLOW_MODE_OS;
+                tu_attention_auto_tile(&d2);
+                tu_attention_execute(&d2, &st);
+            }
+
+            uint64_t rms_stall = tu_rmsnorm_2d(&g_tu.sram_o, 0,
+                                                w->sq, w->hd,
+                                                NULL, 1e-5f);
+
+            uint32_t elem_count = w->sq * w->hd;
+            double ln_overhead = st.total_cycles > 0 ?
+                100.0 * (double)ln_stall / (double)st.total_cycles : 0.0;
+            double rms_overhead = st.total_cycles > 0 ?
+                100.0 * (double)rms_stall / (double)st.total_cycles : 0.0;
+            double ln_ce = elem_count > 0 ?
+                (double)ln_stall / (double)elem_count : 0.0;
+            double rms_ce = elem_count > 0 ?
+                (double)rms_stall / (double)elem_count : 0.0;
+
+            printf("%-22s %-14s %8lu %10lu %12.2f%% %12.2f%% %7.2f %7.2f\n",
+                   w->label, p->label,
+                   (unsigned long)st.total_cycles,
+                   (unsigned long)ln_stall,
+                   ln_overhead, rms_overhead,
+                   ln_ce, rms_ce);
+
+            free(Q); free(K); free(V); free(O);
+        }
+    }
+
+    printf("------------------------------------------------------------------------------------------------------------\n");
+    printf("Done. Norm cycles measured as SRAM stall cycles (2×N reads + 2×N writes per pass).\n");
+    return 0;
+}
