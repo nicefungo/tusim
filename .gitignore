@@ -20,6 +20,7 @@ test-pooling-sweep
 test-softmax-sweep
 test-conv-sweep
 test-conv-groups-sweep
+test-conv-pool-cascade
 test-norm-sweep
 test-attention
 test-bf16
