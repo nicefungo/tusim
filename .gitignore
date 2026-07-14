@@ -52,6 +52,7 @@ test-double
 test-context
 test-liveness
 test-scheduler
+test-scheduler-sweep
 test-tf32
 test-compress
 test-compiler
