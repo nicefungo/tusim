@@ -53,6 +53,7 @@ test-context
 test-liveness
 test-scheduler
 test-scheduler-sweep
+test-interconnect-topology-sweep
 test-tf32
 test-compress
 test-compiler
