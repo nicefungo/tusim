@@ -7,6 +7,7 @@
  */
 
 #include "weight_compress.h"
+#include "../infra/config.h"
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
@@ -17,6 +18,20 @@ const tu_compress_config_t tu_compress_config_default = {
     .rle_epsilon = 0.0f,
     .enabled     = true,
 };
+
+tu_compress_config_t tu_compress_config_from_tu_config(const struct tu_config_t *cfg)
+{
+    tu_compress_config_t out = tu_compress_config_default;
+    if (!cfg) {
+        out.enabled = false;
+        out.type = TU_COMPRESS_NONE;
+        return out;
+    }
+    out.enabled = cfg->compression_enabled;
+    out.type = (tu_compress_type_t)cfg->compression_type;
+    out.rle_epsilon = (float)cfg->compression_rle_epsilon;
+    return out;
+}
 
 /* ---- Helpers ---- */
 
@@ -53,7 +68,7 @@ int tu_compress_rle(const fp16_t *src, uint32_t element_count,
 
     /* Header: uint32_t element_count + uint32_t run_count */
     uint32_t header_size = sizeof(uint32_t) * 2;
-    uint32_t required = header_size + element_count * sizeof(tu_rle_run_t);
+    uint32_t required = header_size + element_count * TU_RLE_RUN_BYTES;
 
     if (dst_capacity < required) return -1;
 
@@ -68,9 +83,9 @@ int tu_compress_rle(const fp16_t *src, uint32_t element_count,
             current_run++;
         } else {
             /* Write completed run */
-            tu_rle_run_t run = { .value = current_val, .count = current_run };
-            uint32_t offset = header_size + run_count * sizeof(tu_rle_run_t);
-            memcpy(dst + offset, &run, sizeof(tu_rle_run_t));
+            uint32_t offset = header_size + run_count * TU_RLE_RUN_BYTES;
+            memcpy(dst + offset, &current_val, sizeof(current_val));
+            memcpy(dst + offset + sizeof(current_val), &current_run, sizeof(current_run));
             run_count++;
 
             current_val = src[i];
@@ -80,9 +95,9 @@ int tu_compress_rle(const fp16_t *src, uint32_t element_count,
 
     /* Write final run */
     {
-        tu_rle_run_t run = { .value = current_val, .count = current_run };
-        uint32_t offset = header_size + run_count * sizeof(tu_rle_run_t);
-        memcpy(dst + offset, &run, sizeof(tu_rle_run_t));
+        uint32_t offset = header_size + run_count * TU_RLE_RUN_BYTES;
+        memcpy(dst + offset, &current_val, sizeof(current_val));
+        memcpy(dst + offset + sizeof(current_val), &current_run, sizeof(current_run));
         run_count++;
     }
 
@@ -90,7 +105,7 @@ int tu_compress_rle(const fp16_t *src, uint32_t element_count,
     memcpy(dst, &element_count, sizeof(uint32_t));
     memcpy(dst + sizeof(uint32_t), &run_count, sizeof(uint32_t));
 
-    *compressed_size_out = header_size + run_count * sizeof(tu_rle_run_t);
+    *compressed_size_out = header_size + run_count * TU_RLE_RUN_BYTES;
     return 0;
 }
 
@@ -117,7 +132,7 @@ int tu_decompress_rle(const uint8_t *src, uint32_t src_size,
     }
 
     /* Validate: enough source data for declared runs */
-    uint32_t expected_src = header_size + run_count * sizeof(tu_rle_run_t);
+    uint32_t expected_src = header_size + run_count * TU_RLE_RUN_BYTES;
     if (src_size < expected_src) return -1;
 
     /* Validate: destination capacity */
@@ -126,9 +141,10 @@ int tu_decompress_rle(const uint8_t *src, uint32_t src_size,
     /* Decode runs */
     uint32_t dst_pos = 0;
     for (uint32_t i = 0; i < run_count; i++) {
-        tu_rle_run_t run;
-        memcpy(&run, src + header_size + i * sizeof(tu_rle_run_t),
-               sizeof(tu_rle_run_t));
+        tu_rle_run_t run = {0};
+        uint32_t offset = header_size + i * TU_RLE_RUN_BYTES;
+        memcpy(&run.value, src + offset, sizeof(run.value));
+        memcpy(&run.count, src + offset + sizeof(run.value), sizeof(run.count));
 
         if (dst_pos + run.count > dst_capacity) return -1;
 
@@ -193,7 +209,7 @@ bool tu_compress_validate(const uint8_t *compressed_data, uint32_t compressed_si
     if (run_count == 0 || run_count > element_count) return false;
 
     /* Check buffer size matches runs */
-    uint32_t expected = header_size + run_count * sizeof(tu_rle_run_t);
+    uint32_t expected = header_size + run_count * TU_RLE_RUN_BYTES;
     return compressed_size >= expected;
 }
 

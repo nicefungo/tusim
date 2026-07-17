@@ -67,6 +67,7 @@ test-debug
 test-scatter-gather
 test-power
 test-int8-sweep
+test-weight-compression-sweep
 
 # Experiments / temp
 experiments/tu_bench

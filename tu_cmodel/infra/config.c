@@ -195,6 +195,11 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->dma_async_mode      = false;
     cfg->dma_multicast_enabled = false;
 
+    /* Conservative default preserves legacy uncompressed DMA traffic. */
+    cfg->compression_enabled = false;
+    cfg->compression_type = 0;
+    cfg->compression_rle_epsilon = 0.0;
+
     cfg->isa_instr_width_bits = 96;
     cfg->isa_queue_depth     = 16;
     cfg->isa_dep_checking    = false;
@@ -335,6 +340,21 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
         parse_opt_bool(d, "multicast_enabled", &cfg->dma_multicast_enabled);
     }
 
+    /* Codec placement is architecture-dependent, so compression is modeled
+     * as its own runtime block rather than an implicit DMA behavior. */
+    const tu_json_value_t *wc = tu_json_get(tu, "weight_compression");
+    if (wc) {
+        parse_opt_bool(wc, "enabled", &cfg->compression_enabled);
+        const tu_json_value_t *ct = tu_json_get(wc, "type");
+        if (ct && ct->type == TU_JSON_STRING) {
+            const char *s = tu_json_as_string(ct, NULL);
+            if (strcmp(s, "none") == 0) cfg->compression_type = 0;
+            else if (strcmp(s, "rle") == 0) cfg->compression_type = 1;
+            else cfg->compression_type = -1;
+        }
+        parse_opt_double(wc, "rle_epsilon", &cfg->compression_rle_epsilon);
+    }
+
     /* ISA */
     const tu_json_value_t *isa = tu_json_get(tu, "isa");
     if (isa) {
@@ -471,6 +491,16 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
             snprintf(error_buf, error_size, "queue_depth must be > 0");
         return -1;
     }
+    if (cfg->compression_type < 0 || cfg->compression_type > 1) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size, "weight compression type must be none or rle");
+        return -1;
+    }
+    if (cfg->compression_rle_epsilon < 0.0) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size, "compression rle_epsilon must be >= 0");
+        return -1;
+    }
     return 0;
 }
 
@@ -485,6 +515,7 @@ void tu_config_dump(const struct tu_config_t *cfg) {
         "  SRAM: W=%uK A=%uK O=%uK, banks=%u×%uB\n"
         "  DRAM: type=%d BW=%.1f GB/s\n"
         "  DMA: bus=%ub, ch=%u, async=%s\n"
+        "  Compression: %s type=%d epsilon=%g\n"
         "  ISA: instr=%ub, qdepth=%u\n"
         "  Multi-core: %s, cores=%u\n"
         "  Cycle: model=%d, counters=%s, trace=%s\n"
@@ -500,6 +531,8 @@ void tu_config_dump(const struct tu_config_t *cfg) {
         cfg->dram_type, cfg->dram_bandwidth_gbps,
         cfg->dma_bus_width_bits, cfg->dma_num_channels,
         cfg->dma_async_mode ? "yes" : "no",
+        cfg->compression_enabled ? "on" : "off", cfg->compression_type,
+        cfg->compression_rle_epsilon,
         cfg->isa_instr_width_bits, cfg->isa_queue_depth,
         cfg->multicore_enabled ? "on" : "off", cfg->num_cores,
         cfg->cycle_model, cfg->counters_enabled ? "on" : "off",
@@ -620,8 +653,14 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             cfg->dma_max_outstanding);
     fprintf(out, "| `dma_async_mode` | %s | bool | Async DMA with descriptor queues |\n",
             fmt_bool(cfg->dma_async_mode));
-    fprintf(out, "| `dma_multicast_enabled` | %s | bool | Multicast/broadcast DMA |\n\n",
+    fprintf(out, "| `dma_multicast_enabled` | %s | bool | Multicast/broadcast DMA |\n",
             fmt_bool(cfg->dma_multicast_enabled));
+    fprintf(out, "| `compression_enabled` | %s | bool | Enable weight-stream compression |\n",
+            fmt_bool(cfg->compression_enabled));
+    fprintf(out, "| `compression_type` | %d | int | 0=None, 1=RLE |\n",
+            cfg->compression_type);
+    fprintf(out, "| `compression_rle_epsilon` | %.6g | double | Merge tolerance; 0 is lossless |\n\n",
+            cfg->compression_rle_epsilon);
 
     /* ---- ISA ---- */
     fprintf(out, "## 5. ISA & Command Queue\n\n");

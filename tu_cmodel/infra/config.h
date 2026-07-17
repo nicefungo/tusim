@@ -89,6 +89,11 @@ typedef struct tu_config_t {
     bool     dma_async_mode;
     bool     dma_multicast_enabled;  /* DM4: multicast/broadcast DMA */
 
+    /* ---- Weight Compression ---- */
+    bool     compression_enabled;
+    int      compression_type;        /* 0=none, 1=RLE */
+    double   compression_rle_epsilon; /* 0=lossless exact runs */
+
     /* ---- ISA / Command Queue ---- */
     uint32_t isa_instr_width_bits;
     uint32_t isa_queue_depth;

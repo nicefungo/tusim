@@ -10,6 +10,7 @@
 #include "test_framework.h"
 #include "tu_cmodel.h"
 #include "tu_cmodel/memory/weight_compress.h"
+#include "tu_cmodel/infra/config.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -308,7 +309,35 @@ static void test_disabled(void) {
 }
 
 /* ================================================================
- * Test 11: NULL safety
+ * Test 11: Canonical runtime config mapping and validation
+ * ================================================================ */
+static void test_runtime_config(void) {
+    const char *json =
+        "{\"tu\":{\"weight_compression\":{"
+        "\"enabled\":true,\"type\":\"rle\",\"rle_epsilon\":0.015}}}";
+    tu_config_t cfg;
+    CHECK(tu_config_load_string(json, &cfg, NULL, 0) == 0, "parse compression config");
+    CHECK(cfg.compression_enabled, "compression enabled");
+    CHECK(cfg.compression_type == 1, "RLE type parsed");
+    CHECK(cfg.compression_rle_epsilon > 0.014 &&
+          cfg.compression_rle_epsilon < 0.016, "epsilon parsed");
+
+    tu_compress_config_t codec = tu_compress_config_from_tu_config(&cfg);
+    CHECK(codec.enabled && codec.type == TU_COMPRESS_RLE, "runtime mapping");
+    CHECK(codec.rle_epsilon > 0.014f && codec.rle_epsilon < 0.016f,
+          "runtime epsilon mapping");
+
+    CHECK(tu_config_load_string(
+        "{\"weight_compression\":{\"type\":\"huffman\"}}",
+        &cfg, NULL, 0) != 0, "reject unsupported codec");
+    CHECK(tu_config_load_string(
+        "{\"weight_compression\":{\"type\":\"rle\",\"rle_epsilon\":-1}}",
+        &cfg, NULL, 0) != 0, "reject negative epsilon");
+    PASS();
+}
+
+/* ================================================================
+ * Test 12: NULL safety
  * ================================================================ */
 static void test_null_safety(void) {
     CHECK(tu_compress_rle(NULL, 10, 0.0f, NULL, 100, NULL) == -1, "compress null");
@@ -374,6 +403,7 @@ int main(void) {
     TEST("validate_corrupt");  test_validate_corrupt();
     TEST("dma_integration");   test_dma_integration();
     TEST("disabled");           test_disabled();
+    TEST("runtime_config");     test_runtime_config();
     TEST("null_safety");       test_null_safety();
     TEST("large_sparse");      test_large_sparse();
 

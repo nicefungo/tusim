@@ -28,6 +28,8 @@
 extern "C" {
 #endif
 
+struct tu_config_t;
+
 /* ---- Compression Types ---- */
 typedef enum {
     TU_COMPRESS_NONE    = 0,  /* Pass-through, no compression */
@@ -51,7 +53,11 @@ typedef enum {
 
 /* Maximum compressed size for worst-case RLE encoding */
 #define TU_RLE_MAX_ENCODED_SIZE(elem_count) \
-    (sizeof(uint32_t) * 2 + (elem_count) * sizeof(tu_rle_run_t))
+    (sizeof(uint32_t) * 2 + (elem_count) * TU_RLE_RUN_BYTES)
+
+/* Stable wire format; do not use sizeof(tu_rle_run_t), which is 8 on common
+ * ABIs because of padding even though the encoded fields occupy 6 bytes. */
+#define TU_RLE_RUN_BYTES (sizeof(uint16_t) + sizeof(uint32_t))
 
 /* RLE run entry */
 typedef struct {
@@ -66,8 +72,12 @@ typedef struct {
     bool                enabled;        /* Enable/disable compression */
 } tu_compress_config_t;
 
-/* Default config: RLE with exact matching */
+/* Default codec config: RLE with exact matching.  The canonical TU runtime
+ * configuration remains disabled by default for backward compatibility. */
 extern const tu_compress_config_t tu_compress_config_default;
+
+/* Translate canonical JSON/runtime settings into codec settings. */
+tu_compress_config_t tu_compress_config_from_tu_config(const struct tu_config_t *cfg);
 
 /* ================================================================
  * Compression API

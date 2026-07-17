@@ -52,6 +52,12 @@
       "multicast_enabled": false
     },
 
+    "weight_compression": {
+      "enabled": false,
+      "type": "none",
+      "rle_epsilon": 0.0
+    },
+
     "isa": {
       "instruction_width_bits": 96,
       "queue_depth": 16,
