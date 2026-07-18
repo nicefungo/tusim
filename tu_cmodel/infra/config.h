@@ -91,7 +91,7 @@ typedef struct tu_config_t {
 
     /* ---- Weight Compression ---- */
     bool     compression_enabled;
-    int      compression_type;        /* 0=none, 1=RLE */
+    int      compression_type;        /* 0=none, 1=RLE, 2=adaptive raw/RLE */
     double   compression_rle_epsilon; /* 0=lossless exact runs */
 
     /* ---- ISA / Command Queue ---- */

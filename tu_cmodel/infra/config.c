@@ -350,6 +350,7 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
             const char *s = tu_json_as_string(ct, NULL);
             if (strcmp(s, "none") == 0) cfg->compression_type = 0;
             else if (strcmp(s, "rle") == 0) cfg->compression_type = 1;
+            else if (strcmp(s, "adaptive_rle") == 0) cfg->compression_type = 2;
             else cfg->compression_type = -1;
         }
         parse_opt_double(wc, "rle_epsilon", &cfg->compression_rle_epsilon);
@@ -491,9 +492,10 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
             snprintf(error_buf, error_size, "queue_depth must be > 0");
         return -1;
     }
-    if (cfg->compression_type < 0 || cfg->compression_type > 1) {
+    if (cfg->compression_type < 0 || cfg->compression_type > 2) {
         if (error_buf && error_size > 0)
-            snprintf(error_buf, error_size, "weight compression type must be none or rle");
+            snprintf(error_buf, error_size,
+                     "weight compression type must be none, rle, or adaptive_rle");
         return -1;
     }
     if (cfg->compression_rle_epsilon < 0.0) {

@@ -388,6 +388,81 @@ static void test_large_sparse(void) {
 }
 
 /* ================================================================
+ * Adaptive framed raw/RLE selection
+ * ================================================================ */
+static void test_adaptive_selects_raw(void) {
+    fp16_t src[64], dst[64];
+    for (int i = 0; i < 64; i++) src[i] = (fp16_t)(i + 1);
+    uint32_t cap = tu_compress_adaptive_max_size(64), size = 0, count = 0;
+    uint8_t *encoded = malloc(cap);
+    tu_weight_payload_codec_t codec = TU_WEIGHT_PAYLOAD_RLE;
+    CHECK(tu_compress_adaptive_rle(src, 64, 0.0f, encoded, cap, &size, &codec) == 0,
+          "adaptive raw encode");
+    CHECK(codec == TU_WEIGHT_PAYLOAD_RAW, "incompressible tensor selects raw");
+    CHECK(size == TU_WEIGHT_FRAME_HEADER_BYTES + sizeof(src), "raw plus fixed frame only");
+    CHECK(tu_compress_adaptive_validate(encoded, size), "raw frame validates");
+    CHECK(tu_decompress_adaptive(encoded, size, dst, 64, &count) == 0, "raw frame decode");
+    CHECK(count == 64 && memcmp(src, dst, sizeof(src)) == 0, "raw exact round-trip");
+    free(encoded);
+    PASS();
+}
+
+static void test_adaptive_selects_rle(void) {
+    fp16_t src[128] = {0}, dst[128];
+    uint32_t cap = tu_compress_adaptive_max_size(128), size = 0, count = 0;
+    uint8_t *encoded = malloc(cap);
+    tu_weight_payload_codec_t codec = TU_WEIGHT_PAYLOAD_RAW, parsed;
+    CHECK(tu_compress_adaptive_rle(src, 128, 0.0f, encoded, cap, &size, &codec) == 0,
+          "adaptive RLE encode");
+    CHECK(codec == TU_WEIGHT_PAYLOAD_RLE, "repeated tensor selects RLE");
+    CHECK(size == TU_WEIGHT_FRAME_HEADER_BYTES + 14, "frame plus one-run RLE");
+    CHECK(size <= TU_WEIGHT_FRAME_HEADER_BYTES + sizeof(src), "never exceeds framed raw");
+    CHECK(tu_compress_adaptive_get_codec(encoded, size, &parsed) == 0 && parsed == codec,
+          "codec tag is explicit");
+    CHECK(tu_decompress_adaptive(encoded, size, dst, 128, &count) == 0, "RLE frame decode");
+    CHECK(count == 128 && memcmp(src, dst, sizeof(src)) == 0, "RLE exact round-trip");
+    free(encoded);
+    PASS();
+}
+
+static void test_adaptive_dma_and_config(void) {
+    const char *json = "{\"weight_compression\":{"
+                       "\"enabled\":true,\"type\":\"adaptive_rle\",\"rle_epsilon\":0}}";
+    tu_config_t runtime;
+    CHECK(tu_config_load_string(json, &runtime, NULL, 0) == 0, "parse adaptive config");
+    CHECK(runtime.compression_type == 2, "adaptive config enum");
+    tu_compress_config_t cfg = tu_compress_config_from_tu_config(&runtime);
+    CHECK(cfg.type == TU_COMPRESS_ADAPTIVE_RLE, "adaptive runtime mapping");
+
+    fp16_t src[32] = {0}, dst[32];
+    uint8_t encoded[TU_WEIGHT_FRAME_HEADER_BYTES + sizeof(src)];
+    uint32_t size = 0, count = 0;
+    CHECK(tu_compress_for_dma(src, 32, &cfg, encoded, sizeof(encoded), &size) == 0,
+          "adaptive DMA encode");
+    CHECK(tu_decompress_from_dma(encoded, size, &cfg, dst, 32, &count) == 0,
+          "adaptive DMA decode");
+    CHECK(count == 32 && memcmp(src, dst, sizeof(src)) == 0, "adaptive DMA round-trip");
+    PASS();
+}
+
+static void test_adaptive_rejects_corruption(void) {
+    fp16_t src[16] = {0}, dst[16];
+    uint8_t encoded[TU_WEIGHT_FRAME_HEADER_BYTES + sizeof(src)];
+    uint32_t size = 0, count = 0;
+    CHECK(tu_compress_adaptive_rle(src, 16, 0.0f, encoded, sizeof(encoded),
+                                   &size, NULL) == 0, "make adaptive frame");
+    encoded[4] = 99; /* unsupported version */
+    CHECK(!tu_compress_adaptive_validate(encoded, size), "reject unknown version");
+    CHECK(tu_decompress_adaptive(encoded, size, dst, 16, &count) == -1,
+          "decoder rejects unknown version");
+    encoded[4] = TU_WEIGHT_FRAME_VERSION;
+    encoded[5] = 99; /* unsupported payload codec */
+    CHECK(!tu_compress_adaptive_validate(encoded, size), "reject unknown codec");
+    CHECK(!tu_compress_adaptive_validate(encoded, size - 1), "reject truncated payload");
+    PASS();
+}
+
+/* ================================================================
  * Main
  * ================================================================ */
 int main(void) {
@@ -406,6 +481,10 @@ int main(void) {
     TEST("runtime_config");     test_runtime_config();
     TEST("null_safety");       test_null_safety();
     TEST("large_sparse");      test_large_sparse();
+    TEST("adaptive_selects_raw"); test_adaptive_selects_raw();
+    TEST("adaptive_selects_rle"); test_adaptive_selects_rle();
+    TEST("adaptive_dma_config");  test_adaptive_dma_and_config();
+    TEST("adaptive_corruption");  test_adaptive_rejects_corruption();
 
     return test_exit();
 }

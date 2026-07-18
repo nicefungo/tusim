@@ -1,22 +1,12 @@
-/*
- * TU Weight Compression Implementation (Gap M5)
- * ===============================================
- *
- * RLE encoding for FP16 weight tensors with configurable
- * near-value merging for quantized/dead weights.
- */
-
+/* TU weight compression implementation: raw, RLE, adaptive framed raw/RLE. */
 #include "weight_compress.h"
 #include "../infra/config.h"
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
 
-/* Default config */
 const tu_compress_config_t tu_compress_config_default = {
-    .type        = TU_COMPRESS_RLE,
-    .rle_epsilon = 0.0f,
-    .enabled     = true,
+    .type = TU_COMPRESS_RLE, .rle_epsilon = 0.0f, .enabled = true,
 };
 
 tu_compress_config_t tu_compress_config_from_tu_config(const struct tu_config_t *cfg)
@@ -33,235 +23,257 @@ tu_compress_config_t tu_compress_config_from_tu_config(const struct tu_config_t 
     return out;
 }
 
-/* ---- Helpers ---- */
-
-/* Compare two FP16 values within epsilon tolerance (in FP32 space) */
 static bool fp16_near_equal(fp16_t a, fp16_t b, float epsilon)
 {
     if (a == b) return true;
     if (epsilon <= 0.0f) return false;
-
-    float fa = tu_fp16_to_fp32(a);
-    float fb = tu_fp16_to_fp32(b);
-
-    /* Handle NaN: NaN != NaN, never merge NaN runs */
-    if (fa != fa || fb != fb) return false;
-
-    float diff = (fa > fb) ? (fa - fb) : (fb - fa);
-    return diff <= epsilon;
+    float fa = tu_fp16_to_fp32(a), fb = tu_fp16_to_fp32(b);
+    if (isnan(fa) || isnan(fb)) return false;
+    return fabsf(fa - fb) <= epsilon;
 }
 
-/* ================================================================
- * RLE Compression
- * ================================================================ */
+static uint32_t count_runs(const fp16_t *src, uint32_t n, float epsilon)
+{
+    if (n == 0) return 0;
+    uint32_t runs = 1;
+    fp16_t current = src[0];
+    for (uint32_t i = 1; i < n; i++) {
+        if (!fp16_near_equal(src[i], current, epsilon)) {
+            runs++;
+            current = src[i];
+        }
+    }
+    return runs;
+}
 
 int tu_compress_rle(const fp16_t *src, uint32_t element_count,
-                     float epsilon,
-                     uint8_t *dst, uint32_t dst_capacity,
-                     uint32_t *compressed_size_out)
+                    float epsilon, uint8_t *dst, uint32_t dst_capacity,
+                    uint32_t *compressed_size_out)
 {
-    if (!src || !dst || !compressed_size_out) return -1;
+    if (!src || !dst || !compressed_size_out || epsilon < 0.0f) return -1;
     if (element_count == 0) {
         *compressed_size_out = 0;
         return 0;
     }
-
-    /* Header: uint32_t element_count + uint32_t run_count */
-    uint32_t header_size = sizeof(uint32_t) * 2;
-    uint32_t required = header_size + element_count * TU_RLE_RUN_BYTES;
-
+    const uint32_t header_size = sizeof(uint32_t) * 2;
+    if (element_count > (UINT32_MAX - header_size) / TU_RLE_RUN_BYTES) return -1;
+    uint32_t exact_runs = count_runs(src, element_count, epsilon);
+    uint32_t required = header_size + exact_runs * TU_RLE_RUN_BYTES;
     if (dst_capacity < required) return -1;
 
-    /* Reserve space for header; write at end */
-    uint32_t run_count = 0;
-
+    uint32_t run_count = 0, current_run = 1;
     fp16_t current_val = src[0];
-    uint32_t current_run = 1;
-
     for (uint32_t i = 1; i < element_count; i++) {
         if (fp16_near_equal(src[i], current_val, epsilon) && current_run < UINT32_MAX) {
             current_run++;
         } else {
-            /* Write completed run */
-            uint32_t offset = header_size + run_count * TU_RLE_RUN_BYTES;
-            memcpy(dst + offset, &current_val, sizeof(current_val));
-            memcpy(dst + offset + sizeof(current_val), &current_run, sizeof(current_run));
+            uint32_t off = header_size + run_count * TU_RLE_RUN_BYTES;
+            memcpy(dst + off, &current_val, sizeof(current_val));
+            memcpy(dst + off + sizeof(current_val), &current_run, sizeof(current_run));
             run_count++;
-
             current_val = src[i];
             current_run = 1;
         }
     }
-
-    /* Write final run */
-    {
-        uint32_t offset = header_size + run_count * TU_RLE_RUN_BYTES;
-        memcpy(dst + offset, &current_val, sizeof(current_val));
-        memcpy(dst + offset + sizeof(current_val), &current_run, sizeof(current_run));
-        run_count++;
-    }
-
-    /* Write header */
-    memcpy(dst, &element_count, sizeof(uint32_t));
-    memcpy(dst + sizeof(uint32_t), &run_count, sizeof(uint32_t));
-
+    uint32_t off = header_size + run_count * TU_RLE_RUN_BYTES;
+    memcpy(dst + off, &current_val, sizeof(current_val));
+    memcpy(dst + off + sizeof(current_val), &current_run, sizeof(current_run));
+    run_count++;
+    memcpy(dst, &element_count, sizeof(element_count));
+    memcpy(dst + sizeof(element_count), &run_count, sizeof(run_count));
     *compressed_size_out = header_size + run_count * TU_RLE_RUN_BYTES;
     return 0;
 }
 
-/* ================================================================
- * RLE Decompression
- * ================================================================ */
-
 int tu_decompress_rle(const uint8_t *src, uint32_t src_size,
-                       fp16_t *dst, uint32_t dst_capacity,
-                       uint32_t *decompressed_count_out)
+                      fp16_t *dst, uint32_t dst_capacity,
+                      uint32_t *decompressed_count_out)
 {
     if (!src || !dst || !decompressed_count_out) return -1;
-
-    uint32_t header_size = sizeof(uint32_t) * 2;
+    const uint32_t header_size = sizeof(uint32_t) * 2;
     if (src_size < header_size) return -1;
-
     uint32_t element_count, run_count;
-    memcpy(&element_count, src, sizeof(uint32_t));
-    memcpy(&run_count, src + sizeof(uint32_t), sizeof(uint32_t));
-
+    memcpy(&element_count, src, sizeof(element_count));
+    memcpy(&run_count, src + sizeof(element_count), sizeof(run_count));
     if (element_count == 0) {
+        if (run_count != 0) return -1;
         *decompressed_count_out = 0;
         return 0;
     }
+    if (run_count == 0 || run_count > element_count ||
+        run_count > (UINT32_MAX - header_size) / TU_RLE_RUN_BYTES) return -1;
+    uint32_t expected = header_size + run_count * TU_RLE_RUN_BYTES;
+    if (src_size < expected || dst_capacity < element_count) return -1;
 
-    /* Validate: enough source data for declared runs */
-    uint32_t expected_src = header_size + run_count * TU_RLE_RUN_BYTES;
-    if (src_size < expected_src) return -1;
-
-    /* Validate: destination capacity */
-    if (dst_capacity < element_count) return -1;
-
-    /* Decode runs */
     uint32_t dst_pos = 0;
     for (uint32_t i = 0; i < run_count; i++) {
         tu_rle_run_t run = {0};
-        uint32_t offset = header_size + i * TU_RLE_RUN_BYTES;
-        memcpy(&run.value, src + offset, sizeof(run.value));
-        memcpy(&run.count, src + offset + sizeof(run.value), sizeof(run.count));
-
-        if (dst_pos + run.count > dst_capacity) return -1;
-
-        for (uint32_t j = 0; j < run.count; j++) {
-            dst[dst_pos + j] = run.value;
-        }
+        uint32_t roff = header_size + i * TU_RLE_RUN_BYTES;
+        memcpy(&run.value, src + roff, sizeof(run.value));
+        memcpy(&run.count, src + roff + sizeof(run.value), sizeof(run.count));
+        if (run.count == 0 || run.count > element_count - dst_pos) return -1;
+        for (uint32_t j = 0; j < run.count; j++) dst[dst_pos + j] = run.value;
         dst_pos += run.count;
     }
-
-    /* Verify exact match with header */
     if (dst_pos != element_count) return -1;
-
     *decompressed_count_out = dst_pos;
     return 0;
 }
 
-/* ================================================================
- * Utilities
- * ================================================================ */
-
-float tu_compress_get_ratio(const uint8_t *compressed_data, uint32_t compressed_size)
+float tu_compress_get_ratio(const uint8_t *data, uint32_t size)
 {
-    if (!compressed_data || compressed_size < 8) return 0.0f;
-
-    uint32_t element_count;
-    memcpy(&element_count, compressed_data, sizeof(uint32_t));
-
-    if (element_count == 0) return 1.0f;
-
-    float original_size = (float)(element_count * sizeof(fp16_t));
-    float comp_size = (float)compressed_size;
-
-    if (comp_size <= 0.0f) return 0.0f;
-    return original_size / comp_size;
+    if (!data || size < 8) return 0.0f;
+    uint32_t n;
+    memcpy(&n, data, sizeof(n));
+    return n == 0 ? 1.0f : (float)(n * sizeof(fp16_t)) / (float)size;
 }
 
-uint32_t tu_compress_get_original_count(const uint8_t *compressed_data,
-                                         uint32_t compressed_size)
+uint32_t tu_compress_get_original_count(const uint8_t *data, uint32_t size)
 {
-    if (!compressed_data || compressed_size < 4) return 0;
-
-    uint32_t element_count;
-    memcpy(&element_count, compressed_data, sizeof(uint32_t));
-    return element_count;
+    uint32_t n = 0;
+    if (data && size >= sizeof(n)) memcpy(&n, data, sizeof(n));
+    return n;
 }
 
-bool tu_compress_validate(const uint8_t *compressed_data, uint32_t compressed_size)
+bool tu_compress_validate(const uint8_t *data, uint32_t size)
 {
-    if (!compressed_data) return false;
-
-    uint32_t header_size = sizeof(uint32_t) * 2;
-    if (compressed_size < header_size) return false;
-
-    uint32_t element_count, run_count;
-    memcpy(&element_count, compressed_data, sizeof(uint32_t));
-    memcpy(&run_count, compressed_data + sizeof(uint32_t), sizeof(uint32_t));
-
-    /* Zero elements is valid */
-    if (element_count == 0 && run_count == 0) return true;
-
-    /* Non-zero elements must have at least 1 run */
-    if (run_count == 0 || run_count > element_count) return false;
-
-    /* Check buffer size matches runs */
-    uint32_t expected = header_size + run_count * TU_RLE_RUN_BYTES;
-    return compressed_size >= expected;
+    if (!data || size < 8) return false;
+    uint32_t n, runs;
+    memcpy(&n, data, 4);
+    memcpy(&runs, data + 4, 4);
+    if (n == 0) return runs == 0 && size == 8;
+    if (runs == 0 || runs > n || runs > (UINT32_MAX - 8u) / TU_RLE_RUN_BYTES) return false;
+    return size == 8u + runs * TU_RLE_RUN_BYTES;
 }
 
-/* ================================================================
- * DMA Integration
- * ================================================================ */
-
-int tu_compress_for_dma(const fp16_t *src, uint32_t element_count,
-                         const tu_compress_config_t *cfg,
-                         uint8_t *dst, uint32_t dst_capacity,
-                         uint32_t *compressed_size_out)
+static void frame_write(uint8_t *dst, tu_weight_payload_codec_t codec,
+                        uint32_t elements, uint32_t payload_bytes)
 {
-    if (!cfg || !cfg->enabled || cfg->type == TU_COMPRESS_NONE) {
-        /* Pass-through: just copy the raw data */
-        if (!dst || !compressed_size_out) return -1;
-        uint32_t raw_size = element_count * sizeof(fp16_t);
-        if (dst_capacity < raw_size) return -1;
-        memcpy(dst, src, raw_size);
-        *compressed_size_out = raw_size;
+    uint32_t magic = TU_WEIGHT_FRAME_MAGIC;
+    uint16_t reserved = 0;
+    memcpy(dst, &magic, 4);
+    dst[4] = TU_WEIGHT_FRAME_VERSION;
+    dst[5] = (uint8_t)codec;
+    memcpy(dst + 6, &reserved, 2);
+    memcpy(dst + 8, &elements, 4);
+    memcpy(dst + 12, &payload_bytes, 4);
+}
+
+static bool frame_read(const uint8_t *src, uint32_t size,
+                       tu_weight_payload_codec_t *codec,
+                       uint32_t *elements, uint32_t *payload_bytes)
+{
+    if (!src || size < TU_WEIGHT_FRAME_HEADER_BYTES) return false;
+    uint32_t magic;
+    uint16_t reserved;
+    memcpy(&magic, src, 4);
+    memcpy(&reserved, src + 6, 2);
+    memcpy(elements, src + 8, 4);
+    memcpy(payload_bytes, src + 12, 4);
+    *codec = (tu_weight_payload_codec_t)src[5];
+    if (magic != TU_WEIGHT_FRAME_MAGIC || src[4] != TU_WEIGHT_FRAME_VERSION ||
+        reserved != 0 || (*codec != TU_WEIGHT_PAYLOAD_RAW && *codec != TU_WEIGHT_PAYLOAD_RLE)) return false;
+    return *payload_bytes == size - TU_WEIGHT_FRAME_HEADER_BYTES;
+}
+
+int tu_compress_adaptive_rle(const fp16_t *src, uint32_t n, float epsilon,
+                             uint8_t *dst, uint32_t cap, uint32_t *size_out,
+                             tu_weight_payload_codec_t *codec_out)
+{
+    if (!src || !dst || !size_out || epsilon < 0.0f) return -1;
+    if (n > (UINT32_MAX - TU_WEIGHT_FRAME_HEADER_BYTES) / sizeof(fp16_t)) return -1;
+    uint32_t raw_bytes = n * (uint32_t)sizeof(fp16_t);
+    if (cap < TU_WEIGHT_FRAME_HEADER_BYTES + raw_bytes) return -1;
+
+    uint32_t runs = count_runs(src, n, epsilon);
+    uint64_t rle_bytes = n == 0 ? 8u : 8u + (uint64_t)runs * TU_RLE_RUN_BYTES;
+    tu_weight_payload_codec_t codec = rle_bytes < raw_bytes ?
+        TU_WEIGHT_PAYLOAD_RLE : TU_WEIGHT_PAYLOAD_RAW;
+    uint32_t payload = raw_bytes;
+    if (codec == TU_WEIGHT_PAYLOAD_RLE) {
+        if (tu_compress_rle(src, n, epsilon, dst + TU_WEIGHT_FRAME_HEADER_BYTES,
+                            cap - TU_WEIGHT_FRAME_HEADER_BYTES, &payload) != 0) return -1;
+    } else if (raw_bytes) {
+        memcpy(dst + TU_WEIGHT_FRAME_HEADER_BYTES, src, raw_bytes);
+    }
+    frame_write(dst, codec, n, payload);
+    *size_out = TU_WEIGHT_FRAME_HEADER_BYTES + payload;
+    if (codec_out) *codec_out = codec;
+    return 0;
+}
+
+bool tu_compress_adaptive_validate(const uint8_t *src, uint32_t size)
+{
+    tu_weight_payload_codec_t codec;
+    uint32_t n, payload;
+    if (!frame_read(src, size, &codec, &n, &payload)) return false;
+    if (codec == TU_WEIGHT_PAYLOAD_RAW)
+        return n <= UINT32_MAX / sizeof(fp16_t) && payload == n * sizeof(fp16_t);
+    return tu_compress_validate(src + TU_WEIGHT_FRAME_HEADER_BYTES, payload) &&
+           tu_compress_get_original_count(src + TU_WEIGHT_FRAME_HEADER_BYTES, payload) == n;
+}
+
+int tu_compress_adaptive_get_codec(const uint8_t *src, uint32_t size,
+                                   tu_weight_payload_codec_t *codec_out)
+{
+    uint32_t n, payload;
+    if (!codec_out || !frame_read(src, size, codec_out, &n, &payload)) return -1;
+    return 0;
+}
+
+int tu_decompress_adaptive(const uint8_t *src, uint32_t size,
+                           fp16_t *dst, uint32_t cap, uint32_t *count_out)
+{
+    if (!dst || !count_out || !tu_compress_adaptive_validate(src, size)) return -1;
+    tu_weight_payload_codec_t codec;
+    uint32_t n, payload;
+    if (!frame_read(src, size, &codec, &n, &payload) || cap < n) return -1;
+    const uint8_t *body = src + TU_WEIGHT_FRAME_HEADER_BYTES;
+    if (codec == TU_WEIGHT_PAYLOAD_RAW) {
+        if (payload) memcpy(dst, body, payload);
+        *count_out = n;
         return 0;
     }
-
-    if (cfg->type == TU_COMPRESS_RLE) {
-        return tu_compress_rle(src, element_count,
-                                cfg->rle_epsilon,
-                                dst, dst_capacity,
-                                compressed_size_out);
-    }
-
-    return -1;  /* Unknown compression type */
+    return tu_decompress_rle(body, payload, dst, cap, count_out);
 }
 
-int tu_decompress_from_dma(const uint8_t *src, uint32_t src_size,
-                            const tu_compress_config_t *cfg,
-                            fp16_t *dst, uint32_t dst_capacity,
-                            uint32_t *decompressed_count_out)
+int tu_compress_for_dma(const fp16_t *src, uint32_t n,
+                        const tu_compress_config_t *cfg,
+                        uint8_t *dst, uint32_t cap, uint32_t *size_out)
 {
+    if (!src || !dst || !size_out) return -1;
     if (!cfg || !cfg->enabled || cfg->type == TU_COMPRESS_NONE) {
-        /* Pass-through: just copy */
-        if (!dst || !decompressed_count_out) return -1;
-        uint32_t elem_count = src_size / sizeof(fp16_t);
-        if (dst_capacity < elem_count) return -1;
-        memcpy(dst, src, src_size);
-        *decompressed_count_out = elem_count;
+        if (n > UINT32_MAX / sizeof(fp16_t)) return -1;
+        uint32_t raw = n * (uint32_t)sizeof(fp16_t);
+        if (cap < raw) return -1;
+        if (raw) memcpy(dst, src, raw);
+        *size_out = raw;
         return 0;
     }
+    if (cfg->type == TU_COMPRESS_RLE)
+        return tu_compress_rle(src, n, cfg->rle_epsilon, dst, cap, size_out);
+    if (cfg->type == TU_COMPRESS_ADAPTIVE_RLE)
+        return tu_compress_adaptive_rle(src, n, cfg->rle_epsilon, dst, cap,
+                                        size_out, NULL);
+    return -1;
+}
 
-    if (cfg->type == TU_COMPRESS_RLE) {
-        return tu_decompress_rle(src, src_size,
-                                  dst, dst_capacity,
-                                  decompressed_count_out);
+int tu_decompress_from_dma(const uint8_t *src, uint32_t size,
+                           const tu_compress_config_t *cfg,
+                           fp16_t *dst, uint32_t cap, uint32_t *count_out)
+{
+    if (!src || !dst || !count_out) return -1;
+    if (!cfg || !cfg->enabled || cfg->type == TU_COMPRESS_NONE) {
+        if (size % sizeof(fp16_t) != 0) return -1;
+        uint32_t n = size / sizeof(fp16_t);
+        if (cap < n) return -1;
+        if (size) memcpy(dst, src, size);
+        *count_out = n;
+        return 0;
     }
-
+    if (cfg->type == TU_COMPRESS_RLE)
+        return tu_decompress_rle(src, size, dst, cap, count_out);
+    if (cfg->type == TU_COMPRESS_ADAPTIVE_RLE)
+        return tu_decompress_adaptive(src, size, dst, cap, count_out);
     return -1;
 }

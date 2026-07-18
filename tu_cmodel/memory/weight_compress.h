@@ -1,28 +1,16 @@
 /*
- * TU Weight Compression — RLE + Frequency-Aware Encoding (Gap M5)
- * ================================================================
- *
- * Compresses weight tensors for reduced memory bandwidth and storage.
- * Supports Run-Length Encoding (RLE) optimized for quantized/dead weights.
- *
- * Gap: M5 — Memory compression (P2)
- * Dependencies: tu_config.h, tu_precision.h
- *
- * Design:
- *   - RLE: Run-length encoding for repeated values (zeros, saturated, identical)
- *   - Quantization-aware: configurable epsilon for near-value merging
- *   - Config-driven: enable/disable, compression type, epsilon
- *   - DMA integration: compress on host→TU transfer, transparent decompression
+ * TU Weight Compression — raw, RLE, and framed adaptive raw/RLE
+ * =================================================================
+ * Runtime-configurable weight-stream formats for architecture exploration.
  */
-
 #ifndef TU_WEIGHT_COMPRESS_H
 #define TU_WEIGHT_COMPRESS_H
 
 #include "../tu_config.h"
 #include "../tu_precision.h"
-#include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,144 +18,89 @@ extern "C" {
 
 struct tu_config_t;
 
-/* ---- Compression Types ---- */
 typedef enum {
-    TU_COMPRESS_NONE    = 0,  /* Pass-through, no compression */
-    TU_COMPRESS_RLE     = 1,  /* Run-length encoding for repeated values */
+    TU_COMPRESS_NONE         = 0,
+    TU_COMPRESS_RLE          = 1,
+    TU_COMPRESS_ADAPTIVE_RLE = 2, /* Per tensor: framed raw or RLE, whichever is smaller */
     TU_COMPRESS_COUNT
 } tu_compress_type_t;
 
-/* ---- RLE Encoding ---- */
-
-/*
- * RLE-encoded data format:
- *   Header:  uint32_t original_elem_count (number of elements before compression)
- *            uint32_t encoded_runs       (number of runs)
- *   Run:     uint16_t value              (FP16 bit pattern)
- *            uint32_t count              (consecutive repetitions of this value)
- *
- * Worst case: no runs (alternating values) → 6 bytes per element (300% overhead)
- * Best case: all identical → 6 bytes for entire tensor (~100% / N compression)
- * Typical: sparse/quantized weights → 2-10x compression
- */
-
-/* Maximum compressed size for worst-case RLE encoding */
+/* Stable RLE wire format: uint32 element_count, uint32 run_count, then
+ * repeated {uint16 value, uint32 count}. Fields are copied individually so
+ * ABI struct padding never enters the stream. */
+#define TU_RLE_RUN_BYTES (sizeof(uint16_t) + sizeof(uint32_t))
 #define TU_RLE_MAX_ENCODED_SIZE(elem_count) \
     (sizeof(uint32_t) * 2 + (elem_count) * TU_RLE_RUN_BYTES)
 
-/* Stable wire format; do not use sizeof(tu_rle_run_t), which is 8 on common
- * ABIs because of padding even though the encoded fields occupy 6 bytes. */
-#define TU_RLE_RUN_BYTES (sizeof(uint16_t) + sizeof(uint32_t))
-
-/* RLE run entry */
 typedef struct {
-    uint16_t value;     /* FP16 bit pattern */
-    uint32_t count;     /* Number of consecutive occurrences */
+    uint16_t value;
+    uint32_t count;
 } tu_rle_run_t;
 
-/* ---- Compression Config ---- */
+/* Adaptive streams are explicitly framed; a decoder never guesses the codec
+ * from payload bytes. Header layout (16 bytes): magic:u32, version:u8,
+ * codec:u8, reserved:u16, element_count:u32, payload_bytes:u32. */
+#define TU_WEIGHT_FRAME_MAGIC       UINT32_C(0x54555743) /* "CWUT" in LE byte order */
+#define TU_WEIGHT_FRAME_VERSION     1u
+#define TU_WEIGHT_FRAME_HEADER_BYTES 16u
+
+typedef enum {
+    TU_WEIGHT_PAYLOAD_RAW = 0,
+    TU_WEIGHT_PAYLOAD_RLE = 1
+} tu_weight_payload_codec_t;
+
 typedef struct {
-    tu_compress_type_t  type;           /* Compression algorithm */
-    float               rle_epsilon;    /* Max difference to merge into a run (0 = exact) */
-    bool                enabled;        /* Enable/disable compression */
+    tu_compress_type_t type;
+    float              rle_epsilon;
+    bool               enabled;
 } tu_compress_config_t;
 
-/* Default codec config: RLE with exact matching.  The canonical TU runtime
- * configuration remains disabled by default for backward compatibility. */
 extern const tu_compress_config_t tu_compress_config_default;
-
-/* Translate canonical JSON/runtime settings into codec settings. */
 tu_compress_config_t tu_compress_config_from_tu_config(const struct tu_config_t *cfg);
 
-/* ================================================================
- * Compression API
- * ================================================================ */
-
-/*
- * Compress an FP16 weight tensor using RLE.
- *
- *   src:         Source FP16 data (element_count elements)
- *   element_count: Number of FP16 elements in src
- *   epsilon:     Maximum absolute difference to consider values "equal" for merging
- *                 0.0f = exact matching only; 0.001f = near-value merging
- *   dst:         Output buffer (caller-allocated)
- *   dst_capacity: Size of dst buffer in bytes
- *   compressed_size_out: Written with actual compressed size in bytes
- *
- * Returns 0 on success, -1 if dst_capacity is insufficient.
- */
 int tu_compress_rle(const fp16_t *src, uint32_t element_count,
-                     float epsilon,
-                     uint8_t *dst, uint32_t dst_capacity,
-                     uint32_t *compressed_size_out);
-
-/*
- * Decompress an RLE-encoded weight tensor.
- *
- *   src:         Compressed data (from tu_compress_rle)
- *   src_size:    Size of compressed data in bytes
- *   dst:         Output buffer for decompressed FP16 data
- *   dst_capacity: Max FP16 elements the buffer can hold
- *   decompressed_count_out: Written with actual number of elements decompressed
- *
- * Returns 0 on success, -1 on error (corrupt data, insufficient capacity).
- */
+                    float epsilon, uint8_t *dst, uint32_t dst_capacity,
+                    uint32_t *compressed_size_out);
 int tu_decompress_rle(const uint8_t *src, uint32_t src_size,
-                       fp16_t *dst, uint32_t dst_capacity,
-                       uint32_t *decompressed_count_out);
-
-/*
- * Get the compression ratio for a compressed buffer.
- * Ratio = original_size / compressed_size.
- * Returns 1.0 if no compression, or 0.0 on invalid input.
- */
+                      fp16_t *dst, uint32_t dst_capacity,
+                      uint32_t *decompressed_count_out);
 float tu_compress_get_ratio(const uint8_t *compressed_data, uint32_t compressed_size);
-
-/*
- * Get the original element count from a compressed buffer header.
- * Returns 0 on invalid input.
- */
 uint32_t tu_compress_get_original_count(const uint8_t *compressed_data,
-                                         uint32_t compressed_size);
-
-/*
- * Validate a compressed buffer header.
- * Returns true if the header is valid.
- */
+                                        uint32_t compressed_size);
 bool tu_compress_validate(const uint8_t *compressed_data, uint32_t compressed_size);
 
-/* ---- DMA Integration Helpers ---- */
+/* Adaptive framed codec. The encoder selects RLE only when its payload is
+ * strictly smaller than raw FP16, so output is never larger than raw bytes
+ * plus the fixed frame. Ties choose raw for simpler decoding. */
+static inline uint32_t tu_compress_adaptive_max_size(uint32_t element_count) {
+    return TU_WEIGHT_FRAME_HEADER_BYTES + element_count * (uint32_t)sizeof(fp16_t);
+}
+int tu_compress_adaptive_rle(const fp16_t *src, uint32_t element_count,
+                             float epsilon, uint8_t *dst, uint32_t dst_capacity,
+                             uint32_t *encoded_size_out,
+                             tu_weight_payload_codec_t *selected_codec_out);
+int tu_decompress_adaptive(const uint8_t *src, uint32_t src_size,
+                           fp16_t *dst, uint32_t dst_capacity,
+                           uint32_t *decompressed_count_out);
+bool tu_compress_adaptive_validate(const uint8_t *src, uint32_t src_size);
+int tu_compress_adaptive_get_codec(const uint8_t *src, uint32_t src_size,
+                                   tu_weight_payload_codec_t *codec_out);
 
-/*
- * Estimate the maximum compressed size for a given input.
- * Use this to allocate destination buffers.
- * For RLE: worst case is every element is unique → sizeof(header) + N × sizeof(run).
- */
+/* Legacy helper remains the RLE worst-case allocator. */
 static inline uint32_t tu_compress_max_size(uint32_t element_count) {
     return TU_RLE_MAX_ENCODED_SIZE(element_count);
 }
 
-/*
- * Compress FP16 data for DMA transfer (host → TU).
- * Wraps tu_compress_rle with config-driven parameters.
- * Returns 0 on success, -1 on failure.
- */
 int tu_compress_for_dma(const fp16_t *src, uint32_t element_count,
-                         const tu_compress_config_t *cfg,
-                         uint8_t *dst, uint32_t dst_capacity,
-                         uint32_t *compressed_size_out);
-
-/*
- * Decompress data after DMA transfer (TU side).
- * Returns 0 on success, -1 on failure.
- */
+                        const tu_compress_config_t *cfg,
+                        uint8_t *dst, uint32_t dst_capacity,
+                        uint32_t *compressed_size_out);
 int tu_decompress_from_dma(const uint8_t *src, uint32_t src_size,
-                            const tu_compress_config_t *cfg,
-                            fp16_t *dst, uint32_t dst_capacity,
-                            uint32_t *decompressed_count_out);
+                           const tu_compress_config_t *cfg,
+                           fp16_t *dst, uint32_t dst_capacity,
+                           uint32_t *decompressed_count_out);
 
 #ifdef __cplusplus
 }
 #endif
-
-#endif /* TU_WEIGHT_COMPRESS_H */
+#endif
