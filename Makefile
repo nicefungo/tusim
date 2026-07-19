@@ -8,7 +8,7 @@ LDFLAGS ?= -lm
 TU_DIR     = tu_cmodel
 COMPILER   = compiler/onnx_to_tu.py
 
-.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline test-agen test-multicore test-multicore-sweep test-multicast test-scatter-gather test-trace test-errors test-config test-dataflow test-logging test-rounding test-fp8 test-softmax test-double test-random test-full test-context test-compress test-weight-compression-sweep test-scheduler test-liveness test-tf32 test-bench test-power test-debug test-dataflow-sweep test-rounding-sweep test-attention-sweep test-pooling-sweep test-softmax-sweep test-conv-sweep test-norm-sweep test-norm-attention-sweep test-conv-groups-sweep test-conv-pool-cascade test-mma-activation-sweep test-softmax-attention-sweep
+.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline test-agen test-multicore test-multicore-sweep test-multicast test-scatter-gather test-trace test-errors test-config test-dataflow test-logging test-rounding test-fp8 test-softmax test-double test-random test-full test-context test-context-switch-sweep test-compress test-weight-compression-sweep test-scheduler test-liveness test-tf32 test-bench test-power test-debug test-dataflow-sweep test-rounding-sweep test-attention-sweep test-pooling-sweep test-softmax-sweep test-conv-sweep test-norm-sweep test-norm-attention-sweep test-conv-groups-sweep test-conv-pool-cascade test-mma-activation-sweep test-softmax-attention-sweep
 
 all: libtucmodel.a libtucmodel.so
 
@@ -443,8 +443,12 @@ test-liveness: tests/test_liveness.c libtucmodel.a
 
 # ---- Test: Multi-context Execution (E3) ----
 test-context: tests/test_context.c libtucmodel.a
-	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
-	./test-context test-compress
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< ./libtucmodel.a $(LDFLAGS)
+	./test-context
+
+test-context-switch-sweep: tests/test_context_switch_sweep.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< ./libtucmodel.a $(LDFLAGS)
+	./test-context-switch-sweep
 
 # ---- Test: Event Tracing (P2.7) — VCD waveform generation ----
 test-trace: tests/test_trace.c libtucmodel.a
@@ -544,6 +548,6 @@ clean:
 	rm -f test-dataflow test-elementwise test-bf16 test-memhier test-norm test-logging
 	rm -f test-int-quant test-conv test-random
 	rm -f test-rounding test-fp8 test-attention test-perf test-pool test-pipeline
-	rm -f test-agen test-multicore test-multicore-sweep test-compress test-errors test-config test-softmax test-double test-context test-compress test-weight-compression-sweep test-scheduler test-scheduler-sweep test-interconnect-topology-sweep test-liveness test-power test-dpi test-dataflow-sweep test-rounding-sweep test-attention-sweep test-pooling-sweep test-softmax-sweep test-conv-sweep test-norm-sweep test-norm-attention-sweep test-conv-groups-sweep test-conv-pool-cascade test-mma-activation-sweep test-softmax-attention-sweep
+	rm -f test-agen test-multicore test-multicore-sweep test-compress test-errors test-config test-softmax test-double test-context test-context-switch-sweep test-compress test-weight-compression-sweep test-scheduler test-scheduler-sweep test-interconnect-topology-sweep test-liveness test-power test-dpi test-dataflow-sweep test-rounding-sweep test-attention-sweep test-pooling-sweep test-softmax-sweep test-conv-sweep test-norm-sweep test-norm-attention-sweep test-conv-groups-sweep test-conv-pool-cascade test-mma-activation-sweep test-softmax-attention-sweep
 	rm -f /tmp/gpt_block_tu /tmp/gpt_block_tu.c /tmp/test_asm
 	rm -rf build/ci_reports

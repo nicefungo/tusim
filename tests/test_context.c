@@ -265,6 +265,7 @@ static void test_block_unblock(void) {
     int id0 = tu_ctx_alloc(g_mgr);
     int id1 = tu_ctx_alloc(g_mgr);
     (void)id0;
+    (void)id1;
 
     /* Block the active context */
     int ret = tu_ctx_block_current(g_mgr);
@@ -391,6 +392,79 @@ static void test_max_contexts(void) {
     PASS();
 }
 
+/* Retention modes model physically distinct context-store designs. */
+static void test_save_scope_and_cost(void) {
+    tu_ctx_manager_destroy(g_mgr);
+    g_cfg.save_scope = TU_CTX_SAVE_LIVE_SRAM;
+    g_cfg.live_w_bytes = sizeof(float);
+    g_cfg.live_a_bytes = sizeof(float);
+    g_cfg.live_o_bytes = sizeof(float);
+    g_cfg.state_bytes_per_cycle = 8;
+    g_cfg.switch_overhead = 7;
+    g_mgr = tu_ctx_manager_create(g_core, &g_cfg);
+    CHECK(g_mgr != NULL, "live-scope manager created");
+
+    tu_ctx_alloc(g_mgr);
+    tu_ctx_alloc(g_mgr);
+    float ctx0[2] = {1.0f, 2.0f};
+    float ctx1[2] = {10.0f, 20.0f};
+    tu_core_dma_load_w(g_core, ctx0, 0, sizeof(ctx0));
+    CHECK(tu_ctx_switch(g_mgr, 1) == 0, "switch to ctx1");
+    tu_core_dma_load_w(g_core, ctx1, 0, sizeof(ctx1));
+    CHECK(tu_ctx_switch(g_mgr, 0) == 0, "switch to ctx0");
+
+    float out[2] = {0};
+    tu_sram_read_bulk(tu_core_get_sram_w(g_core), 0, out, sizeof(out));
+    CHECK(out[0] == 1.0f, "live W prefix must be restored");
+    CHECK(out[1] == 20.0f, "non-live W tail must remain unrestored");
+    CHECK(tu_ctx_get_switch_overhead(g_mgr) == 20,
+          "live-scope byte cost should be charged per switch");
+    CHECK(tu_ctx_get(g_mgr, 0)->saved_sram_bytes == 12,
+          "live retained-byte accounting");
+    PASS();
+}
+
+static void test_full_and_control_cost(void) {
+    uint64_t total_sram = (uint64_t)g_core->state.sram_w.banks.size +
+                          g_core->state.sram_a.banks.size +
+                          g_core->state.sram_o.banks.size;
+    tu_ctx_manager_destroy(g_mgr);
+    g_cfg.save_scope = TU_CTX_SAVE_FULL_SRAM;
+    g_cfg.state_bytes_per_cycle = 32;
+    g_cfg.switch_overhead = 100;
+    g_mgr = tu_ctx_manager_create(g_core, &g_cfg);
+    tu_ctx_alloc(g_mgr); tu_ctx_alloc(g_mgr);
+    CHECK(tu_ctx_switch(g_mgr, 1) == 0, "full switch");
+    CHECK(tu_ctx_get_switch_overhead(g_mgr) ==
+          100 + (2 * total_sram + 31) / 32, "full SRAM transfer cost");
+
+    tu_ctx_manager_destroy(g_mgr);
+    g_cfg.save_scope = TU_CTX_SAVE_CONTROL_ONLY;
+    g_mgr = tu_ctx_manager_create(g_core, &g_cfg);
+    tu_ctx_alloc(g_mgr); tu_ctx_alloc(g_mgr);
+    CHECK(tu_ctx_switch(g_mgr, 1) == 0, "control-only switch");
+    CHECK(tu_ctx_get_switch_overhead(g_mgr) == 100,
+          "control-only switch has fixed cost only");
+    CHECK(tu_ctx_get(g_mgr, 1)->saved_sram_bytes == 0,
+          "control-only retains no SRAM");
+    PASS();
+}
+
+static void test_context_config_validation(void) {
+    CHECK(tu_ctx_manager_config_validate(g_core, &g_cfg) == 0,
+          "default config valid");
+    tu_ctx_manager_config_t bad = g_cfg;
+    bad.max_contexts = 0;
+    CHECK(tu_ctx_manager_config_validate(g_core, &bad) != 0,
+          "zero contexts rejected");
+    bad = g_cfg;
+    bad.save_scope = TU_CTX_SAVE_LIVE_SRAM;
+    bad.live_w_bytes = g_core->state.sram_w.banks.size + 1;
+    CHECK(tu_ctx_manager_create(g_core, &bad) == NULL,
+          "live range beyond SRAM rejected");
+    PASS();
+}
+
 /* ================================================================
  * Main
  * ================================================================ */
@@ -409,6 +483,9 @@ int main(void) {
     TEST("ctx_print_status");      setup(); test_print_status();      teardown();
     TEST("ctx_null_safety");       setup(); test_null_safety();       teardown();
     TEST("ctx_max_contexts");      setup(); test_max_contexts();      teardown();
+    TEST("ctx_save_scope_cost");   setup(); test_save_scope_and_cost(); teardown();
+    TEST("ctx_full_control_cost"); setup(); test_full_and_control_cost(); teardown();
+    TEST("ctx_config_validation"); setup(); test_context_config_validation(); teardown();
 
     return test_exit();
 }

@@ -50,6 +50,7 @@ test-config
 test-softmax
 test-double
 test-context
+test-context-switch-sweep
 test-liveness
 test-scheduler
 test-scheduler-sweep

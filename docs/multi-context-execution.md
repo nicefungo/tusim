@@ -89,22 +89,9 @@ configuration, precision modes, and performance statistics. This is the foundati
 
 ## How to Configure
 
-### YAML Configuration (config/tu_config.json)
-
-```json
-{
-  "tu": {
-    "context_manager": {
-      "enabled": true,
-      "max_contexts": 4,
-      "sched_policy": "round_robin",
-      "time_slice_cycles": 0,
-      "time_slice_commands": 0,
-      "switch_overhead_cycles": 100
-    }
-  }
-}
-```
+Context-manager configuration is currently supplied through its C API; it is
+not part of the global JSON loader. This limitation is explicit to avoid
+claiming that a JSON block is honored when it is not.
 
 ### C API Configuration
 
@@ -114,7 +101,9 @@ tu_ctx_manager_config_t cfg = {
     .sched_policy      = TU_CTX_SCHED_ROUND_ROBIN,  // or PRIORITY
     .time_slice_cycles = 0,                     // 0 = switch only at sync points
     .time_slice_cmds   = 0,                     // 0 = switch only at sync points
-    .switch_overhead   = 100,                   // Cycle cost per context switch
+    .switch_overhead   = 100,                   // Fixed drain/control cycles
+    .save_scope        = TU_CTX_SAVE_FULL_SRAM, // or LIVE_SRAM / CONTROL_ONLY
+    .state_bytes_per_cycle = 32,                // Context-store datapath
 };
 
 tu_ctx_manager_t *mgr = tu_ctx_manager_create(core, &cfg);
@@ -184,8 +173,12 @@ int main(void) {
 4. **Performance accounting per-context** — Each context has its own cycle/command counters
 
 ### Performance Overhead
-- Context switch cost: ~100 cycles (configurable)
-- SRAM deep copy: O(SRAM_size) per save/restore
+- Context switch cost is fixed drain/control cycles plus retained-state
+  save/restore bytes divided by the configured context-store bandwidth.
+- Full, compiler-declared live-prefix, and control-only retention are runtime
+  modes; see `docs/exploration/context-switch-state-scope.md` for measurements.
+- A zero `state_bytes_per_cycle` preserves the historical fixed-only timing
+  model for backward compatibility.
 - No overhead when not switching (zero-cost when single-context)
 
 ## Verification

@@ -22,32 +22,20 @@
 #include <string.h>
 #include <stdio.h>
 
-/* ---- Default config ---- */
-static const tu_ctx_manager_config_t k_default_config = {
-    .max_contexts      = 4,
-    .sched_policy      = TU_CTX_SCHED_ROUND_ROBIN,
-    .time_slice_cycles = 0,       /* Only switch at sync points */
-    .time_slice_cmds   = 0,       /* Only switch at sync points */
-    .switch_overhead   = 100,     /* 100 cycles per context switch */
-    .save_dram_state   = false,
-};
-
 /* ---- Internal: Deep-copy SRAM region data ---- */
-static int ctx_copy_sram_data(tu_sram_region_t *dst, const tu_sram_region_t *src)
+static int ctx_copy_sram_data(tu_sram_region_t *dst, const tu_sram_region_t *src,
+                              uint32_t copy_bytes)
 {
     if (!dst || !src || !src->banks.data) return -1;
 
-    /* Allocate new data buffer */
-    uint32_t data_size = src->banks.size;
-    if (data_size == 0) {
-        dst->banks.data = NULL;
-        return 0;
+    /* Allocate only bytes retained by this policy; metadata still describes
+     * the physical region capacity. */
+    dst->banks.data = NULL;
+    if (copy_bytes > 0) {
+        dst->banks.data = (uint8_t *)malloc(copy_bytes);
+        if (!dst->banks.data) return -1;
+        memcpy(dst->banks.data, src->banks.data, copy_bytes);
     }
-
-    dst->banks.data = (uint8_t *)malloc(data_size);
-    if (!dst->banks.data) return -1;
-
-    memcpy(dst->banks.data, src->banks.data, data_size);
 
     /* Copy bank metadata */
     dst->banks.size        = src->banks.size;
@@ -84,7 +72,16 @@ static void ctx_free_sram_data(tu_sram_region_t *r)
 }
 
 /* ---- Internal: Save full hardware state from core into context ---- */
-static int ctx_save_full_state(tu_context_desc_t *ctx, tu_state_t *state)
+static uint32_t ctx_scope_bytes(tu_ctx_save_scope_t scope, uint32_t live,
+                                uint32_t capacity)
+{
+    if (scope == TU_CTX_SAVE_FULL_SRAM) return capacity;
+    if (scope == TU_CTX_SAVE_LIVE_SRAM) return live;
+    return 0;
+}
+
+static int ctx_save_full_state(tu_ctx_manager_t *mgr, tu_context_desc_t *ctx,
+                               tu_state_t *state)
 {
     tu_sram_region_t *sw = &state->sram_w;
     tu_sram_region_t *sa = &state->sram_a;
@@ -99,10 +96,18 @@ static int ctx_save_full_state(tu_context_desc_t *ctx, tu_state_t *state)
     ctx_free_sram_data(da);
     ctx_free_sram_data(d_o);
 
-    /* Deep-copy SRAM data */
-    if (ctx_copy_sram_data(dw, sw) != 0) return -1;
-    if (ctx_copy_sram_data(da, sa) != 0) { ctx_free_sram_data(dw); return -1; }
-    if (ctx_copy_sram_data(d_o, so) != 0) { ctx_free_sram_data(dw); ctx_free_sram_data(da); return -1; }
+    ctx->saved_w_bytes = ctx_scope_bytes(mgr->save_scope, mgr->live_w_bytes,
+                                         sw->banks.size);
+    ctx->saved_a_bytes = ctx_scope_bytes(mgr->save_scope, mgr->live_a_bytes,
+                                         sa->banks.size);
+    ctx->saved_o_bytes = ctx_scope_bytes(mgr->save_scope, mgr->live_o_bytes,
+                                         so->banks.size);
+    ctx->saved_sram_bytes = (uint64_t)ctx->saved_w_bytes + ctx->saved_a_bytes +
+                            ctx->saved_o_bytes;
+
+    if (ctx_copy_sram_data(dw, sw, ctx->saved_w_bytes) != 0) return -1;
+    if (ctx_copy_sram_data(da, sa, ctx->saved_a_bytes) != 0) { ctx_free_sram_data(dw); return -1; }
+    if (ctx_copy_sram_data(d_o, so, ctx->saved_o_bytes) != 0) { ctx_free_sram_data(dw); ctx_free_sram_data(da); return -1; }
 
     /* Copy region names (pointers to static strings, safe) */
     dw->name = sw->name;
@@ -156,26 +161,14 @@ static int ctx_restore_full_state(tu_state_t *state, const tu_context_desc_t *ct
     tu_sram_region_t *ra = &state->sram_a;
     tu_sram_region_t *ro = &state->sram_o;
 
-    /* Restore SRAM data: free current, allocate new, copy from saved */
-    uint32_t w_bytes = sw->banks.size;
-    uint32_t a_bytes = sa->banks.size;
-    uint32_t o_bytes = so->banks.size;
-
-    /* Reallocate data buffers to match saved sizes */
-    free(rw->banks.data);
-    rw->banks.data = (uint8_t *)malloc(w_bytes);
-    if (!rw->banks.data) return -1;
-    memcpy(rw->banks.data, sw->banks.data, w_bytes);
-
-    free(ra->banks.data);
-    ra->banks.data = (uint8_t *)malloc(a_bytes);
-    if (!ra->banks.data) { free(rw->banks.data); rw->banks.data = NULL; return -1; }
-    memcpy(ra->banks.data, sa->banks.data, a_bytes);
-
-    free(ro->banks.data);
-    ro->banks.data = (uint8_t *)malloc(o_bytes);
-    if (!ro->banks.data) { free(rw->banks.data); free(ra->banks.data); rw->banks.data = ra->banks.data = NULL; return -1; }
-    memcpy(ro->banks.data, so->banks.data, o_bytes);
+    /* Core SRAM stays physically allocated. Restore only retained bytes;
+     * CONTROL_ONLY and non-live tails must be reloaded by software. */
+    if (ctx->saved_w_bytes)
+        memcpy(rw->banks.data, sw->banks.data, ctx->saved_w_bytes);
+    if (ctx->saved_a_bytes)
+        memcpy(ra->banks.data, sa->banks.data, ctx->saved_a_bytes);
+    if (ctx->saved_o_bytes)
+        memcpy(ro->banks.data, so->banks.data, ctx->saved_o_bytes);
 
     /* Restore bank metadata */
     rw->banks.size        = sw->banks.size;
@@ -262,7 +255,7 @@ static int ctx_restore_full_state(tu_state_t *state, const tu_context_desc_t *ct
 tu_ctx_manager_t *tu_ctx_manager_create(tu_core_t *core,
                                          const tu_ctx_manager_config_t *cfg)
 {
-    if (!core || !cfg) return NULL;
+    if (tu_ctx_manager_config_validate(core, cfg) != 0) return NULL;
 
     tu_ctx_manager_t *mgr = (tu_ctx_manager_t *)calloc(1, sizeof(tu_ctx_manager_t));
     if (!mgr) return NULL;
@@ -272,6 +265,12 @@ tu_ctx_manager_t *tu_ctx_manager_create(tu_core_t *core,
     mgr->sched_policy = cfg->sched_policy;
     mgr->time_slice_cycles = cfg->time_slice_cycles;
     mgr->time_slice_cmds = cfg->time_slice_cmds;
+    mgr->switch_fixed_cycles = cfg->switch_overhead;
+    mgr->state_bytes_per_cycle = cfg->state_bytes_per_cycle;
+    mgr->save_scope = cfg->save_scope;
+    mgr->live_w_bytes = cfg->live_w_bytes;
+    mgr->live_a_bytes = cfg->live_a_bytes;
+    mgr->live_o_bytes = cfg->live_o_bytes;
 
     /* Allocate context descriptors */
     mgr->contexts = (tu_context_desc_t *)calloc(mgr->max_contexts,
@@ -293,6 +292,19 @@ tu_ctx_manager_t *tu_ctx_manager_create(tu_core_t *core,
     mgr->total_cycles_stolen = 0;
 
     return mgr;
+}
+
+int tu_ctx_manager_config_validate(const tu_core_t *core,
+                                   const tu_ctx_manager_config_t *cfg)
+{
+    if (!core || !cfg || cfg->max_contexts == 0 ||
+        (int)cfg->sched_policy < 0 || cfg->sched_policy >= TU_CTX_SCHED_COUNT ||
+        (int)cfg->save_scope < 0 || cfg->save_scope >= TU_CTX_SAVE_SCOPE_COUNT) return -1;
+    if (cfg->save_scope == TU_CTX_SAVE_LIVE_SRAM &&
+        (cfg->live_w_bytes > core->state.sram_w.banks.size ||
+         cfg->live_a_bytes > core->state.sram_a.banks.size ||
+         cfg->live_o_bytes > core->state.sram_o.banks.size)) return -1;
+    return 0;
 }
 
 void tu_ctx_manager_destroy(tu_ctx_manager_t *mgr)
@@ -327,7 +339,10 @@ int tu_ctx_alloc(tu_ctx_manager_t *mgr)
             ctx->priority = 128;
 
             /* Snapshot current core state as initial context state */
-            ctx_save_full_state(ctx, &mgr->core->state);
+            if (ctx_save_full_state(mgr, ctx, &mgr->core->state) != 0) {
+                ctx->state = TU_CTX_IDLE;
+                return -1;
+            }
 
             /* If this is the first context, make it active */
             if (mgr->active_count == 0) {
@@ -394,8 +409,9 @@ int tu_ctx_save(tu_ctx_manager_t *mgr)
     tu_core_sync(mgr->core);
 
     /* Save the hardware state */
-    int ret = ctx_save_full_state(ctx, &mgr->core->state);
+    int ret = ctx_save_full_state(mgr, ctx, &mgr->core->state);
     if (ret != 0) return ret;
+    mgr->pending_save_bytes = ctx->saved_sram_bytes;
 
     /* Move context to READY (or COMPLETED) */
     ctx->state = TU_CTX_READY;
@@ -421,9 +437,15 @@ int tu_ctx_restore(tu_ctx_manager_t *mgr, uint32_t ctx_id)
     ctx->last_switch_cycle = mgr->core->state.estimated_cycles;
     mgr->active_ctx_id = ctx_id;
 
-    /* Account for switch overhead */
+    /* Account for fixed drain/control cost plus save and restore traffic. */
     mgr->total_switches++;
-    mgr->total_cycles_stolen += k_default_config.switch_overhead;
+    uint64_t transfer_bytes = mgr->pending_save_bytes + ctx->saved_sram_bytes;
+    uint64_t transfer_cycles = 0;
+    if (mgr->state_bytes_per_cycle > 0)
+        transfer_cycles = (transfer_bytes + mgr->state_bytes_per_cycle - 1) /
+                          mgr->state_bytes_per_cycle;
+    mgr->total_cycles_stolen += mgr->switch_fixed_cycles + transfer_cycles;
+    mgr->pending_save_bytes = 0;
 
     /* Reset time-slice counters */
     mgr->slice_cycles_used = 0;

@@ -40,6 +40,14 @@ typedef enum {
     TU_CTX_SCHED_COUNT
 } tu_ctx_sched_policy_t;
 
+/* FULL is zero so existing aggregate initializers retain historical behavior. */
+typedef enum {
+    TU_CTX_SAVE_FULL_SRAM    = 0, /* Preserve all W/A/O SRAM */
+    TU_CTX_SAVE_LIVE_SRAM    = 1, /* Preserve configured live prefixes only */
+    TU_CTX_SAVE_CONTROL_ONLY = 2, /* Preserve control state; software reloads SRAM */
+    TU_CTX_SAVE_SCOPE_COUNT
+} tu_ctx_save_scope_t;
+
 /* ---- Context State ---- */
 typedef enum {
     TU_CTX_IDLE      = 0,  /* Available, not in use */
@@ -63,6 +71,10 @@ typedef struct tu_context_desc_t {
     uint64_t            total_commands;  /* Total commands executed */
     uint64_t            switch_count;    /* Number of times this context was switched in */
     uint64_t            last_switch_cycle; /* Cycle counter at last switch-in */
+    uint64_t            saved_sram_bytes;  /* Bytes physically retained */
+    uint32_t            saved_w_bytes;
+    uint32_t            saved_a_bytes;
+    uint32_t            saved_o_bytes;
     
     /* Context-local configuration overrides */
     bool                has_config_override;
@@ -92,6 +104,13 @@ typedef struct tu_ctx_manager_t {
     /* Statistics */
     uint64_t            total_switches;     /* Total context switches performed */
     uint64_t            total_cycles_stolen;/* Cycles lost to context switch overhead */
+    uint64_t            switch_fixed_cycles;/* Pipeline/control save cost */
+    uint32_t            state_bytes_per_cycle; /* 0 preserves legacy fixed-only timing */
+    tu_ctx_save_scope_t  save_scope;
+    uint32_t            live_w_bytes;
+    uint32_t            live_a_bytes;
+    uint32_t            live_o_bytes;
+    uint64_t            pending_save_bytes;
 } tu_ctx_manager_t;
 
 /* ---- Config-driven context manager config ---- */
@@ -100,9 +119,17 @@ typedef struct {
     tu_ctx_sched_policy_t sched_policy;      /* Scheduling policy (default: round-robin) */
     uint64_t            time_slice_cycles;   /* 0 = switch only at sync points */
     uint32_t            time_slice_cmds;     /* 0 = switch only at sync points */
-    uint64_t            switch_overhead;     /* Cycles lost per context switch */
+    uint64_t            switch_overhead;     /* Fixed pipeline/control cycles */
     bool                save_dram_state;     /* Whether to include DRAM in state snapshot */
+    tu_ctx_save_scope_t save_scope;          /* Full, live-prefix, or control-only */
+    uint32_t            live_w_bytes;        /* LIVE: retained W-buffer prefix */
+    uint32_t            live_a_bytes;        /* LIVE: retained A-buffer prefix */
+    uint32_t            live_o_bytes;        /* LIVE: retained O-buffer prefix */
+    uint32_t            state_bytes_per_cycle; /* Save/restore datapath BW; 0=fixed-only */
 } tu_ctx_manager_config_t;
+
+int tu_ctx_manager_config_validate(const tu_core_t *core,
+                                   const tu_ctx_manager_config_t *cfg);
 
 /* ================================================================
  * Context Manager API
