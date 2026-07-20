@@ -22,6 +22,7 @@
 
 #include "../tu_cmodel/sparsity/structured_2of4.h"
 #include "../tu_cmodel/tu_precision.h"
+#include "../tu_cmodel/infra/config.h"
 
 static int tests_run = 0;
 static int tests_passed = 0;
@@ -536,6 +537,92 @@ static void test_int8_sparsity(void) {
 }
 
 /* ================================================================
+ * Test 10: Runtime configuration and cycle model
+ * ================================================================ */
+
+static void test_runtime_config_and_cycles(void) {
+    TEST("runtime config — dense default");
+    tu_config_t cfg;
+    tu_config_default(&cfg);
+    ASSERT_TRUE(!cfg.sparsity_enabled && !cfg.sparsity_2of4,
+                "default must preserve dense execution");
+    ASSERT_EQ(cfg.sparsity_decoder_groups_per_cycle, 1,
+              "default decoder throughput");
+    PASS();
+
+    TEST("runtime config — parse 2:4 decoder throughput");
+    const char *json =
+        "{\"tu\":{\"sparsity\":{\"enabled\":true,"
+        "\"structured_2of4\":true,\"decoder_groups_per_cycle\":4}}}";
+    ASSERT_TRUE(tu_config_load_string(json, &cfg, NULL, 0) == 0,
+                "2:4 JSON config should parse");
+    ASSERT_TRUE(cfg.sparsity_enabled && cfg.sparsity_2of4,
+                "2:4 mode should be selected");
+    ASSERT_EQ(cfg.sparsity_decoder_groups_per_cycle, 4,
+              "decoder throughput should parse");
+    PASS();
+
+    TEST("runtime config — reject inconsistent and unsupported modes");
+    ASSERT_TRUE(tu_config_load_string(
+        "{\"tu\":{\"sparsity\":{\"enabled\":true}}}",
+        &cfg, NULL, 0) != 0, "enabled-without-mode must fail");
+    ASSERT_TRUE(tu_config_load_string(
+        "{\"tu\":{\"sparsity\":{\"enabled\":true,\"unstructured\":true}}}",
+        &cfg, NULL, 0) != 0, "unimplemented unstructured mode must fail");
+    ASSERT_TRUE(tu_config_load_string(
+        "{\"tu\":{\"sparsity\":{\"decoder_groups_per_cycle\":-1}}}",
+        &cfg, NULL, 0) != 0, "negative decoder throughput must fail");
+    PASS();
+
+    TEST("cycle estimate — config selects dense or 2:4");
+    tu_config_default(&cfg);
+    tu_sparsity_2of4_cycle_stats_t dense;
+    ASSERT_TRUE(tu_sparsity_2of4_estimate_cycles(&cfg, 128, 128, 128, &dense),
+                "dense estimate");
+    ASSERT_TRUE(!dense.selected_2of4 &&
+                dense.selected_total_cycles == dense.dense_total_cycles,
+                "dense default must select dense cycles");
+    cfg.sparsity_enabled = true;
+    cfg.sparsity_2of4 = true;
+    cfg.sparsity_decoder_groups_per_cycle = 4;
+    tu_sparsity_2of4_cycle_stats_t sparse;
+    ASSERT_TRUE(tu_sparsity_2of4_estimate_cycles(&cfg, 128, 128, 128, &sparse),
+                "sparse estimate");
+    ASSERT_TRUE(sparse.selected_2of4 &&
+                sparse.selected_total_cycles == sparse.sparse_total_cycles,
+                "2:4 config must select sparse cycles");
+    ASSERT_TRUE(sparse.sparse_macs * 2 == sparse.dense_macs,
+                "2:4 should halve useful MACs");
+    ASSERT_TRUE(sparse.sparse_weight_bytes * 8 == sparse.dense_weight_bytes * 5,
+                "FP16 packed weights should be 62.5% of dense bytes");
+    PASS();
+
+    TEST("cycle estimate — decoder throughput can bottleneck");
+    cfg.sparsity_decoder_groups_per_cycle = 1;
+    tu_sparsity_2of4_cycle_stats_t slow;
+    ASSERT_TRUE(tu_sparsity_2of4_estimate_cycles(&cfg, 512, 16, 512, &slow),
+                "slow decoder estimate");
+    cfg.sparsity_decoder_groups_per_cycle = 16;
+    tu_sparsity_2of4_cycle_stats_t fast;
+    ASSERT_TRUE(tu_sparsity_2of4_estimate_cycles(&cfg, 512, 16, 512, &fast),
+                "fast decoder estimate");
+    ASSERT_TRUE(slow.sparse_total_cycles > fast.sparse_total_cycles,
+                "decoder provisioning should affect narrow-N workloads");
+    PASS();
+
+    TEST("invalid group sizes and masks fail safely");
+    float src[5] = {1, 2, 3, 4, 5}, dst[5] = {0};
+    uint8_t packed[16] = {0};
+    ASSERT_EQ(tu_sparsity_2of4_prune_fp32(src, dst, 5), 0,
+              "non-multiple-of-four pruning must fail");
+    ASSERT_EQ(tu_sparsity_2of4_encode_group(src, 0xF, sizeof(float), packed), 0,
+              "invalid 2:4 mask must fail");
+    ASSERT_TRUE(!tu_sparsity_2of4_estimate_cycles(&cfg, 16, 16, 15, &fast),
+                "K not divisible by four must fail");
+    PASS();
+}
+
+/* ================================================================
  * Main
  * ================================================================ */
 
@@ -570,6 +657,9 @@ int main(void) {
 
     /* Section 9: INT8 */
     test_int8_sparsity();
+
+    /* Section 10: Runtime selection and realistic cycle costs */
+    test_runtime_config_and_cycles();
 
     /* Summary */
     printf("\n---\n");

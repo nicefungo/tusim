@@ -20,6 +20,7 @@
  */
 
 #include "structured_2of4.h"
+#include "../infra/config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -63,6 +64,7 @@ int tu_sparsity_2of4_mask_nth_bit(tu_sparsity_2of4_mask_t mask, int n) {
  * Zeros out the other 2.
  */
 size_t tu_sparsity_2of4_prune_fp32(const float *src, float *dst, size_t n) {
+    if (!src || !dst || n == 0 || n % TU_2OF4_GROUP_SIZE != 0) return 0;
     size_t groups = n / TU_2OF4_GROUP_SIZE;
     size_t zeros = 0;
 
@@ -105,6 +107,8 @@ size_t tu_sparsity_2of4_prune_with_masks_fp32(
     const float *src, float *pruned,
     tu_sparsity_2of4_mask_t *masks, size_t n)
 {
+    if (!src || !pruned || !masks || n == 0 ||
+        n % TU_2OF4_GROUP_SIZE != 0) return 0;
     size_t groups = n / TU_2OF4_GROUP_SIZE;
 
     for (size_t g = 0; g < groups; g++) {
@@ -152,6 +156,8 @@ size_t tu_sparsity_2of4_encode_group(
     size_t elem_size,
     void *packed)
 {
+    if (!pruned || !packed || elem_size == 0 ||
+        !tu_sparsity_2of4_mask_is_valid(mask)) return 0;
     uint8_t *pkt = (uint8_t *)packed;
     const uint8_t *src = (const uint8_t *)pruned;
     int pos0 = tu_sparsity_2of4_mask_nth_bit(mask, 0);
@@ -180,8 +186,15 @@ void tu_sparsity_2of4_decode_group(
     const uint8_t *pkt = (const uint8_t *)packed;
     uint8_t *dst = (uint8_t *)dense;
 
+    if (!packed || !dense || elem_size == 0) return;
+
     /* Get mask from last byte */
     tu_sparsity_2of4_mask_t m = pkt[2 * elem_size] & 0x0F;
+    if (!tu_sparsity_2of4_mask_is_valid(m)) {
+        memset(dst, 0, TU_2OF4_GROUP_SIZE * elem_size);
+        if (mask) *mask = 0;
+        return;
+    }
     if (mask) *mask = m;
 
     /* Zero the entire 4-element dense output */
@@ -201,12 +214,17 @@ size_t tu_sparsity_2of4_compress(
     size_t elem_size, size_t n,
     void *packed)
 {
+    if (!pruned || !masks || !packed || elem_size == 0 || n == 0 ||
+        n % TU_2OF4_GROUP_SIZE != 0) return 0;
     size_t groups = n / TU_2OF4_GROUP_SIZE;
     uint8_t *pkt = (uint8_t *)packed;
     const uint8_t *src = (const uint8_t *)pruned;
     size_t group_stride = TU_2OF4_GROUP_SIZE * elem_size;
     size_t pkt_group_size = TU_2OF4_NONZEROS * elem_size + 1;
 
+    for (size_t g = 0; g < groups; g++) {
+        if (!tu_sparsity_2of4_mask_is_valid(masks[g])) return 0;
+    }
     for (size_t g = 0; g < groups; g++) {
         tu_sparsity_2of4_encode_group(
             src + g * group_stride,
@@ -223,6 +241,8 @@ void tu_sparsity_2of4_decompress(
     size_t elem_size, size_t n,
     void *dense)
 {
+    if (!packed || !dense || elem_size == 0 || n == 0 ||
+        n % TU_2OF4_GROUP_SIZE != 0) return;
     size_t groups = n / TU_2OF4_GROUP_SIZE;
     const uint8_t *pkt = (const uint8_t *)packed;
     uint8_t *dst = (uint8_t *)dense;
@@ -298,6 +318,19 @@ static inline float read_weight_packed(
     return 0.0f; /* Should not reach for valid masks */
 }
 
+static bool validate_packed_masks(const void *packed,
+                                  const tu_sparsity_2of4_mask_t *masks,
+                                  size_t groups, size_t elem_size) {
+    const uint8_t *bytes = (const uint8_t *)packed;
+    size_t group_bytes = TU_2OF4_NONZEROS * elem_size + 1;
+    for (size_t g = 0; g < groups; g++) {
+        tu_sparsity_2of4_mask_t embedded = bytes[g * group_bytes + 2 * elem_size] & 0x0F;
+        if (!tu_sparsity_2of4_mask_is_valid(masks[g]) || embedded != masks[g])
+            return false;
+    }
+    return true;
+}
+
 uint64_t tu_sparsity_2of4_mma_fp16(
     fp32_t *O, uint32_t O_stride,
     const void *W_packed, const tu_sparsity_2of4_mask_t *W_masks,
@@ -305,7 +338,12 @@ uint64_t tu_sparsity_2of4_mma_fp16(
     uint16_t M, uint16_t N, uint16_t K,
     size_t W_elem_size, size_t A_elem_size)
 {
+    if (!O || !W_packed || !W_masks || !A_dense || M == 0 || N == 0 ||
+        K == 0 || K % TU_2OF4_GROUP_SIZE != 0 || W_elem_size == 0 ||
+        A_elem_size == 0) return 0;
     size_t K_groups = (K + TU_2OF4_GROUP_SIZE - 1) / TU_2OF4_GROUP_SIZE;
+    if (!validate_packed_masks(W_packed, W_masks, (size_t)M * K_groups,
+                               W_elem_size)) return 0;
     size_t pkt_group_size = TU_2OF4_NONZEROS * W_elem_size + 1;
     uint64_t mac_count = 0;
 
@@ -355,8 +393,14 @@ uint64_t tu_sparsity_2of4_mma_tiled(
     uint16_t tile_m, uint16_t tile_n, uint16_t tile_k,
     size_t W_elem_size, size_t A_elem_size)
 {
+    if (!O || !W_packed || !W_masks || !A_dense || M == 0 || N == 0 ||
+        K == 0 || K % TU_2OF4_GROUP_SIZE != 0 || tile_m == 0 ||
+        tile_n == 0 || tile_k == 0 || W_elem_size == 0 || A_elem_size == 0)
+        return 0;
     uint64_t total_macs = 0;
     size_t K_groups = (K + TU_2OF4_GROUP_SIZE - 1) / TU_2OF4_GROUP_SIZE;
+    if (!validate_packed_masks(W_packed, W_masks, (size_t)M * K_groups,
+                               W_elem_size)) return 0;
     size_t pkt_group_size = TU_2OF4_NONZEROS * W_elem_size + 1;
 
     for (uint16_t m_tile = 0; m_tile < M; m_tile += tile_m) {
@@ -420,6 +464,8 @@ uint64_t tu_sparsity_2of4_mma_tiled(
 double tu_sparsity_2of4_speedup(uint16_t M, uint16_t N, uint16_t K,
                                  const tu_sparsity_2of4_mask_t *W_masks)
 {
+    if (!W_masks || M == 0 || N == 0 || K == 0 ||
+        K % TU_2OF4_GROUP_SIZE != 0) return 1.0;
     size_t K_groups = (K + TU_2OF4_GROUP_SIZE - 1) / TU_2OF4_GROUP_SIZE;
     uint64_t dense_macs = (uint64_t)M * N * K;
     uint64_t sparse_macs = 0;
@@ -434,6 +480,52 @@ double tu_sparsity_2of4_speedup(uint16_t M, uint16_t N, uint16_t K,
 
     if (sparse_macs == 0) return 1.0;
     return (double)dense_macs / (double)sparse_macs;
+}
+
+static uint64_t ceil_div_u64(uint64_t n, uint64_t d) {
+    return n / d + (n % d != 0);
+}
+
+bool tu_sparsity_2of4_estimate_cycles(
+    const struct tu_config_t *cfg,
+    uint32_t M, uint32_t N, uint32_t K,
+    tu_sparsity_2of4_cycle_stats_t *stats)
+{
+    if (!cfg || !stats || M == 0 || N == 0 || K == 0 ||
+        K % TU_2OF4_GROUP_SIZE != 0 || cfg->pe_rows == 0 ||
+        cfg->pe_cols == 0 || cfg->dma_bus_width_bits < 8 ||
+        cfg->sparsity_decoder_groups_per_cycle == 0) return false;
+
+    memset(stats, 0, sizeof(*stats));
+    uint64_t pe_macs = (uint64_t)cfg->pe_rows * cfg->pe_cols;
+    uint64_t fill_drain = cfg->pe_pipeline_depth == 0 ? 0 :
+                          (uint64_t)cfg->pe_pipeline_depth * 2u - 1u;
+    uint64_t bus_bytes = cfg->dma_bus_width_bits / 8u;
+    uint64_t groups = (uint64_t)M * K / TU_2OF4_GROUP_SIZE;
+    uint64_t activation_bytes = (uint64_t)K * N * sizeof(fp16_t);
+    uint64_t output_bytes = (uint64_t)M * N * sizeof(fp32_t);
+
+    stats->dense_macs = (uint64_t)M * N * K;
+    stats->sparse_macs = stats->dense_macs / 2u;
+    stats->dense_weight_bytes = (uint64_t)M * K * sizeof(fp16_t);
+    stats->sparse_weight_bytes = groups * (2u * sizeof(fp16_t) + 1u);
+    stats->dense_dma_cycles = ceil_div_u64(
+        stats->dense_weight_bytes + activation_bytes + output_bytes, bus_bytes);
+    stats->sparse_dma_cycles = ceil_div_u64(
+        stats->sparse_weight_bytes + activation_bytes + output_bytes, bus_bytes);
+    stats->dense_compute_cycles = ceil_div_u64(stats->dense_macs, pe_macs) + fill_drain;
+    stats->sparse_compute_cycles = ceil_div_u64(stats->sparse_macs, pe_macs) + fill_drain;
+    stats->sparse_decode_cycles = ceil_div_u64(
+        groups, cfg->sparsity_decoder_groups_per_cycle);
+    stats->dense_total_cycles = stats->dense_dma_cycles + stats->dense_compute_cycles;
+    uint64_t sparse_core = stats->sparse_compute_cycles > stats->sparse_decode_cycles
+                         ? stats->sparse_compute_cycles : stats->sparse_decode_cycles;
+    stats->sparse_total_cycles = stats->sparse_dma_cycles + sparse_core;
+    stats->selected_2of4 = cfg->sparsity_enabled && cfg->sparsity_2of4;
+    stats->selected_total_cycles = stats->selected_2of4
+                                 ? stats->sparse_total_cycles
+                                 : stats->dense_total_cycles;
+    return true;
 }
 
 /* ================================================================

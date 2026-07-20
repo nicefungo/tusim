@@ -219,6 +219,7 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->sparsity_2of4       = false;
     cfg->sparsity_unstructured = false;
     cfg->sparsity_metadata_format = 0;
+    cfg->sparsity_decoder_groups_per_cycle = 1;
 
     cfg->golden_reference    = 1;
     cfg->random_test_iters   = 1000;
@@ -419,6 +420,10 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
         parse_opt_bool(sp, "enabled", &cfg->sparsity_enabled);
         parse_opt_bool(sp, "structured_2of4", &cfg->sparsity_2of4);
         parse_opt_bool(sp, "unstructured", &cfg->sparsity_unstructured);
+        int64_t iv;
+        if (parse_opt_int64(sp, "decoder_groups_per_cycle", &iv))
+            cfg->sparsity_decoder_groups_per_cycle =
+                (iv > 0 && iv <= 1048576) ? (uint32_t)iv : 0;
     }
 
     /* Verification */
@@ -503,6 +508,29 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
             snprintf(error_buf, error_size, "compression rle_epsilon must be >= 0");
         return -1;
     }
+    if (cfg->sparsity_unstructured) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size, "unstructured sparsity is not implemented");
+        return -1;
+    }
+    if (cfg->sparsity_enabled && !cfg->sparsity_2of4) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "enabled sparsity requires structured_2of4=true");
+        return -1;
+    }
+    if (cfg->sparsity_2of4 && !cfg->sparsity_enabled) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "structured_2of4 requires sparsity enabled");
+        return -1;
+    }
+    if (cfg->sparsity_decoder_groups_per_cycle == 0) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "sparsity decoder_groups_per_cycle must be > 0");
+        return -1;
+    }
     return 0;
 }
 
@@ -521,7 +549,7 @@ void tu_config_dump(const struct tu_config_t *cfg) {
         "  ISA: instr=%ub, qdepth=%u\n"
         "  Multi-core: %s, cores=%u\n"
         "  Cycle: model=%d, counters=%s, trace=%s\n"
-        "  Sparsity: %s 2:4=%s\n"
+        "  Sparsity: %s 2:4=%s decoder=%u groups/cycle\n"
         "══════════════════════\n",
         cfg->pe_rows, cfg->pe_cols, cfg->pe_pipeline_depth, cfg->dataflow_mode,
         cfg->dataflow_via_plugin ? "yes" : "no",
@@ -540,7 +568,8 @@ void tu_config_dump(const struct tu_config_t *cfg) {
         cfg->cycle_model, cfg->counters_enabled ? "on" : "off",
         cfg->trace_enabled ? "on" : "off",
         cfg->sparsity_enabled ? "on" : "off",
-        cfg->sparsity_2of4 ? "on" : "off");
+        cfg->sparsity_2of4 ? "on" : "off",
+        cfg->sparsity_decoder_groups_per_cycle);
 }
 
 /* ---- Markdown documentation generator (Gap Q4) ---- */
@@ -711,6 +740,8 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             fmt_bool(cfg->sparsity_2of4));
     fprintf(out, "| `sparsity_unstructured` | %s | bool | Unstructured sparsity |\n",
             fmt_bool(cfg->sparsity_unstructured));
+    fprintf(out, "| `sparsity_decoder_groups_per_cycle` | %u | uint32 | 2:4 metadata groups decoded per cycle |\n",
+            cfg->sparsity_decoder_groups_per_cycle);
     fprintf(out, "| `sparsity_metadata_format` | %d | int | 0=Bitmask, 1=CSR, 2=Coord |\n\n",
             cfg->sparsity_metadata_format);
 

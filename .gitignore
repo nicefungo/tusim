@@ -69,6 +69,8 @@ test-scatter-gather
 test-power
 test-int8-sweep
 test-weight-compression-sweep
+test-sparsity
+test-sparsity-sweep
 
 # Experiments / temp
 experiments/tu_bench

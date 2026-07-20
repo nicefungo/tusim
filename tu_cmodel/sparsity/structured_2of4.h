@@ -4,7 +4,8 @@
  *
  * NVIDIA Ampere-style 2:4 structured sparsity:
  * In every contiguous group of 4 elements, exactly 2 are non-zero.
- * This guarantees 2× compute throughput and ~2× memory compression.
+ * This halves useful MAC count. End-to-end speedup depends on metadata
+ * decode throughput, DMA traffic, tile utilization, and pipeline overhead.
  *
  * Reference: "Accelerating Sparsity in the NVIDIA Ampere Architecture"
  * Reference: Mishra et al., "Accelerating Sparse Deep Neural Networks," 2021
@@ -30,6 +31,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+
+struct tu_config_t;
 
 #ifdef __cplusplus
 extern "C" {
@@ -239,6 +242,31 @@ uint64_t tu_sparsity_2of4_mma_tiled(
  */
 double tu_sparsity_2of4_speedup(uint16_t M, uint16_t N, uint16_t K,
                                  const tu_sparsity_2of4_mask_t *W_masks);
+
+/* Analytical dense-vs-2:4 estimate used for architecture exploration.
+ * FP16 weights/activations and FP32 output are assumed. DMA and compute are
+ * serialized; metadata decode overlaps sparse compute. The selected mode is
+ * taken from the canonical runtime config. K must be divisible by four. */
+typedef struct {
+    uint64_t dense_macs;
+    uint64_t sparse_macs;
+    uint64_t dense_weight_bytes;
+    uint64_t sparse_weight_bytes;
+    uint64_t dense_dma_cycles;
+    uint64_t sparse_dma_cycles;
+    uint64_t dense_compute_cycles;
+    uint64_t sparse_compute_cycles;
+    uint64_t sparse_decode_cycles;
+    uint64_t dense_total_cycles;
+    uint64_t sparse_total_cycles;
+    uint64_t selected_total_cycles;
+    bool selected_2of4;
+} tu_sparsity_2of4_cycle_stats_t;
+
+bool tu_sparsity_2of4_estimate_cycles(
+    const struct tu_config_t *cfg,
+    uint32_t M, uint32_t N, uint32_t K,
+    tu_sparsity_2of4_cycle_stats_t *stats);
 
 /* ================================================================
  * Verification Helpers

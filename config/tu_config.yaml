@@ -110,6 +110,7 @@ tu:
     structured_2of4: false
     unstructured: false
     metadata_format: "bitmask"   # bitmask | csf | coordinate_list
+    decoder_groups_per_cycle: 1  # packed 2:4 groups decoded per cycle
 
   # ---- Verification ----
   verification:

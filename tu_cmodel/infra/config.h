@@ -117,6 +117,7 @@ typedef struct tu_config_t {
     bool     sparsity_2of4;
     bool     sparsity_unstructured;
     int      sparsity_metadata_format;  /* 0=bitmask, 1=csf, 2=coordinate_list */
+    uint32_t sparsity_decoder_groups_per_cycle; /* 2:4 groups decoded per cycle */
 
     /* ---- Verification ---- */
     int      golden_reference;      /* 0=numpy, 1=pytorch */

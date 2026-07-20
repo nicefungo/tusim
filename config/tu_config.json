@@ -111,7 +111,8 @@
       "enabled": false,
       "structured_2of4": false,
       "unstructured": false,
-      "metadata_format": "bitmask"
+      "metadata_format": "bitmask",
+      "decoder_groups_per_cycle": 1
     },
 
     "verification": {
