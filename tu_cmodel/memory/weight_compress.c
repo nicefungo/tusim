@@ -1,4 +1,4 @@
-/* TU weight compression implementation: raw, RLE, adaptive framed raw/RLE. */
+/* TU weight compression implementation: raw, RLE, bitmap, adaptive framing. */
 #include "weight_compress.h"
 #include "../infra/config.h"
 #include <math.h>
@@ -146,6 +146,80 @@ bool tu_compress_validate(const uint8_t *data, uint32_t size)
     return size == 8u + runs * TU_RLE_RUN_BYTES;
 }
 
+static uint32_t count_nonzero_bits(const fp16_t *src, uint32_t n)
+{
+    uint32_t count = 0;
+    for (uint32_t i = 0; i < n; i++)
+        if (src[i] != 0) count++;
+    return count;
+}
+
+int tu_compress_bitmap(const fp16_t *src, uint32_t n, uint8_t *dst,
+                       uint32_t cap, uint32_t *size_out)
+{
+    if (!src || !dst || !size_out || n > UINT32_MAX - 7u) return -1;
+    uint32_t bitmap_bytes = (n + 7u) / 8u;
+    uint32_t nnz = count_nonzero_bits(src, n);
+    uint64_t required64 = TU_BITMAP_HEADER_BYTES + (uint64_t)bitmap_bytes +
+                          (uint64_t)nnz * sizeof(fp16_t);
+    if (required64 > UINT32_MAX || cap < (uint32_t)required64) return -1;
+    uint32_t required = (uint32_t)required64;
+    memcpy(dst, &n, 4);
+    memcpy(dst + 4, &nnz, 4);
+    if (bitmap_bytes) memset(dst + TU_BITMAP_HEADER_BYTES, 0, bitmap_bytes);
+    uint32_t value_off = TU_BITMAP_HEADER_BYTES + bitmap_bytes;
+    for (uint32_t i = 0; i < n; i++) {
+        if (src[i] == 0) continue;
+        dst[TU_BITMAP_HEADER_BYTES + i / 8u] |= (uint8_t)(1u << (i % 8u));
+        memcpy(dst + value_off, &src[i], sizeof(fp16_t));
+        value_off += sizeof(fp16_t);
+    }
+    *size_out = required;
+    return 0;
+}
+
+bool tu_compress_bitmap_validate(const uint8_t *src, uint32_t size)
+{
+    if (!src || size < TU_BITMAP_HEADER_BYTES) return false;
+    uint32_t n, nnz;
+    memcpy(&n, src, 4);
+    memcpy(&nnz, src + 4, 4);
+    if (n > UINT32_MAX - 7u || nnz > n) return false;
+    uint32_t bitmap_bytes = (n + 7u) / 8u;
+    uint64_t expected = TU_BITMAP_HEADER_BYTES + (uint64_t)bitmap_bytes +
+                        (uint64_t)nnz * sizeof(fp16_t);
+    if (expected != size) return false;
+    uint32_t observed = 0;
+    for (uint32_t i = 0; i < n; i++)
+        observed += (src[TU_BITMAP_HEADER_BYTES + i / 8u] >> (i % 8u)) & 1u;
+    if (n % 8u) {
+        uint8_t valid_mask = (uint8_t)((1u << (n % 8u)) - 1u);
+        if (src[TU_BITMAP_HEADER_BYTES + bitmap_bytes - 1u] & (uint8_t)~valid_mask)
+            return false;
+    }
+    return observed == nnz;
+}
+
+int tu_decompress_bitmap(const uint8_t *src, uint32_t size, fp16_t *dst,
+                         uint32_t cap, uint32_t *count_out)
+{
+    if (!dst || !count_out || !tu_compress_bitmap_validate(src, size)) return -1;
+    uint32_t n;
+    memcpy(&n, src, 4);
+    if (cap < n) return -1;
+    uint32_t value_off = TU_BITMAP_HEADER_BYTES + (n + 7u) / 8u;
+    for (uint32_t i = 0; i < n; i++) {
+        if ((src[TU_BITMAP_HEADER_BYTES + i / 8u] >> (i % 8u)) & 1u) {
+            memcpy(&dst[i], src + value_off, sizeof(fp16_t));
+            value_off += sizeof(fp16_t);
+        } else {
+            dst[i] = 0;
+        }
+    }
+    *count_out = n;
+    return 0;
+}
+
 static void frame_write(uint8_t *dst, tu_weight_payload_codec_t codec,
                         uint32_t elements, uint32_t payload_bytes)
 {
@@ -172,7 +246,8 @@ static bool frame_read(const uint8_t *src, uint32_t size,
     memcpy(payload_bytes, src + 12, 4);
     *codec = (tu_weight_payload_codec_t)src[5];
     if (magic != TU_WEIGHT_FRAME_MAGIC || src[4] != TU_WEIGHT_FRAME_VERSION ||
-        reserved != 0 || (*codec != TU_WEIGHT_PAYLOAD_RAW && *codec != TU_WEIGHT_PAYLOAD_RLE)) return false;
+        reserved != 0 || (*codec != TU_WEIGHT_PAYLOAD_RAW &&
+        *codec != TU_WEIGHT_PAYLOAD_RLE && *codec != TU_WEIGHT_PAYLOAD_BITMAP)) return false;
     return *payload_bytes == size - TU_WEIGHT_FRAME_HEADER_BYTES;
 }
 
@@ -202,6 +277,43 @@ int tu_compress_adaptive_rle(const fp16_t *src, uint32_t n, float epsilon,
     return 0;
 }
 
+int tu_compress_adaptive(const fp16_t *src, uint32_t n, float epsilon,
+                         uint8_t *dst, uint32_t cap, uint32_t *size_out,
+                         tu_weight_payload_codec_t *codec_out)
+{
+    if (!src || !dst || !size_out || epsilon < 0.0f ||
+        n > (UINT32_MAX - TU_WEIGHT_FRAME_HEADER_BYTES) / sizeof(fp16_t) ||
+        n > UINT32_MAX - 7u) return -1;
+    uint32_t raw_bytes = n * (uint32_t)sizeof(fp16_t);
+    if (cap < TU_WEIGHT_FRAME_HEADER_BYTES + raw_bytes) return -1;
+    uint32_t runs = count_runs(src, n, epsilon);
+    uint64_t rle_bytes = n == 0 ? 8u : 8u + (uint64_t)runs * TU_RLE_RUN_BYTES;
+    uint32_t nnz = count_nonzero_bits(src, n);
+    uint64_t bitmap_bytes = TU_BITMAP_HEADER_BYTES + (uint64_t)(n + 7u) / 8u +
+                            (uint64_t)nnz * sizeof(fp16_t);
+    tu_weight_payload_codec_t codec = TU_WEIGHT_PAYLOAD_RAW;
+    uint64_t selected = raw_bytes;
+    if (rle_bytes < selected) { codec = TU_WEIGHT_PAYLOAD_RLE; selected = rle_bytes; }
+    if (bitmap_bytes < selected) { codec = TU_WEIGHT_PAYLOAD_BITMAP; selected = bitmap_bytes; }
+
+    uint32_t payload = raw_bytes;
+    uint8_t *body = dst + TU_WEIGHT_FRAME_HEADER_BYTES;
+    if (codec == TU_WEIGHT_PAYLOAD_RLE) {
+        if (tu_compress_rle(src, n, epsilon, body,
+                            cap - TU_WEIGHT_FRAME_HEADER_BYTES, &payload) != 0) return -1;
+    } else if (codec == TU_WEIGHT_PAYLOAD_BITMAP) {
+        if (tu_compress_bitmap(src, n, body,
+                               cap - TU_WEIGHT_FRAME_HEADER_BYTES, &payload) != 0) return -1;
+    } else if (raw_bytes) {
+        memcpy(body, src, raw_bytes);
+    }
+    (void)selected;
+    frame_write(dst, codec, n, payload);
+    *size_out = TU_WEIGHT_FRAME_HEADER_BYTES + payload;
+    if (codec_out) *codec_out = codec;
+    return 0;
+}
+
 bool tu_compress_adaptive_validate(const uint8_t *src, uint32_t size)
 {
     tu_weight_payload_codec_t codec;
@@ -209,8 +321,13 @@ bool tu_compress_adaptive_validate(const uint8_t *src, uint32_t size)
     if (!frame_read(src, size, &codec, &n, &payload)) return false;
     if (codec == TU_WEIGHT_PAYLOAD_RAW)
         return n <= UINT32_MAX / sizeof(fp16_t) && payload == n * sizeof(fp16_t);
-    return tu_compress_validate(src + TU_WEIGHT_FRAME_HEADER_BYTES, payload) &&
-           tu_compress_get_original_count(src + TU_WEIGHT_FRAME_HEADER_BYTES, payload) == n;
+    if (codec == TU_WEIGHT_PAYLOAD_RLE)
+        return tu_compress_validate(src + TU_WEIGHT_FRAME_HEADER_BYTES, payload) &&
+               tu_compress_get_original_count(src + TU_WEIGHT_FRAME_HEADER_BYTES, payload) == n;
+    if (!tu_compress_bitmap_validate(src + TU_WEIGHT_FRAME_HEADER_BYTES, payload)) return false;
+    uint32_t bitmap_n;
+    memcpy(&bitmap_n, src + TU_WEIGHT_FRAME_HEADER_BYTES, sizeof(bitmap_n));
+    return bitmap_n == n;
 }
 
 int tu_compress_adaptive_get_codec(const uint8_t *src, uint32_t size,
@@ -234,7 +351,9 @@ int tu_decompress_adaptive(const uint8_t *src, uint32_t size,
         *count_out = n;
         return 0;
     }
-    return tu_decompress_rle(body, payload, dst, cap, count_out);
+    if (codec == TU_WEIGHT_PAYLOAD_RLE)
+        return tu_decompress_rle(body, payload, dst, cap, count_out);
+    return tu_decompress_bitmap(body, payload, dst, cap, count_out);
 }
 
 int tu_compress_for_dma(const fp16_t *src, uint32_t n,
@@ -255,6 +374,11 @@ int tu_compress_for_dma(const fp16_t *src, uint32_t n,
     if (cfg->type == TU_COMPRESS_ADAPTIVE_RLE)
         return tu_compress_adaptive_rle(src, n, cfg->rle_epsilon, dst, cap,
                                         size_out, NULL);
+    if (cfg->type == TU_COMPRESS_BITMAP)
+        return tu_compress_bitmap(src, n, dst, cap, size_out);
+    if (cfg->type == TU_COMPRESS_ADAPTIVE)
+        return tu_compress_adaptive(src, n, cfg->rle_epsilon, dst, cap,
+                                    size_out, NULL);
     return -1;
 }
 
@@ -274,6 +398,10 @@ int tu_decompress_from_dma(const uint8_t *src, uint32_t size,
     if (cfg->type == TU_COMPRESS_RLE)
         return tu_decompress_rle(src, size, dst, cap, count_out);
     if (cfg->type == TU_COMPRESS_ADAPTIVE_RLE)
+        return tu_decompress_adaptive(src, size, dst, cap, count_out);
+    if (cfg->type == TU_COMPRESS_BITMAP)
+        return tu_decompress_bitmap(src, size, dst, cap, count_out);
+    if (cfg->type == TU_COMPRESS_ADAPTIVE)
         return tu_decompress_adaptive(src, size, dst, cap, count_out);
     return -1;
 }

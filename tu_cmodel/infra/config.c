@@ -352,6 +352,8 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
             if (strcmp(s, "none") == 0) cfg->compression_type = 0;
             else if (strcmp(s, "rle") == 0) cfg->compression_type = 1;
             else if (strcmp(s, "adaptive_rle") == 0) cfg->compression_type = 2;
+            else if (strcmp(s, "bitmap") == 0) cfg->compression_type = 3;
+            else if (strcmp(s, "adaptive") == 0) cfg->compression_type = 4;
             else cfg->compression_type = -1;
         }
         parse_opt_double(wc, "rle_epsilon", &cfg->compression_rle_epsilon);
@@ -497,10 +499,10 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
             snprintf(error_buf, error_size, "queue_depth must be > 0");
         return -1;
     }
-    if (cfg->compression_type < 0 || cfg->compression_type > 2) {
+    if (cfg->compression_type < 0 || cfg->compression_type > 4) {
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
-                     "weight compression type must be none, rle, or adaptive_rle");
+                     "weight compression type must be none, rle, adaptive_rle, bitmap, or adaptive");
         return -1;
     }
     if (cfg->compression_rle_epsilon < 0.0) {
@@ -688,7 +690,7 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             fmt_bool(cfg->dma_multicast_enabled));
     fprintf(out, "| `compression_enabled` | %s | bool | Enable weight-stream compression |\n",
             fmt_bool(cfg->compression_enabled));
-    fprintf(out, "| `compression_type` | %d | int | 0=None, 1=RLE |\n",
+    fprintf(out, "| `compression_type` | %d | int | 0=None, 1=RLE, 2=Adaptive RLE, 3=Bitmap, 4=Adaptive all |\n",
             cfg->compression_type);
     fprintf(out, "| `compression_rle_epsilon` | %.6g | double | Merge tolerance; 0 is lossless |\n\n",
             cfg->compression_rle_epsilon);

@@ -4,6 +4,12 @@
 **Status:** Implemented and verified
 **Type:** Cmodel-linked sweep (`make test-weight-compression-sweep`)
 
+> **2026-07-21 follow-up:** the identical-pattern audit in
+> [`bitmap-weight-compression.md`](bitmap-weight-compression.md) added explicit
+> `bitmap` and three-way `adaptive` (raw/RLE/bitmap) runtime modes. This document
+> preserves the original raw/RLE experiment; use the follow-up for the current
+> 12-row codec matrix and implementation surface.
+
 ## Design question
 
 When is a simple FP16 run-length codec physically plausible, and how can a TU/compiler avoid RLE's severe expansion on unsuitable tensors without ambiguously guessing the payload format? The hypothesis is that **placement of repeated values, not scalar sparsity alone**, determines whether RLE helps, so selection must be per tensor.
@@ -25,7 +31,9 @@ The canonical JSON block is:
 }
 ```
 
-Supported types are `none`, `rle`, and `adaptive_rle`. Defaults remain disabled/NONE, preserving existing raw DMA semantics.
+The original experiment supported `none`, `rle`, and `adaptive_rle`. The current
+runtime additionally supports `bitmap` and `adaptive`; defaults remain
+disabled/NONE, preserving existing raw DMA semantics.
 
 ## Explicit adaptive frame
 

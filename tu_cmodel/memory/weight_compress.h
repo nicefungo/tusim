@@ -1,5 +1,5 @@
 /*
- * TU Weight Compression — raw, RLE, and framed adaptive raw/RLE
+ * TU Weight Compression — raw, RLE, bitmap sparse, and adaptive streams
  * =================================================================
  * Runtime-configurable weight-stream formats for architecture exploration.
  */
@@ -22,6 +22,8 @@ typedef enum {
     TU_COMPRESS_NONE         = 0,
     TU_COMPRESS_RLE          = 1,
     TU_COMPRESS_ADAPTIVE_RLE = 2, /* Per tensor: framed raw or RLE, whichever is smaller */
+    TU_COMPRESS_BITMAP       = 3, /* Exact bitmap plus packed nonzero FP16 values */
+    TU_COMPRESS_ADAPTIVE     = 4, /* Per tensor: framed raw/RLE/bitmap minimum */
     TU_COMPRESS_COUNT
 } tu_compress_type_t;
 
@@ -46,7 +48,8 @@ typedef struct {
 
 typedef enum {
     TU_WEIGHT_PAYLOAD_RAW = 0,
-    TU_WEIGHT_PAYLOAD_RLE = 1
+    TU_WEIGHT_PAYLOAD_RLE = 1,
+    TU_WEIGHT_PAYLOAD_BITMAP = 2
 } tu_weight_payload_codec_t;
 
 typedef struct {
@@ -69,16 +72,40 @@ uint32_t tu_compress_get_original_count(const uint8_t *compressed_data,
                                         uint32_t compressed_size);
 bool tu_compress_validate(const uint8_t *compressed_data, uint32_t compressed_size);
 
-/* Adaptive framed codec. The encoder selects RLE only when its payload is
- * strictly smaller than raw FP16, so output is never larger than raw bytes
- * plus the fixed frame. Ties choose raw for simpler decoding. */
+/* Exact bitmap wire format: element_count:u32, nonzero_count:u32,
+ * ceil(element_count/8) bitmap bytes, then packed FP16 nonzero values.
+ * A set bit means that the corresponding FP16 bit pattern is stored. */
+#define TU_BITMAP_HEADER_BYTES 8u
+static inline uint32_t tu_compress_bitmap_max_size(uint32_t element_count) {
+    uint64_t total = TU_BITMAP_HEADER_BYTES + ((uint64_t)element_count + 7u) / 8u +
+                     (uint64_t)element_count * sizeof(fp16_t);
+    return total > UINT32_MAX ? UINT32_MAX : (uint32_t)total;
+}
+int tu_compress_bitmap(const fp16_t *src, uint32_t element_count,
+                       uint8_t *dst, uint32_t dst_capacity,
+                       uint32_t *compressed_size_out);
+int tu_decompress_bitmap(const uint8_t *src, uint32_t src_size,
+                         fp16_t *dst, uint32_t dst_capacity,
+                         uint32_t *decompressed_count_out);
+bool tu_compress_bitmap_validate(const uint8_t *src, uint32_t src_size);
+
+/* Adaptive framed codecs. The legacy adaptive-RLE entry point compares raw
+ * and RLE. tu_compress_adaptive compares raw, RLE, and bitmap. Both select a
+ * codec only when strictly smaller than the current candidate, so raw wins
+ * ties and output never exceeds raw bytes plus the fixed frame. */
 static inline uint32_t tu_compress_adaptive_max_size(uint32_t element_count) {
-    return TU_WEIGHT_FRAME_HEADER_BYTES + element_count * (uint32_t)sizeof(fp16_t);
+    uint64_t total = TU_WEIGHT_FRAME_HEADER_BYTES +
+                     (uint64_t)element_count * sizeof(fp16_t);
+    return total > UINT32_MAX ? UINT32_MAX : (uint32_t)total;
 }
 int tu_compress_adaptive_rle(const fp16_t *src, uint32_t element_count,
                              float epsilon, uint8_t *dst, uint32_t dst_capacity,
                              uint32_t *encoded_size_out,
                              tu_weight_payload_codec_t *selected_codec_out);
+int tu_compress_adaptive(const fp16_t *src, uint32_t element_count,
+                         float epsilon, uint8_t *dst, uint32_t dst_capacity,
+                         uint32_t *encoded_size_out,
+                         tu_weight_payload_codec_t *selected_codec_out);
 int tu_decompress_adaptive(const uint8_t *src, uint32_t src_size,
                            fp16_t *dst, uint32_t dst_capacity,
                            uint32_t *decompressed_count_out);

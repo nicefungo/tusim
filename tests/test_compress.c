@@ -462,6 +462,84 @@ static void test_adaptive_rejects_corruption(void) {
     PASS();
 }
 
+static void test_bitmap_round_trip_random_sparse(void) {
+    fp16_t src[65] = {0}, dst[65];
+    for (int i = 0; i < 65; i += 3) src[i] = tu_fp32_to_fp16((float)(i + 1));
+    uint32_t cap = tu_compress_bitmap_max_size(65), size = 0, count = 0;
+    uint8_t *encoded = malloc(cap);
+    CHECK(tu_compress_bitmap(src, 65, encoded, cap, &size) == 0, "bitmap encode");
+    CHECK(size == 8 + 9 + 22 * sizeof(fp16_t), "bitmap exact wire size");
+    CHECK(tu_compress_bitmap_validate(encoded, size), "bitmap validates");
+    CHECK(tu_decompress_bitmap(encoded, size, dst, 65, &count) == 0, "bitmap decode");
+    CHECK(count == 65 && memcmp(src, dst, sizeof(src)) == 0, "bitmap exact round-trip");
+    CHECK(!tu_compress_bitmap_validate(encoded, size - 1), "reject truncated bitmap stream");
+    uint32_t bad_nnz = 21;
+    memcpy(encoded + 4, &bad_nnz, sizeof(bad_nnz));
+    CHECK(!tu_compress_bitmap_validate(encoded, size), "reject bitmap popcount mismatch");
+    free(encoded);
+    PASS();
+}
+
+static void test_bitmap_preserves_fp16_bit_patterns(void) {
+    fp16_t src[] = {0x0000u, 0x8000u, 0x7e01u, 0x3c00u, 0x0000u};
+    fp16_t dst[5];
+    uint8_t encoded[64];
+    uint32_t size = 0, count = 0;
+    CHECK(tu_compress_bitmap(src, 5, encoded, sizeof(encoded), &size) == 0,
+          "bitmap special encode");
+    CHECK(tu_decompress_bitmap(encoded, size, dst, 5, &count) == 0,
+          "bitmap special decode");
+    CHECK(count == 5 && memcmp(src, dst, sizeof(src)) == 0,
+          "negative zero and NaN payload preserved");
+    encoded[8] |= 0x80u;
+    CHECK(!tu_compress_bitmap_validate(encoded, size), "reject nonzero padding bits");
+    PASS();
+}
+
+static void test_adaptive_all_selects_realistic_modes(void) {
+    fp16_t random_sparse[128] = {0}, clustered[128] = {0}, dense[128], dst[128];
+    for (int i = 0; i < 128; i++) {
+        if (i % 3 == 0) random_sparse[i] = tu_fp32_to_fp16((float)(i + 1));
+        if (i >= 96) clustered[i] = tu_fp32_to_fp16(2.0f);
+        dense[i] = (fp16_t)(i + 1);
+    }
+    uint8_t encoded[TU_WEIGHT_FRAME_HEADER_BYTES + sizeof(dense)];
+    uint32_t size = 0, count = 0;
+    tu_weight_payload_codec_t codec;
+    CHECK(tu_compress_adaptive(random_sparse, 128, 0.0f, encoded, sizeof(encoded),
+                               &size, &codec) == 0 && codec == TU_WEIGHT_PAYLOAD_BITMAP,
+          "random sparse selects bitmap");
+    CHECK(tu_decompress_adaptive(encoded, size, dst, 128, &count) == 0 &&
+          memcmp(random_sparse, dst, sizeof(dst)) == 0, "adaptive bitmap round-trip");
+    CHECK(tu_compress_adaptive(clustered, 128, 0.0f, encoded, sizeof(encoded),
+                               &size, &codec) == 0 && codec == TU_WEIGHT_PAYLOAD_RLE,
+          "clustered sparse selects RLE");
+    CHECK(tu_compress_adaptive(dense, 128, 0.0f, encoded, sizeof(encoded),
+                               &size, &codec) == 0 && codec == TU_WEIGHT_PAYLOAD_RAW,
+          "dense unique selects raw");
+    PASS();
+}
+
+static void test_bitmap_dma_and_runtime_config(void) {
+    tu_config_t runtime;
+    CHECK(tu_config_load_string("{\"weight_compression\":{\"enabled\":true,\"type\":\"bitmap\"}}",
+                                &runtime, NULL, 0) == 0, "parse bitmap config");
+    tu_compress_config_t cfg = tu_compress_config_from_tu_config(&runtime);
+    CHECK(cfg.type == TU_COMPRESS_BITMAP, "bitmap runtime mapping");
+    fp16_t src[32] = {0}, dst[32];
+    src[7] = tu_fp32_to_fp16(3.0f);
+    uint8_t encoded[128];
+    uint32_t size = 0, count = 0;
+    CHECK(tu_compress_for_dma(src, 32, &cfg, encoded, sizeof(encoded), &size) == 0,
+          "bitmap DMA encode");
+    CHECK(tu_decompress_from_dma(encoded, size, &cfg, dst, 32, &count) == 0 &&
+          memcmp(src, dst, sizeof(src)) == 0, "bitmap DMA round-trip");
+    CHECK(tu_config_load_string("{\"weight_compression\":{\"enabled\":true,\"type\":\"adaptive\"}}",
+                                &runtime, NULL, 0) == 0 && runtime.compression_type == 4,
+          "parse adaptive-all config");
+    PASS();
+}
+
 /* ================================================================
  * Main
  * ================================================================ */
@@ -485,6 +563,10 @@ int main(void) {
     TEST("adaptive_selects_rle"); test_adaptive_selects_rle();
     TEST("adaptive_dma_config");  test_adaptive_dma_and_config();
     TEST("adaptive_corruption");  test_adaptive_rejects_corruption();
+    TEST("bitmap_random_sparse"); test_bitmap_round_trip_random_sparse();
+    TEST("bitmap_bit_patterns");  test_bitmap_preserves_fp16_bit_patterns();
+    TEST("adaptive_all_modes");   test_adaptive_all_selects_realistic_modes();
+    TEST("bitmap_dma_config");    test_bitmap_dma_and_runtime_config();
 
     return test_exit();
 }

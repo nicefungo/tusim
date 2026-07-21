@@ -550,7 +550,7 @@ docs-api:
 config-docs: libtucmodel.a
 	@echo "Generating config reference documentation..."
 	@printf '#include "tu_cmodel/infra/config.h"\nint main(void) { tu_config_t cfg; tu_config_default(&cfg); tu_config_emit_docs(&cfg, stdout); return 0; }\n' > /tmp/tu_config_docs.c
-	@$(CC) $(CFLAGS) -I. -Itu_cmodel -o /tmp/tu_config_docs /tmp/tu_config_docs.c -L. -ltucmodel $(LDFLAGS)
+	@$(CC) $(CFLAGS) -I. -Itu_cmodel -o /tmp/tu_config_docs /tmp/tu_config_docs.c ./libtucmodel.a $(LDFLAGS)
 	/tmp/tu_config_docs > docs/CONFIG_REFERENCE.md
 	@rm -f /tmp/tu_config_docs /tmp/tu_config_docs.c
 	@echo "Config reference written to docs/CONFIG_REFERENCE.md"
