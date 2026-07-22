@@ -55,7 +55,7 @@ The existing 16-byte adaptive frame now accepts an explicit BITMAP codec tag in 
 - Payload cycles = `ceil(payload_bytes / 32)`
 - Random placement uses a deterministic LCG
 - Clustered placement uses one zero prefix and 16-element repeated-value runs
-- **Not modeled:** bitmap/RLE decoder throughput, metadata/data alignment, FIFO backpressure, burst fragmentation, area, and decoder energy
+- The original table is intentionally payload-only. Configurable bitmap/RLE decoder throughput and DMA overlap are now modeled in the follow-up `weight-decoder-throughput.md`; metadata/data alignment, finite FIFO backpressure, burst fragmentation, area, and decoder energy remain unmodeled.
 
 ## Measured trade-off matrix
 
@@ -91,7 +91,7 @@ For random 10–90% zeros, bitmap reduces measured payload cycles by 3.5–82.8%
 | Verification burden | Lowest | Runs, overflow, malformed counts | Bitmap padding/popcount/packed-value bounds | Every payload path, selection boundaries, framing, compatibility |
 | Compiler/runtime | No packing | Prefer clustered/repeated tensors | Prefer scattered exact zeros | Offline packer evaluates candidates and carries explicit codec tag |
 
-Area, power, decoder throughput, SRAM port pressure, physical alignment, and verification effort are **qualitative/unquantified**, not fabricated. A real low-cost ASIC may still hard-wire raw or one codec; the pre-spec cmodel keeps all materially distinct modes for comparison.
+Area, power, SRAM port pressure, physical alignment, and verification effort are **qualitative/unquantified**, not fabricated. Decoder throughput is quantified separately in `weight-decoder-throughput.md` and shows that narrow decoders can erase or reverse payload-only latency gains. A real low-cost ASIC may still hard-wire raw or one codec; the pre-spec cmodel keeps all materially distinct modes for comparison.
 
 ## Implementation and verification
 
@@ -110,6 +110,6 @@ make clean && make
 make test-quick
 ```
 
-## Remaining model gap
+## Follow-up status and remaining model gap
 
-Payload bytes are not end-to-end latency. Before recommending decoder provisioning, add configurable bitmap and RLE decode elements/groups per cycle, FIFO/backpressure behavior, and metadata alignment. This is a READY follow-up only after a defensible shared decoder-cycle abstraction and tests are specified; physical area/power still require external characterization.
+`weight-decoder-throughput.md` implements configurable dense-output, RLE-run, and bitmap-scan rates plus overlapped/staged DMA. Its 48-row sweep demonstrates that payload bytes are not end-to-end latency: 1–8 output/cycle decoders are slower than raw here, 16/cycle generally breaks even, and 32/cycle is required for measured latency gains while reconstructing a dense W-buffer. Finite FIFO/backpressure, metadata alignment, SRAM bank conflicts, burst fragmentation, direct compressed-domain MMA feed, and physical area/power remain unmodeled.

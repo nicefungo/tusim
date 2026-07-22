@@ -540,6 +540,85 @@ static void test_bitmap_dma_and_runtime_config(void) {
     PASS();
 }
 
+static void test_decoder_cycle_profiles(void) {
+    fp16_t rle_src[128] = {0};
+    uint8_t rle[128];
+    uint32_t size = 0;
+    CHECK(tu_compress_rle(rle_src, 128, 0.0f, rle, sizeof(rle), &size) == 0,
+          "make RLE stream");
+    tu_compress_config_t cfg = tu_compress_config_default;
+    cfg.decoder_enabled = true;
+    tu_compress_cycle_stats_t s;
+    CHECK(tu_compress_estimate_cycles(rle, size, &cfg, 256, &s) == 0,
+          "estimate serial RLE decoder");
+    CHECK(s.codec == TU_WEIGHT_PAYLOAD_RLE && s.metadata_units == 1,
+          "RLE stream metadata parsed");
+    CHECK(s.dma_cycles == 1 && s.decode_cycles == 128 && s.total_cycles == 128 &&
+          s.decoder_bound, "serial output lane dominates RLE");
+    cfg.decoder_elements_per_cycle = 16;
+    cfg.rle_runs_per_cycle = 4;
+    CHECK(tu_compress_estimate_cycles(rle, size, &cfg, 256, &s) == 0 &&
+          s.decode_cycles == 8 && s.total_cycles == 8, "wide RLE decoder");
+    cfg.decoder_overlap_dma = false;
+    CHECK(tu_compress_estimate_cycles(rle, size, &cfg, 256, &s) == 0 &&
+          s.total_cycles == 9, "non-overlap serializes DMA and decode");
+    PASS();
+}
+
+static void test_bitmap_and_adaptive_cycle_model(void) {
+    fp16_t src[64] = {0};
+    for (int i = 1; i < 64; i += 2) src[i] = (fp16_t)(i + 1);
+    uint8_t bitmap[160], adaptive[144];
+    uint32_t bitmap_size = 0, adaptive_size = 0;
+    tu_weight_payload_codec_t selected;
+    CHECK(tu_compress_bitmap(src, 64, bitmap, sizeof(bitmap), &bitmap_size) == 0,
+          "make bitmap stream");
+    CHECK(tu_compress_adaptive(src, 64, 0.0f, adaptive, sizeof(adaptive),
+                               &adaptive_size, &selected) == 0 &&
+          selected == TU_WEIGHT_PAYLOAD_BITMAP, "adaptive selects bitmap");
+    tu_compress_config_t cfg = tu_compress_config_default;
+    cfg.type = TU_COMPRESS_BITMAP;
+    cfg.decoder_enabled = true;
+    cfg.decoder_elements_per_cycle = 16;
+    cfg.bitmap_elements_per_cycle = 8;
+    tu_compress_cycle_stats_t s;
+    CHECK(tu_compress_estimate_cycles(bitmap, bitmap_size, &cfg, 256, &s) == 0 &&
+          s.element_count == 64 && s.metadata_units == 64,
+          "bitmap metadata parsed");
+    CHECK(s.dma_cycles == 3 && s.decode_cycles == 8 && s.total_cycles == 8,
+          "bitmap scan width dominates");
+    cfg.type = TU_COMPRESS_ADAPTIVE;
+    CHECK(tu_compress_estimate_cycles(adaptive, adaptive_size, &cfg, 256, &s) == 0 &&
+          s.codec == TU_WEIGHT_PAYLOAD_BITMAP && s.decode_cycles == 8,
+          "framed adaptive codec is modeled");
+    cfg.decoder_enabled = false;
+    CHECK(tu_compress_estimate_cycles(adaptive, adaptive_size, &cfg, 256, &s) == 0 &&
+          s.decode_cycles == 0 && s.total_cycles == s.dma_cycles,
+          "disabled model preserves payload-only behavior");
+    PASS();
+}
+
+static void test_decoder_runtime_config(void) {
+    const char *json = "{\"weight_compression\":{\"enabled\":true,\"type\":\"adaptive\","
+                       "\"decoder_enabled\":true,\"decoder_overlap_dma\":false,"
+                       "\"decoder_elements_per_cycle\":16,\"rle_runs_per_cycle\":4,"
+                       "\"bitmap_elements_per_cycle\":8}}";
+    tu_config_t runtime;
+    CHECK(tu_config_load_string(json, &runtime, NULL, 0) == 0,
+          "parse decoder throughput config");
+    tu_compress_config_t cfg = tu_compress_config_from_tu_config(&runtime);
+    CHECK(cfg.decoder_enabled && !cfg.decoder_overlap_dma &&
+          cfg.decoder_elements_per_cycle == 16 && cfg.rle_runs_per_cycle == 4 &&
+          cfg.bitmap_elements_per_cycle == 8, "map decoder config");
+    CHECK(tu_config_load_string("{\"weight_compression\":{\"decoder_elements_per_cycle\":0}}",
+                                &runtime, NULL, 0) != 0, "reject zero output width");
+    CHECK(tu_config_load_string("{\"weight_compression\":{\"rle_runs_per_cycle\":0}}",
+                                &runtime, NULL, 0) != 0, "reject zero RLE width");
+    CHECK(tu_config_load_string("{\"weight_compression\":{\"bitmap_elements_per_cycle\":0}}",
+                                &runtime, NULL, 0) != 0, "reject zero bitmap width");
+    PASS();
+}
+
 /* ================================================================
  * Main
  * ================================================================ */
@@ -567,6 +646,9 @@ int main(void) {
     TEST("bitmap_bit_patterns");  test_bitmap_preserves_fp16_bit_patterns();
     TEST("adaptive_all_modes");   test_adaptive_all_selects_realistic_modes();
     TEST("bitmap_dma_config");    test_bitmap_dma_and_runtime_config();
+    TEST("decoder_profiles");     test_decoder_cycle_profiles();
+    TEST("bitmap_adaptive_cycles"); test_bitmap_and_adaptive_cycle_model();
+    TEST("decoder_runtime_config"); test_decoder_runtime_config();
 
     return test_exit();
 }

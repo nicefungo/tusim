@@ -66,6 +66,11 @@
 | `compression_enabled` | `false` | bool | Enable weight-stream compression |
 | `compression_type` | 0 | int | 0=None, 1=RLE, 2=Adaptive RLE, 3=Bitmap, 4=Adaptive all |
 | `compression_rle_epsilon` | 0 | double | Merge tolerance; 0 is lossless |
+| `compression_decoder_enabled` | `false` | bool | Include decompressor throughput in stream-cycle estimates |
+| `compression_decoder_overlap_dma` | `true` | bool | Pipeline payload DMA and decode; false serializes them |
+| `compression_decoder_elements_per_cycle` | 1 | uint32 | Dense FP16 outputs reconstructed per cycle |
+| `compression_rle_runs_per_cycle` | 1 | uint32 | RLE run descriptors issued per cycle |
+| `compression_bitmap_elements_per_cycle` | 1 | uint32 | Bitmap positions scanned per cycle |
 
 ## 5. ISA & Command Queue
 

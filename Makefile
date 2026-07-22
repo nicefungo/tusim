@@ -476,7 +476,7 @@ test-errors: tests/test_error_handling.c libtucmodel.a
 
 # ---- Test: JSON Config Loader (A1) ----
 test-config: tests/test_config.c libtucmodel.a
-	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< ./libtucmodel.a $(LDFLAGS)
 	./test-config
 
 test-golden-full: tests/test_golden.c libtucmodel.a

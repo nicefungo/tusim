@@ -7,6 +7,9 @@
 
 const tu_compress_config_t tu_compress_config_default = {
     .type = TU_COMPRESS_RLE, .rle_epsilon = 0.0f, .enabled = true,
+    .decoder_enabled = false, .decoder_overlap_dma = true,
+    .decoder_elements_per_cycle = 1, .rle_runs_per_cycle = 1,
+    .bitmap_elements_per_cycle = 1,
 };
 
 tu_compress_config_t tu_compress_config_from_tu_config(const struct tu_config_t *cfg)
@@ -20,6 +23,11 @@ tu_compress_config_t tu_compress_config_from_tu_config(const struct tu_config_t 
     out.enabled = cfg->compression_enabled;
     out.type = (tu_compress_type_t)cfg->compression_type;
     out.rle_epsilon = (float)cfg->compression_rle_epsilon;
+    out.decoder_enabled = cfg->compression_decoder_enabled;
+    out.decoder_overlap_dma = cfg->compression_decoder_overlap_dma;
+    out.decoder_elements_per_cycle = cfg->compression_decoder_elements_per_cycle;
+    out.rle_runs_per_cycle = cfg->compression_rle_runs_per_cycle;
+    out.bitmap_elements_per_cycle = cfg->compression_bitmap_elements_per_cycle;
     return out;
 }
 
@@ -404,4 +412,72 @@ int tu_decompress_from_dma(const uint8_t *src, uint32_t size,
     if (cfg->type == TU_COMPRESS_ADAPTIVE)
         return tu_decompress_adaptive(src, size, dst, cap, count_out);
     return -1;
+}
+
+static uint64_t ceil_div_u64(uint64_t n, uint64_t d)
+{
+    return n / d + (n % d != 0);
+}
+
+int tu_compress_estimate_cycles(const uint8_t *src, uint32_t size,
+                                const tu_compress_config_t *cfg,
+                                uint32_t dma_bus_width_bits,
+                                tu_compress_cycle_stats_t *stats)
+{
+    if (!src || !cfg || !stats || dma_bus_width_bits == 0 ||
+        dma_bus_width_bits % 8u != 0 || cfg->decoder_elements_per_cycle == 0 ||
+        cfg->rle_runs_per_cycle == 0 || cfg->bitmap_elements_per_cycle == 0)
+        return -1;
+    memset(stats, 0, sizeof(*stats));
+    stats->payload_bytes = size;
+    stats->dma_cycles = ceil_div_u64(size, dma_bus_width_bits / 8u);
+    const uint8_t *body = src;
+    uint32_t body_size = size;
+
+    if (!cfg->enabled || cfg->type == TU_COMPRESS_NONE) {
+        if (size % sizeof(fp16_t) != 0) return -1;
+        stats->codec = TU_WEIGHT_PAYLOAD_RAW;
+        stats->element_count = size / sizeof(fp16_t);
+    } else if (cfg->type == TU_COMPRESS_ADAPTIVE_RLE ||
+               cfg->type == TU_COMPRESS_ADAPTIVE) {
+        uint32_t payload;
+        if (!frame_read(src, size, &stats->codec, &stats->element_count, &payload) ||
+            !tu_compress_adaptive_validate(src, size)) return -1;
+        body = src + TU_WEIGHT_FRAME_HEADER_BYTES;
+        body_size = payload;
+    } else if (cfg->type == TU_COMPRESS_RLE) {
+        uint32_t runs;
+        if (!tu_compress_validate(src, size)) return -1;
+        memcpy(&stats->element_count, src, 4);
+        memcpy(&runs, src + 4, 4);
+        stats->codec = TU_WEIGHT_PAYLOAD_RLE;
+        stats->metadata_units = runs;
+    } else if (cfg->type == TU_COMPRESS_BITMAP) {
+        if (!tu_compress_bitmap_validate(src, size)) return -1;
+        memcpy(&stats->element_count, src, 4);
+        stats->codec = TU_WEIGHT_PAYLOAD_BITMAP;
+        stats->metadata_units = stats->element_count;
+    } else return -1;
+
+    if (cfg->type == TU_COMPRESS_ADAPTIVE_RLE || cfg->type == TU_COMPRESS_ADAPTIVE) {
+        if (stats->codec == TU_WEIGHT_PAYLOAD_RLE) {
+            memcpy(&stats->metadata_units, body + 4, 4);
+        } else if (stats->codec == TU_WEIGHT_PAYLOAD_BITMAP) {
+            stats->metadata_units = stats->element_count;
+        } else if (body_size != stats->element_count * sizeof(fp16_t)) return -1;
+    }
+
+    if (cfg->decoder_enabled && stats->codec != TU_WEIGHT_PAYLOAD_RAW) {
+        uint64_t output = ceil_div_u64(stats->element_count,
+                                       cfg->decoder_elements_per_cycle);
+        uint64_t metadata = stats->codec == TU_WEIGHT_PAYLOAD_RLE ?
+            ceil_div_u64(stats->metadata_units, cfg->rle_runs_per_cycle) :
+            ceil_div_u64(stats->metadata_units, cfg->bitmap_elements_per_cycle);
+        stats->decode_cycles = output > metadata ? output : metadata;
+    }
+    stats->decoder_bound = stats->decode_cycles > stats->dma_cycles;
+    stats->total_cycles = cfg->decoder_overlap_dma ?
+        (stats->decode_cycles > stats->dma_cycles ? stats->decode_cycles : stats->dma_cycles) :
+        stats->dma_cycles + stats->decode_cycles;
+    return 0;
 }

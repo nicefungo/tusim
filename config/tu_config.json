@@ -55,7 +55,12 @@
     "weight_compression": {
       "enabled": false,
       "type": "none",
-      "rle_epsilon": 0.0
+      "rle_epsilon": 0.0,
+      "decoder_enabled": false,
+      "decoder_overlap_dma": true,
+      "decoder_elements_per_cycle": 1,
+      "rle_runs_per_cycle": 1,
+      "bitmap_elements_per_cycle": 1
     },
 
     "isa": {

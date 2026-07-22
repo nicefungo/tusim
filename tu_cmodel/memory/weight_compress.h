@@ -56,7 +56,23 @@ typedef struct {
     tu_compress_type_t type;
     float              rle_epsilon;
     bool               enabled;
+    bool               decoder_enabled;
+    bool               decoder_overlap_dma;
+    uint32_t           decoder_elements_per_cycle;
+    uint32_t           rle_runs_per_cycle;
+    uint32_t           bitmap_elements_per_cycle;
 } tu_compress_config_t;
+
+typedef struct {
+    tu_weight_payload_codec_t codec;
+    uint32_t element_count;
+    uint32_t metadata_units; /* RLE runs, bitmap positions, or zero for raw */
+    uint32_t payload_bytes;
+    uint64_t dma_cycles;
+    uint64_t decode_cycles;
+    uint64_t total_cycles;
+    bool decoder_bound;
+} tu_compress_cycle_stats_t;
 
 extern const tu_compress_config_t tu_compress_config_default;
 tu_compress_config_t tu_compress_config_from_tu_config(const struct tu_config_t *cfg);
@@ -126,6 +142,14 @@ int tu_decompress_from_dma(const uint8_t *src, uint32_t src_size,
                            const tu_compress_config_t *cfg,
                            fp16_t *dst, uint32_t dst_capacity,
                            uint32_t *decompressed_count_out);
+
+/* Estimate stream latency. Decode is bounded by dense output lanes and the
+ * codec-specific metadata issue/scan width. Streaming overlap uses
+ * max(DMA, decode); non-overlap serializes both stages. */
+int tu_compress_estimate_cycles(const uint8_t *src, uint32_t src_size,
+                                const tu_compress_config_t *cfg,
+                                uint32_t dma_bus_width_bits,
+                                tu_compress_cycle_stats_t *stats);
 
 #ifdef __cplusplus
 }

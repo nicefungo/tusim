@@ -199,6 +199,11 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->compression_enabled = false;
     cfg->compression_type = 0;
     cfg->compression_rle_epsilon = 0.0;
+    cfg->compression_decoder_enabled = false;
+    cfg->compression_decoder_overlap_dma = true;
+    cfg->compression_decoder_elements_per_cycle = 1;
+    cfg->compression_rle_runs_per_cycle = 1;
+    cfg->compression_bitmap_elements_per_cycle = 1;
 
     cfg->isa_instr_width_bits = 96;
     cfg->isa_queue_depth     = 16;
@@ -357,6 +362,18 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
             else cfg->compression_type = -1;
         }
         parse_opt_double(wc, "rle_epsilon", &cfg->compression_rle_epsilon);
+        parse_opt_bool(wc, "decoder_enabled", &cfg->compression_decoder_enabled);
+        parse_opt_bool(wc, "decoder_overlap_dma", &cfg->compression_decoder_overlap_dma);
+        int64_t iv;
+        if (parse_opt_int64(wc, "decoder_elements_per_cycle", &iv))
+            cfg->compression_decoder_elements_per_cycle =
+                (iv > 0 && iv <= 1048576) ? (uint32_t)iv : 0;
+        if (parse_opt_int64(wc, "rle_runs_per_cycle", &iv))
+            cfg->compression_rle_runs_per_cycle =
+                (iv > 0 && iv <= 1048576) ? (uint32_t)iv : 0;
+        if (parse_opt_int64(wc, "bitmap_elements_per_cycle", &iv))
+            cfg->compression_bitmap_elements_per_cycle =
+                (iv > 0 && iv <= 1048576) ? (uint32_t)iv : 0;
     }
 
     /* ISA */
@@ -510,6 +527,14 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
             snprintf(error_buf, error_size, "compression rle_epsilon must be >= 0");
         return -1;
     }
+    if (cfg->compression_decoder_elements_per_cycle == 0 ||
+        cfg->compression_rle_runs_per_cycle == 0 ||
+        cfg->compression_bitmap_elements_per_cycle == 0) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "compression decoder throughput values must be > 0");
+        return -1;
+    }
     if (cfg->sparsity_unstructured) {
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size, "unstructured sparsity is not implemented");
@@ -547,7 +572,7 @@ void tu_config_dump(const struct tu_config_t *cfg) {
         "  SRAM: W=%uK A=%uK O=%uK, banks=%u×%uB\n"
         "  DRAM: type=%d BW=%.1f GB/s\n"
         "  DMA: bus=%ub, ch=%u, async=%s\n"
-        "  Compression: %s type=%d epsilon=%g\n"
+        "  Compression: %s type=%d epsilon=%g decoder=%s (%u elem/cyc, %u run/cyc, %u bitmap elem/cyc)\n"
         "  ISA: instr=%ub, qdepth=%u\n"
         "  Multi-core: %s, cores=%u\n"
         "  Cycle: model=%d, counters=%s, trace=%s\n"
@@ -565,6 +590,10 @@ void tu_config_dump(const struct tu_config_t *cfg) {
         cfg->dma_async_mode ? "yes" : "no",
         cfg->compression_enabled ? "on" : "off", cfg->compression_type,
         cfg->compression_rle_epsilon,
+        cfg->compression_decoder_enabled ? "on" : "off",
+        cfg->compression_decoder_elements_per_cycle,
+        cfg->compression_rle_runs_per_cycle,
+        cfg->compression_bitmap_elements_per_cycle,
         cfg->isa_instr_width_bits, cfg->isa_queue_depth,
         cfg->multicore_enabled ? "on" : "off", cfg->num_cores,
         cfg->cycle_model, cfg->counters_enabled ? "on" : "off",
@@ -692,8 +721,18 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             fmt_bool(cfg->compression_enabled));
     fprintf(out, "| `compression_type` | %d | int | 0=None, 1=RLE, 2=Adaptive RLE, 3=Bitmap, 4=Adaptive all |\n",
             cfg->compression_type);
-    fprintf(out, "| `compression_rle_epsilon` | %.6g | double | Merge tolerance; 0 is lossless |\n\n",
+    fprintf(out, "| `compression_rle_epsilon` | %.6g | double | Merge tolerance; 0 is lossless |\n",
             cfg->compression_rle_epsilon);
+    fprintf(out, "| `compression_decoder_enabled` | %s | bool | Include decompressor throughput in stream-cycle estimates |\n",
+            fmt_bool(cfg->compression_decoder_enabled));
+    fprintf(out, "| `compression_decoder_overlap_dma` | %s | bool | Pipeline payload DMA and decode; false serializes them |\n",
+            fmt_bool(cfg->compression_decoder_overlap_dma));
+    fprintf(out, "| `compression_decoder_elements_per_cycle` | %u | uint32 | Dense FP16 outputs reconstructed per cycle |\n",
+            cfg->compression_decoder_elements_per_cycle);
+    fprintf(out, "| `compression_rle_runs_per_cycle` | %u | uint32 | RLE run descriptors issued per cycle |\n",
+            cfg->compression_rle_runs_per_cycle);
+    fprintf(out, "| `compression_bitmap_elements_per_cycle` | %u | uint32 | Bitmap positions scanned per cycle |\n\n",
+            cfg->compression_bitmap_elements_per_cycle);
 
     /* ---- ISA ---- */
     fprintf(out, "## 5. ISA & Command Queue\n\n");

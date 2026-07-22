@@ -93,6 +93,11 @@ typedef struct tu_config_t {
     bool     compression_enabled;
     int      compression_type;        /* 0=none, 1=RLE, 2=adaptive RLE, 3=bitmap, 4=adaptive all */
     double   compression_rle_epsilon; /* 0=lossless exact runs */
+    bool     compression_decoder_enabled; /* Include decompressor throughput in estimates */
+    bool     compression_decoder_overlap_dma; /* Stream decode concurrently with payload DMA */
+    uint32_t compression_decoder_elements_per_cycle; /* Dense FP16 output lanes */
+    uint32_t compression_rle_runs_per_cycle; /* RLE metadata/run issue width */
+    uint32_t compression_bitmap_elements_per_cycle; /* Bitmap scan width */
 
     /* ---- ISA / Command Queue ---- */
     uint32_t isa_instr_width_bits;
