@@ -152,6 +152,12 @@ extern "C" {
 #define TU_INTERCONNECT_MESH    2
 #define TU_INTERCONNECT_MODE    0
 #define TU_CACHE_COHERENCE      0
+#define TU_ICC_SWITCH_LEGACY_HOP_ONLY  0
+#define TU_ICC_SWITCH_CUT_THROUGH      1
+#define TU_ICC_SWITCH_STORE_FORWARD    2
+#define TU_ICC_SWITCHING_MODE          TU_ICC_SWITCH_LEGACY_HOP_ONLY
+#define TU_ICC_LINK_BYTES_PER_CYCLE    16
+#define TU_ICC_ROUTER_LATENCY_CYCLES   5
 
 /* ================================================================
  * Performance Model
@@ -233,6 +239,9 @@ typedef struct {
     char     trace_file[256];
     bool     verify_enabled;
     double   verify_tolerance;
+    int      icc_switching_mode;
+    uint32_t icc_link_bytes_per_cycle;
+    uint32_t icc_router_latency_cycles;
 } tu_runtime_config_t;
 
 static inline tu_runtime_config_t tu_runtime_config_default(void) {
@@ -248,6 +257,9 @@ static inline tu_runtime_config_t tu_runtime_config_default(void) {
         .trace_file        = "",
         .verify_enabled    = false,
         .verify_tolerance  = TU_VERIFY_ERROR_TOLERANCE,
+        .icc_switching_mode = TU_ICC_SWITCHING_MODE,
+        .icc_link_bytes_per_cycle = TU_ICC_LINK_BYTES_PER_CYCLE,
+        .icc_router_latency_cycles = TU_ICC_ROUTER_LATENCY_CYCLES,
     };
 }
 

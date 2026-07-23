@@ -73,6 +73,9 @@
       "enabled": false,
       "num_cores": 1,
       "interconnect": "none",
+      "switching": "legacy_hop_only",
+      "link_bytes_per_cycle": 16,
+      "router_latency_cycles": 5,
       "cache_coherence": false
     },
 

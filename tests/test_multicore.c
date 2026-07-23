@@ -130,14 +130,14 @@ static void test_core_mma(void) {
     /* MMA: 16×16×16 */
     tu_core_mma(core, 16, 16, 16, 0, 0, 0, false);
 
-    /* Read output */
-    fp16_t o_data[256];
+    /* O-buffer is FP32 accumulator storage; DMA store is a raw copy. */
+    fp32_t o_data[256];
     tu_core_dma_store_o(core, o_data, 0, sizeof(o_data));
 
     /* Verify: O = W × A = I × 2I = 2I */
     for (int i = 0; i < 16; i++) {
         for (int j = 0; j < 16; j++) {
-            float val = tu_fp16_to_fp32(o_data[i * 16 + j]);
+            float val = o_data[i * 16 + j];
             float expected = (i == j) ? 2.0f : 0.0f;
             if (fabsf(val - expected) > 0.01f) {
                 char msg[256];
@@ -352,7 +352,41 @@ static void test_icc_send(void) {
     PASS();
 }
 
-/* ---- Test 10: ICC broadcast ---- */
+/* ---- Test 10: Interconnect switching timing modes ---- */
+static void test_icc_switching_modes(void) {
+    TEST("ICC switching timing modes");
+    tu_runtime_config_t cfg = tu_runtime_config_default();
+    cfg.icc_link_bytes_per_cycle = 16;
+    cfg.icc_router_latency_cycles = 5;
+
+    cfg.icc_switching_mode = TU_ICC_SWITCH_LEGACY_HOP_ONLY;
+    tu_cluster_t *cl = tu_cluster_create(6, TU_TOPOLOGY_MESH, 2, &cfg);
+    CHECK(cl != NULL, "legacy cluster create failed");
+    CHECK(tu_cluster_estimate_transfer_cycles(cl, 0, 5, 1024) == 15,
+          "legacy must preserve hop-only latency");
+    tu_cluster_destroy(cl);
+
+    cfg.icc_switching_mode = TU_ICC_SWITCH_CUT_THROUGH;
+    cl = tu_cluster_create(6, TU_TOPOLOGY_MESH, 2, &cfg);
+    CHECK(cl != NULL, "cut-through cluster create failed");
+    CHECK(tu_cluster_estimate_transfer_cycles(cl, 0, 5, 1024) == 79,
+          "cut-through must serialize once plus three router hops");
+    CHECK(tu_cluster_estimate_transfer_cycles(cl, 0, 5, 0) == 0,
+          "zero-byte transfer must take zero cycles");
+    tu_cluster_destroy(cl);
+
+    cfg.icc_switching_mode = TU_ICC_SWITCH_STORE_FORWARD;
+    cl = tu_cluster_create(6, TU_TOPOLOGY_MESH, 2, &cfg);
+    CHECK(cl != NULL, "store-forward cluster create failed");
+    CHECK(tu_cluster_estimate_transfer_cycles(cl, 0, 5, 1024) == 207,
+          "store-forward must serialize at each of three hops");
+    CHECK(tu_cluster_estimate_transfer_cycles(cl, 0, 99, 1024) == UINT64_MAX,
+          "invalid route must be rejected");
+    tu_cluster_destroy(cl);
+    PASS();
+}
+
+/* ---- Test 11: ICC broadcast ---- */
 static void test_icc_broadcast(void) {
     TEST("ICC broadcast");
     tu_runtime_config_t cfg = tu_runtime_config_default();
@@ -496,6 +530,7 @@ int main(void) {
     test_hop_distance();
     test_neighbors();
     test_icc_send();
+    test_icc_switching_modes();
     test_icc_broadcast();
     test_allreduce_sum();
     test_barrier();

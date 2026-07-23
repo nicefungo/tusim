@@ -244,6 +244,38 @@ int main(void) {
         PASS();
     }
 
+    TEST("Config: interconnect switching parse + validation");
+    {
+        const char *json =
+            "{\"tu\":{\"multicore\":{\"enabled\":true,\"num_cores\":8,"
+            "\"interconnect\":\"mesh\",\"switching\":\"cut_through\","
+            "\"link_bytes_per_cycle\":32,\"router_latency_cycles\":3}}}";
+        tu_config_t cfg;
+        CHECK(tu_config_load_string(json, &cfg, NULL, 0) == 0, "ICC config parse");
+        CHECK(cfg.icc_switching_mode == TU_ICC_SWITCH_CUT_THROUGH, "switching mode");
+        CHECK(cfg.icc_link_bytes_per_cycle == 32, "link width");
+        CHECK(cfg.icc_router_latency_cycles == 3, "router latency");
+        tu_runtime_config_t rt = tu_config_to_runtime(&cfg);
+        CHECK(rt.icc_switching_mode == TU_ICC_SWITCH_CUT_THROUGH, "runtime switching");
+        CHECK(rt.icc_link_bytes_per_cycle == 32, "runtime link width");
+        PASS();
+    }
+
+    TEST("Config: reject unsupported interconnect switching");
+    {
+        tu_config_t cfg;
+        char err[160];
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"multicore\":{\"switching\":\"teleport\"}}}",
+            &cfg, err, sizeof(err)) != 0, "unsupported switch accepted");
+        CHECK(strstr(err, "switching") != NULL, "wrong switch validation error");
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"multicore\":{\"switching\":\"cut_through\","
+            "\"link_bytes_per_cycle\":0}}}",
+            &cfg, err, sizeof(err)) != 0, "zero link width accepted");
+        PASS();
+    }
+
     TEST("Config: to runtime conversion");
     {
         tu_config_t cfg;

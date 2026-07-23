@@ -40,7 +40,12 @@ tu_cluster_t *tu_cluster_create(uint32_t num_cores,
 
     cluster->num_cores = num_cores;
     cluster->topology = topology;
-    cluster->hop_latency = 5;  /* Default: 5 cycles per hop */
+    cluster->hop_latency = base_config ? base_config->icc_router_latency_cycles :
+                                         TU_ICC_ROUTER_LATENCY_CYCLES;
+    cluster->switching_mode = base_config ? base_config->icc_switching_mode :
+                                            TU_ICC_SWITCHING_MODE;
+    cluster->link_bytes_per_cycle = base_config ? base_config->icc_link_bytes_per_cycle :
+                                                  TU_ICC_LINK_BYTES_PER_CYCLE;
 
     if (topology == TU_TOPOLOGY_MESH) {
         cluster->mesh_rows = mesh_rows;
@@ -142,6 +147,29 @@ uint32_t tu_cluster_hop_distance(const tu_cluster_t *cluster,
     }
 }
 
+uint64_t tu_cluster_estimate_transfer_cycles(const tu_cluster_t *cluster,
+                                              uint32_t src, uint32_t dst,
+                                              uint32_t size_bytes) {
+    if (!cluster) return UINT64_MAX;
+    uint32_t hops = tu_cluster_hop_distance(cluster, src, dst);
+    if (hops == UINT32_MAX) return UINT64_MAX;
+    if (hops == 0 || size_bytes == 0) return 0;
+
+    uint64_t route_cycles = (uint64_t)hops * cluster->hop_latency;
+    if (cluster->switching_mode == TU_ICC_SWITCH_LEGACY_HOP_ONLY)
+        return route_cycles;
+    if (cluster->link_bytes_per_cycle == 0) return UINT64_MAX;
+
+    uint64_t serialization =
+        ((uint64_t)size_bytes + cluster->link_bytes_per_cycle - 1) /
+        cluster->link_bytes_per_cycle;
+    if (cluster->switching_mode == TU_ICC_SWITCH_CUT_THROUGH)
+        return route_cycles + serialization;
+    if (cluster->switching_mode == TU_ICC_SWITCH_STORE_FORWARD)
+        return (uint64_t)hops * (cluster->hop_latency + serialization);
+    return UINT64_MAX;
+}
+
 void tu_cluster_neighbors(const tu_cluster_t *cluster,
                            uint32_t core_id,
                            uint32_t *neighbors,
@@ -215,12 +243,10 @@ int tu_cluster_send(tu_cluster_t *cluster,
     if (msg->src_offset + msg->size_bytes > src_sram->total_size) return -1;
     if (msg->dst_offset + msg->size_bytes > dst_sram->total_size) return -1;
 
-    /* Compute hop distance for cycle accounting */
-    uint32_t hops = tu_cluster_hop_distance(cluster, msg->src_core_id, msg->dst_core_id);
-    if (hops == UINT32_MAX) return -1;
-
-    /* Simulated latency */
-    uint64_t latency = (uint64_t)hops * cluster->hop_latency;
+    /* Compute route and serialization latency for the configured switch. */
+    uint64_t latency = tu_cluster_estimate_transfer_cycles(
+        cluster, msg->src_core_id, msg->dst_core_id, msg->size_bytes);
+    if (latency == UINT64_MAX) return -1;
 
     /* Perform the transfer using bulk SRAM read/write */
     /* Allocate temporary buffer */
@@ -383,6 +409,9 @@ void tu_cluster_print_stats(const tu_cluster_t *cluster) {
                cluster->mesh_rows, cluster->mesh_cols);
     }
     printf("  Hop latency:        %u cycles\n", cluster->hop_latency);
+    printf("  Switching mode:     %d (0=legacy, 1=cut-through, 2=store-forward)\n",
+           cluster->switching_mode);
+    printf("  Link width:         %u bytes/cycle\n", cluster->link_bytes_per_cycle);
     printf("  ICC messages:       %lu\n",
            (unsigned long)cluster->stats.total_icc_messages);
     printf("  ICC bytes:          %lu\n",

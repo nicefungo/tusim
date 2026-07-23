@@ -108,6 +108,9 @@ typedef struct tu_config_t {
     bool     multicore_enabled;
     uint32_t num_cores;
     int      interconnect_mode;     /* NONE=0, RING=1, MESH=2 */
+    int      icc_switching_mode;    /* legacy=0, cut-through=1, store-forward=2 */
+    uint32_t icc_link_bytes_per_cycle;
+    uint32_t icc_router_latency_cycles;
 
     /* ---- Performance ---- */
     int      cycle_model;           /* FUNCTIONAL=0, ESTIMATED=1, CYCLE_ACCURATE=2 */

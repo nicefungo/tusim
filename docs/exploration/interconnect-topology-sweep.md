@@ -4,6 +4,14 @@
 **Status:** Complete
 **Type:** Analytical sweep (standalone C, no cmodel dependency)
 
+> **2026-07-23 fidelity correction:** This historical sweep implicitly uses
+> store-and-forward timing (`full payload serialization × hop count`) and has
+> no shared-link contention, routing, injection, or collective algorithm model.
+> Its 1.5–3.1× MESH figures are therefore not production recommendations and
+> must not be combined with the new cut-through model. See
+> `interconnect-switching-modes.md`. RING and MESH remain plausible alternatives;
+> topology choice is blocked on a finite-contention traffic-matrix exploration.
+
 ## Design Question
 
 How does interconnect topology choice (RING vs MESH) affect all-reduce latency for different core counts and data sizes? Where is the crossover point where MESH complexity is justified?
@@ -83,7 +91,7 @@ Speedup is invariant to data size because the same hop-count ratio applies to bo
 | 16 | 4×4 | 30 | 12 | 60.0% |
 | 32 | 4×8 | 62 | 20 | 67.7% |
 
-## Key Finding
+## Historical Finding (superseded as a hardware recommendation)
 
 **MESH topology provides 1.5–3.1× all-reduce speedup over RING for ≥4 cores, with the advantage growing as O(N)/O(√N). The speedup is independent of data size — it comes purely from hop-count reduction.**
 

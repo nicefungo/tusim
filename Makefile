@@ -338,7 +338,7 @@ test-dpi: tests/test_dpi.c libtucmodel.a
 
 # ---- Test: Multi-core Cluster (A5) ----
 test-multicore: tests/test_multicore.c libtucmodel.a
-	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< ./libtucmodel.a $(LDFLAGS)
 	./test-multicore
 
 # ---- Sweep: Multi-Core Scaling (GEMM partitioned across cores) ----
@@ -449,6 +449,11 @@ test-scheduler-sweep: tests/test_scheduler_sweep.c libtucmodel.a
 test-interconnect-topology-sweep: tests/test_interconnect_topology_sweep.c
 	cc -O2 -Wall -std=c11 -o $@ $< -lm
 	./test-interconnect-topology-sweep
+
+# ---- Sweep: Interconnect Switching (cut-through vs store-forward) ----
+test-interconnect-switching-sweep: tests/test_interconnect_switching_sweep.c
+	cc -O2 -Wall -Wextra -std=c11 -o $@ $<
+	./test-interconnect-switching-sweep
 
 # ---- Test: Liveness Allocator (C3) ----
 test-liveness: tests/test_liveness.c libtucmodel.a
@@ -562,6 +567,6 @@ clean:
 	rm -f test-dataflow test-elementwise test-bf16 test-memhier test-norm test-logging
 	rm -f test-int-quant test-conv test-random
 	rm -f test-rounding test-fp8 test-attention test-perf test-pool test-pipeline
-	rm -f test-agen test-multicore test-multicore-sweep test-compress test-errors test-config test-softmax test-double test-context test-context-switch-sweep test-compress test-weight-compression-sweep test-sparsity test-sparsity-sweep test-scheduler test-scheduler-sweep test-interconnect-topology-sweep test-liveness test-power test-dpi test-dataflow-sweep test-rounding-sweep test-attention-sweep test-pooling-sweep test-softmax-sweep test-conv-sweep test-norm-sweep test-norm-attention-sweep test-conv-groups-sweep test-conv-pool-cascade test-mma-activation-sweep test-softmax-attention-sweep
+	rm -f test-agen test-multicore test-multicore-sweep test-compress test-errors test-config test-softmax test-double test-context test-context-switch-sweep test-compress test-weight-compression-sweep test-sparsity test-sparsity-sweep test-scheduler test-scheduler-sweep test-interconnect-topology-sweep test-interconnect-switching-sweep test-liveness test-power test-dpi test-dataflow-sweep test-rounding-sweep test-attention-sweep test-pooling-sweep test-softmax-sweep test-conv-sweep test-norm-sweep test-norm-attention-sweep test-conv-groups-sweep test-conv-pool-cascade test-mma-activation-sweep test-softmax-attention-sweep
 	rm -f /tmp/gpt_block_tu /tmp/gpt_block_tu.c /tmp/test_asm
 	rm -rf build/ci_reports

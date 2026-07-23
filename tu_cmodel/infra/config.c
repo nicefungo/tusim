@@ -212,6 +212,9 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->multicore_enabled   = false;
     cfg->num_cores           = 1;
     cfg->interconnect_mode   = 0;
+    cfg->icc_switching_mode  = TU_ICC_SWITCH_LEGACY_HOP_ONLY;
+    cfg->icc_link_bytes_per_cycle = TU_ICC_LINK_BYTES_PER_CYCLE;
+    cfg->icc_router_latency_cycles = TU_ICC_ROUTER_LATENCY_CYCLES;
 
     cfg->cycle_model         = 2;
     cfg->counters_enabled    = true;
@@ -248,6 +251,9 @@ tu_runtime_config_t tu_config_to_runtime(const struct tu_config_t *cfg) {
     memcpy(rt.trace_file, cfg->trace_file, sizeof(rt.trace_file));
     rt.verify_enabled   = cfg->golden_reference >= 0;
     rt.verify_tolerance = cfg->error_tolerance;
+    rt.icc_switching_mode = cfg->icc_switching_mode;
+    rt.icc_link_bytes_per_cycle = cfg->icc_link_bytes_per_cycle;
+    rt.icc_router_latency_cycles = cfg->icc_router_latency_cycles;
     return rt;
 }
 
@@ -397,7 +403,20 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
             if (strcmp(s, "none") == 0) cfg->interconnect_mode = 0;
             else if (strcmp(s, "ring") == 0) cfg->interconnect_mode = 1;
             else if (strcmp(s, "mesh") == 0) cfg->interconnect_mode = 2;
+            else cfg->interconnect_mode = -1;
         }
+        const tu_json_value_t *sw = tu_json_get(mc, "switching");
+        if (sw && sw->type == TU_JSON_STRING) {
+            const char *s = tu_json_as_string(sw, NULL);
+            if (strcmp(s, "legacy_hop_only") == 0) cfg->icc_switching_mode = TU_ICC_SWITCH_LEGACY_HOP_ONLY;
+            else if (strcmp(s, "cut_through") == 0) cfg->icc_switching_mode = TU_ICC_SWITCH_CUT_THROUGH;
+            else if (strcmp(s, "store_and_forward") == 0) cfg->icc_switching_mode = TU_ICC_SWITCH_STORE_FORWARD;
+            else cfg->icc_switching_mode = -1;
+        }
+        if (parse_opt_int64(mc, "link_bytes_per_cycle", &iv))
+            cfg->icc_link_bytes_per_cycle = (iv > 0 && iv <= 1048576) ? (uint32_t)iv : 0;
+        if (parse_opt_int64(mc, "router_latency_cycles", &iv))
+            cfg->icc_router_latency_cycles = (iv >= 0 && iv <= 1048576) ? (uint32_t)iv : UINT32_MAX;
     }
 
     /* Performance */
@@ -514,6 +533,28 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
     if (cfg->isa_queue_depth == 0) {
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size, "queue_depth must be > 0");
+        return -1;
+    }
+    if (cfg->interconnect_mode < 0 || cfg->interconnect_mode > 2) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size, "interconnect mode must be none, ring, or mesh");
+        return -1;
+    }
+    if (cfg->icc_switching_mode < TU_ICC_SWITCH_LEGACY_HOP_ONLY ||
+        cfg->icc_switching_mode > TU_ICC_SWITCH_STORE_FORWARD) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "interconnect switching must be legacy_hop_only, cut_through, or store_and_forward");
+        return -1;
+    }
+    if (cfg->icc_link_bytes_per_cycle == 0) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size, "interconnect link_bytes_per_cycle must be > 0");
+        return -1;
+    }
+    if (cfg->icc_router_latency_cycles == UINT32_MAX) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size, "interconnect router_latency_cycles is out of range");
         return -1;
     }
     if (cfg->compression_type < 0 || cfg->compression_type > 4) {
@@ -753,8 +794,14 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             fmt_bool(cfg->multicore_enabled));
     fprintf(out, "| `num_cores` | %u | uint32 | Core count |\n",
             cfg->num_cores);
-    fprintf(out, "| `interconnect_mode` | %d | int | 0=None, 1=Ring, 2=Mesh |\n\n",
+    fprintf(out, "| `interconnect_mode` | %d | int | 0=None, 1=Ring, 2=Mesh |\n",
             cfg->interconnect_mode);
+    fprintf(out, "| `icc_switching_mode` | %d | int | 0=Legacy hop-only, 1=Cut-through, 2=Store-and-forward |\n",
+            cfg->icc_switching_mode);
+    fprintf(out, "| `icc_link_bytes_per_cycle` | %u | uint32 | Physical link payload width |\n",
+            cfg->icc_link_bytes_per_cycle);
+    fprintf(out, "| `icc_router_latency_cycles` | %u | uint32 | Per-hop router/link latency |\n\n",
+            cfg->icc_router_latency_cycles);
 
     /* ---- Performance ---- */
     fprintf(out, "## 7. Performance Model\n\n");

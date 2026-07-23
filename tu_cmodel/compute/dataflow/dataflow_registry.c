@@ -23,10 +23,11 @@ void tu_dataflow_register(tu_dataflow_plugin_t *plugin) {
     /* Check for duplicate ID */
     for (int i = 0; i < g_registry_count; i++) {
         if (g_registry[i] && g_registry[i]->id == plugin->id) {
-            /* Replace existing */
-            if (g_registry[i]->impl_data) free(g_registry[i]->impl_data);
-            free(g_registry[i]);
-            g_registry[i] = plugin;
+            /* Registry entries are shared by core snapshots. Keep the stable
+             * address so re-initializing another core cannot invalidate prior
+             * cores; discard the equivalent newly-created instance. */
+            if (plugin->impl_data) free(plugin->impl_data);
+            free(plugin);
             return;
         }
     }

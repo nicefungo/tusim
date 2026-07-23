@@ -76,6 +76,8 @@ typedef struct tu_cluster_t {
 
     /* Interconnect latency model (cycles per hop) */
     uint32_t        hop_latency;
+    int             switching_mode;
+    uint32_t        link_bytes_per_cycle;
 
     /* Statistics */
     tu_cluster_stats_t stats;
@@ -190,6 +192,13 @@ int tu_cluster_spmd_execute(tu_cluster_t *cluster,
  */
 uint32_t tu_cluster_hop_distance(const tu_cluster_t *cluster,
                                   uint32_t src, uint32_t dst);
+
+/* Estimate one point-to-point transfer. Legacy mode preserves the original
+ * hop-only model; cut-through serializes once; store-forward serializes at
+ * every hop. Returns UINT64_MAX for invalid/unreachable routes. */
+uint64_t tu_cluster_estimate_transfer_cycles(const tu_cluster_t *cluster,
+                                              uint32_t src, uint32_t dst,
+                                              uint32_t size_bytes);
 
 /*
  * Get neighbor core IDs for a given core.
