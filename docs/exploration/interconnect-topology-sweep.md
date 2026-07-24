@@ -4,13 +4,16 @@
 **Status:** Complete
 **Type:** Analytical sweep (standalone C, no cmodel dependency)
 
-> **2026-07-23 fidelity correction:** This historical sweep implicitly uses
+> **2026-07-24 fidelity correction:** This historical sweep implicitly uses
 > store-and-forward timing (`full payload serialization × hop count`) and has
 > no shared-link contention, routing, injection, or collective algorithm model.
 > Its 1.5–3.1× MESH figures are therefore not production recommendations and
-> must not be combined with the new cut-through model. See
-> `interconnect-switching-modes.md`. RING and MESH remain plausible alternatives;
-> topology choice is blocked on a finite-contention traffic-matrix exploration.
+> must not be combined with the cut-through model. See
+> `interconnect-switching-modes.md` and the implemented traffic-matrix lower
+> bound in `interconnect-contention-traffic-matrix.md`. That follow-up reverses
+> the topology ordering by workload at 16 cores: MESH is 55.4% lower latency for
+> all-to-all, while RING is 32.7% lower for hotspot fan-in. RING and MESH remain
+> plausible runtime alternatives; queue-accurate recommendation is still blocked.
 
 ## Design Question
 
@@ -111,7 +114,9 @@ speedup = RING_hops / MESH_hops = (2*(N-1)) / (2*(R-1 + C-1))
 
 This is a pure function of topology, not payload.
 
-## Recommendations
+## Historical Recommendations (superseded)
+
+The following checklist is retained only as the original hop-count conclusion. Do **not** use it for hardware selection; `interconnect-contention-traffic-matrix.md` demonstrates workload-dependent reversals.
 
 1. **≤4 cores: Use RING.** Simpler wiring, identical or near-identical performance.
 2. **8 cores: Consider MESH.** 1.75× all-reduce speedup; the 4-neighbor wiring is manageable.

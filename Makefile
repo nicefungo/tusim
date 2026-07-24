@@ -455,6 +455,12 @@ test-interconnect-switching-sweep: tests/test_interconnect_switching_sweep.c
 	cc -O2 -Wall -Wextra -std=c11 -o $@ $<
 	./test-interconnect-switching-sweep
 
+# ---- Sweep: Interconnect Contention (ideal parallel vs shared directed links) ----
+.PHONY: test-interconnect-contention-sweep
+test-interconnect-contention-sweep: tests/test_interconnect_contention_sweep.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
+	./test-interconnect-contention-sweep
+
 # ---- Test: Liveness Allocator (C3) ----
 test-liveness: tests/test_liveness.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
@@ -567,6 +573,6 @@ clean:
 	rm -f test-dataflow test-elementwise test-bf16 test-memhier test-norm test-logging
 	rm -f test-int-quant test-conv test-random
 	rm -f test-rounding test-fp8 test-attention test-perf test-pool test-pipeline
-	rm -f test-agen test-multicore test-multicore-sweep test-compress test-errors test-config test-softmax test-double test-context test-context-switch-sweep test-compress test-weight-compression-sweep test-sparsity test-sparsity-sweep test-scheduler test-scheduler-sweep test-interconnect-topology-sweep test-interconnect-switching-sweep test-liveness test-power test-dpi test-dataflow-sweep test-rounding-sweep test-attention-sweep test-pooling-sweep test-softmax-sweep test-conv-sweep test-norm-sweep test-norm-attention-sweep test-conv-groups-sweep test-conv-pool-cascade test-mma-activation-sweep test-softmax-attention-sweep
+	rm -f test-agen test-multicore test-multicore-sweep test-compress test-errors test-config test-softmax test-double test-context test-context-switch-sweep test-compress test-weight-compression-sweep test-sparsity test-sparsity-sweep test-scheduler test-scheduler-sweep test-interconnect-topology-sweep test-interconnect-switching-sweep test-interconnect-contention-sweep test-liveness test-power test-dpi test-dataflow-sweep test-rounding-sweep test-attention-sweep test-pooling-sweep test-softmax-sweep test-conv-sweep test-norm-sweep test-norm-attention-sweep test-conv-groups-sweep test-conv-pool-cascade test-mma-activation-sweep test-softmax-attention-sweep
 	rm -f /tmp/gpt_block_tu /tmp/gpt_block_tu.c /tmp/test_asm
 	rm -rf build/ci_reports

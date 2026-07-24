@@ -386,7 +386,53 @@ static void test_icc_switching_modes(void) {
     PASS();
 }
 
-/* ---- Test 11: ICC broadcast ---- */
+/* ---- Test 11: Simultaneous shared-link contention ---- */
+static void test_icc_contention_modes(void) {
+    TEST("ICC simultaneous shared-link contention");
+    tu_runtime_config_t cfg = tu_runtime_config_default();
+    cfg.icc_switching_mode = TU_ICC_SWITCH_CUT_THROUGH;
+    cfg.icc_contention_mode = TU_ICC_CONTENTION_SHARED_LINK;
+    cfg.icc_link_bytes_per_cycle = 16;
+    cfg.icc_router_latency_cycles = 5;
+
+    tu_cluster_t *cl = tu_cluster_create(4, TU_TOPOLOGY_MESH, 2, &cfg);
+    CHECK(cl != NULL, "shared-link cluster create failed");
+    tu_icc_message_t same_link[2] = {
+        {.src_core_id = 0, .dst_core_id = 1, .size_bytes = 1024},
+        {.src_core_id = 0, .dst_core_id = 1, .size_bytes = 1024},
+    };
+    tu_icc_traffic_stats_t stats;
+    CHECK(tu_cluster_estimate_traffic_cycles(cl, same_link, 2, &stats) == 0,
+          "shared-link estimate failed");
+    CHECK(stats.isolated_cycles == 69, "wrong isolated latency");
+    CHECK(stats.bottleneck_link_cycles == 128, "wrong bottleneck load");
+    CHECK(stats.estimated_cycles == 133, "same-link traffic must serialize");
+    CHECK(stats.bottleneck_src == 0 && stats.bottleneck_dst == 1,
+          "wrong bottleneck link");
+
+    tu_icc_message_t disjoint[2] = {
+        {.src_core_id = 0, .dst_core_id = 1, .size_bytes = 1024},
+        {.src_core_id = 2, .dst_core_id = 3, .size_bytes = 1024},
+    };
+    CHECK(tu_cluster_estimate_traffic_cycles(cl, disjoint, 2, &stats) == 0,
+          "disjoint estimate failed");
+    CHECK(stats.estimated_cycles == 69, "disjoint directed links should overlap");
+    tu_cluster_destroy(cl);
+
+    cfg.icc_contention_mode = TU_ICC_CONTENTION_IDEAL_PARALLEL;
+    cl = tu_cluster_create(4, TU_TOPOLOGY_MESH, 2, &cfg);
+    CHECK(cl != NULL, "ideal cluster create failed");
+    CHECK(tu_cluster_estimate_traffic_cycles(cl, same_link, 2, &stats) == 0,
+          "ideal estimate failed");
+    CHECK(stats.estimated_cycles == 69, "ideal mode must preserve parallel lower bound");
+    same_link[0].dst_core_id = 99;
+    CHECK(tu_cluster_estimate_traffic_cycles(cl, same_link, 2, &stats) != 0,
+          "invalid route accepted");
+    tu_cluster_destroy(cl);
+    PASS();
+}
+
+/* ---- Test 12: ICC broadcast ---- */
 static void test_icc_broadcast(void) {
     TEST("ICC broadcast");
     tu_runtime_config_t cfg = tu_runtime_config_default();
@@ -531,6 +577,7 @@ int main(void) {
     test_neighbors();
     test_icc_send();
     test_icc_switching_modes();
+    test_icc_contention_modes();
     test_icc_broadcast();
     test_allreduce_sum();
     test_barrier();

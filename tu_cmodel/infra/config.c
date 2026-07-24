@@ -213,6 +213,7 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->num_cores           = 1;
     cfg->interconnect_mode   = 0;
     cfg->icc_switching_mode  = TU_ICC_SWITCH_LEGACY_HOP_ONLY;
+    cfg->icc_contention_mode = TU_ICC_CONTENTION_IDEAL_PARALLEL;
     cfg->icc_link_bytes_per_cycle = TU_ICC_LINK_BYTES_PER_CYCLE;
     cfg->icc_router_latency_cycles = TU_ICC_ROUTER_LATENCY_CYCLES;
 
@@ -252,6 +253,7 @@ tu_runtime_config_t tu_config_to_runtime(const struct tu_config_t *cfg) {
     rt.verify_enabled   = cfg->golden_reference >= 0;
     rt.verify_tolerance = cfg->error_tolerance;
     rt.icc_switching_mode = cfg->icc_switching_mode;
+    rt.icc_contention_mode = cfg->icc_contention_mode;
     rt.icc_link_bytes_per_cycle = cfg->icc_link_bytes_per_cycle;
     rt.icc_router_latency_cycles = cfg->icc_router_latency_cycles;
     return rt;
@@ -413,6 +415,16 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
             else if (strcmp(s, "store_and_forward") == 0) cfg->icc_switching_mode = TU_ICC_SWITCH_STORE_FORWARD;
             else cfg->icc_switching_mode = -1;
         }
+        const tu_json_value_t *cm = tu_json_get(mc, "contention");
+        if (cm && cm->type == TU_JSON_STRING) {
+            const char *s = tu_json_as_string(cm, NULL);
+            if (strcmp(s, "ideal_parallel") == 0)
+                cfg->icc_contention_mode = TU_ICC_CONTENTION_IDEAL_PARALLEL;
+            else if (strcmp(s, "shared_link") == 0)
+                cfg->icc_contention_mode = TU_ICC_CONTENTION_SHARED_LINK;
+            else
+                cfg->icc_contention_mode = -1;
+        }
         if (parse_opt_int64(mc, "link_bytes_per_cycle", &iv))
             cfg->icc_link_bytes_per_cycle = (iv > 0 && iv <= 1048576) ? (uint32_t)iv : 0;
         if (parse_opt_int64(mc, "router_latency_cycles", &iv))
@@ -545,6 +557,13 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
                      "interconnect switching must be legacy_hop_only, cut_through, or store_and_forward");
+        return -1;
+    }
+    if (cfg->icc_contention_mode < TU_ICC_CONTENTION_IDEAL_PARALLEL ||
+        cfg->icc_contention_mode > TU_ICC_CONTENTION_SHARED_LINK) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "interconnect contention must be ideal_parallel or shared_link");
         return -1;
     }
     if (cfg->icc_link_bytes_per_cycle == 0) {
@@ -798,6 +817,8 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             cfg->interconnect_mode);
     fprintf(out, "| `icc_switching_mode` | %d | int | 0=Legacy hop-only, 1=Cut-through, 2=Store-and-forward |\n",
             cfg->icc_switching_mode);
+    fprintf(out, "| `icc_contention_mode` | %d | int | 0=Ideal parallel links, 1=Shared-link lower bound |\n",
+            cfg->icc_contention_mode);
     fprintf(out, "| `icc_link_bytes_per_cycle` | %u | uint32 | Physical link payload width |\n",
             cfg->icc_link_bytes_per_cycle);
     fprintf(out, "| `icc_router_latency_cycles` | %u | uint32 | Per-hop router/link latency |\n\n",

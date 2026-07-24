@@ -15,6 +15,7 @@ test-golden-full
 test-dataflow
 test-dataflow-sweep
 test-interconnect-switching-sweep
+test-interconnect-contention-sweep
 test-rounding-sweep
 test-attention-sweep
 test-pooling-sweep

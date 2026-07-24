@@ -51,6 +51,17 @@ typedef struct {
     uint64_t    latency_cycles;     /* Simulated interconnect latency */
 } tu_icc_message_t;
 
+/* Simultaneous traffic-matrix estimate. shared_link is a deterministic-routing
+ * lower bound: it captures aggregate directed-link serialization but not queue
+ * ordering, finite buffers, virtual channels, or head-of-line blocking. */
+typedef struct {
+    uint64_t isolated_cycles;
+    uint64_t estimated_cycles;
+    uint64_t bottleneck_link_cycles;
+    uint32_t bottleneck_src;
+    uint32_t bottleneck_dst;
+} tu_icc_traffic_stats_t;
+
 /* ---- Cluster statistics ---- */
 typedef struct {
     uint64_t    total_icc_messages;
@@ -77,6 +88,7 @@ typedef struct tu_cluster_t {
     /* Interconnect latency model (cycles per hop) */
     uint32_t        hop_latency;
     int             switching_mode;
+    int             contention_mode;
     uint32_t        link_bytes_per_cycle;
 
     /* Statistics */
@@ -199,6 +211,13 @@ uint32_t tu_cluster_hop_distance(const tu_cluster_t *cluster,
 uint64_t tu_cluster_estimate_transfer_cycles(const tu_cluster_t *cluster,
                                               uint32_t src, uint32_t dst,
                                               uint32_t size_bytes);
+
+/* Estimate messages injected simultaneously. RING uses shortest-path routing
+ * (clockwise on ties); MESH uses deterministic dimension-order XY. */
+int tu_cluster_estimate_traffic_cycles(const tu_cluster_t *cluster,
+                                       const tu_icc_message_t *messages,
+                                       uint32_t message_count,
+                                       tu_icc_traffic_stats_t *stats);
 
 /*
  * Get neighbor core IDs for a given core.

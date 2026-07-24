@@ -44,6 +44,8 @@ tu_cluster_t *tu_cluster_create(uint32_t num_cores,
                                          TU_ICC_ROUTER_LATENCY_CYCLES;
     cluster->switching_mode = base_config ? base_config->icc_switching_mode :
                                             TU_ICC_SWITCHING_MODE;
+    cluster->contention_mode = base_config ? base_config->icc_contention_mode :
+                                            TU_ICC_CONTENTION_MODE;
     cluster->link_bytes_per_cycle = base_config ? base_config->icc_link_bytes_per_cycle :
                                                   TU_ICC_LINK_BYTES_PER_CYCLE;
 
@@ -168,6 +170,108 @@ uint64_t tu_cluster_estimate_transfer_cycles(const tu_cluster_t *cluster,
     if (cluster->switching_mode == TU_ICC_SWITCH_STORE_FORWARD)
         return (uint64_t)hops * (cluster->hop_latency + serialization);
     return UINT64_MAX;
+}
+
+static void add_link_service(uint64_t *links, uint32_t n,
+                             uint32_t src, uint32_t dst, uint64_t service) {
+    links[(uint64_t)src * n + dst] += service;
+}
+
+static int add_route_service(const tu_cluster_t *cluster, uint32_t src,
+                             uint32_t dst, uint64_t service, uint64_t *links) {
+    uint32_t n = cluster->num_cores;
+    if (cluster->topology == TU_TOPOLOGY_RING) {
+        uint32_t forward = (dst + n - src) % n;
+        uint32_t backward = (src + n - dst) % n;
+        bool clockwise = forward <= backward;
+        uint32_t cur = src;
+        while (cur != dst) {
+            uint32_t next = clockwise ? (cur + 1) % n : (cur + n - 1) % n;
+            add_link_service(links, n, cur, next, service);
+            cur = next;
+        }
+        return 0;
+    }
+    if (cluster->topology == TU_TOPOLOGY_MESH) {
+        uint32_t cols = cluster->mesh_cols;
+        uint32_t cur = src;
+        uint32_t dst_row = dst / cols, dst_col = dst % cols;
+        while (cur % cols != dst_col) {
+            uint32_t next = (cur % cols < dst_col) ? cur + 1 : cur - 1;
+            if (next >= n || next / cols != cur / cols) return -1;
+            add_link_service(links, n, cur, next, service);
+            cur = next;
+        }
+        while (cur / cols != dst_row) {
+            uint32_t next = (cur / cols < dst_row) ? cur + cols : cur - cols;
+            if (next >= n) return -1;
+            add_link_service(links, n, cur, next, service);
+            cur = next;
+        }
+        return 0;
+    }
+    return src == dst ? 0 : -1;
+}
+
+int tu_cluster_estimate_traffic_cycles(const tu_cluster_t *cluster,
+                                       const tu_icc_message_t *messages,
+                                       uint32_t message_count,
+                                       tu_icc_traffic_stats_t *stats) {
+    if (!cluster || !stats || (message_count && !messages)) return -1;
+    memset(stats, 0, sizeof(*stats));
+    stats->bottleneck_src = UINT32_MAX;
+    stats->bottleneck_dst = UINT32_MAX;
+    if (message_count == 0) return 0;
+
+    uint32_t n = cluster->num_cores;
+    uint64_t *links = calloc((uint64_t)n * n, sizeof(*links));
+    if (!links) return -1;
+    uint64_t max_route_cycles = 0;
+
+    for (uint32_t i = 0; i < message_count; ++i) {
+        const tu_icc_message_t *m = &messages[i];
+        uint64_t isolated = tu_cluster_estimate_transfer_cycles(
+            cluster, m->src_core_id, m->dst_core_id, m->size_bytes);
+        if (isolated == UINT64_MAX) { free(links); return -1; }
+        if (isolated > stats->isolated_cycles) stats->isolated_cycles = isolated;
+        uint32_t hops = tu_cluster_hop_distance(cluster, m->src_core_id,
+                                                 m->dst_core_id);
+        uint64_t route = (uint64_t)hops * cluster->hop_latency;
+        if (route > max_route_cycles) max_route_cycles = route;
+        uint64_t service = 0;
+        if (cluster->switching_mode != TU_ICC_SWITCH_LEGACY_HOP_ONLY &&
+            m->size_bytes != 0) {
+            service = ((uint64_t)m->size_bytes + cluster->link_bytes_per_cycle - 1) /
+                      cluster->link_bytes_per_cycle;
+        }
+        if (add_route_service(cluster, m->src_core_id, m->dst_core_id,
+                              service, links) != 0) {
+            free(links);
+            return -1;
+        }
+    }
+
+    for (uint32_t src = 0; src < n; ++src) {
+        for (uint32_t dst = 0; dst < n; ++dst) {
+            uint64_t load = links[(uint64_t)src * n + dst];
+            if (load > stats->bottleneck_link_cycles) {
+                stats->bottleneck_link_cycles = load;
+                stats->bottleneck_src = src;
+                stats->bottleneck_dst = dst;
+            }
+        }
+    }
+    free(links);
+
+    stats->estimated_cycles = stats->isolated_cycles;
+    if (cluster->contention_mode == TU_ICC_CONTENTION_SHARED_LINK) {
+        uint64_t shared_bound = stats->bottleneck_link_cycles + max_route_cycles;
+        if (shared_bound > stats->estimated_cycles)
+            stats->estimated_cycles = shared_bound;
+    } else if (cluster->contention_mode != TU_ICC_CONTENTION_IDEAL_PARALLEL) {
+        return -1;
+    }
+    return 0;
 }
 
 void tu_cluster_neighbors(const tu_cluster_t *cluster,
@@ -411,6 +515,8 @@ void tu_cluster_print_stats(const tu_cluster_t *cluster) {
     printf("  Hop latency:        %u cycles\n", cluster->hop_latency);
     printf("  Switching mode:     %d (0=legacy, 1=cut-through, 2=store-forward)\n",
            cluster->switching_mode);
+    printf("  Contention mode:    %d (0=ideal-parallel, 1=shared-link bound)\n",
+           cluster->contention_mode);
     printf("  Link width:         %u bytes/cycle\n", cluster->link_bytes_per_cycle);
     printf("  ICC messages:       %lu\n",
            (unsigned long)cluster->stats.total_icc_messages);
