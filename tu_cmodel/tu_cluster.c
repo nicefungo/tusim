@@ -46,6 +46,8 @@ tu_cluster_t *tu_cluster_create(uint32_t num_cores,
                                             TU_ICC_SWITCHING_MODE;
     cluster->contention_mode = base_config ? base_config->icc_contention_mode :
                                             TU_ICC_CONTENTION_MODE;
+    cluster->mesh_routing_mode = base_config ? base_config->icc_mesh_routing_mode :
+                                               TU_ICC_MESH_ROUTING_MODE;
     cluster->link_bytes_per_cycle = base_config ? base_config->icc_link_bytes_per_cycle :
                                                   TU_ICC_LINK_BYTES_PER_CYCLE;
 
@@ -196,17 +198,26 @@ static int add_route_service(const tu_cluster_t *cluster, uint32_t src,
         uint32_t cols = cluster->mesh_cols;
         uint32_t cur = src;
         uint32_t dst_row = dst / cols, dst_col = dst % cols;
-        while (cur % cols != dst_col) {
-            uint32_t next = (cur % cols < dst_col) ? cur + 1 : cur - 1;
-            if (next >= n || next / cols != cur / cols) return -1;
-            add_link_service(links, n, cur, next, service);
-            cur = next;
-        }
-        while (cur / cols != dst_row) {
-            uint32_t next = (cur / cols < dst_row) ? cur + cols : cur - cols;
-            if (next >= n) return -1;
-            add_link_service(links, n, cur, next, service);
-            cur = next;
+        bool x_first = cluster->mesh_routing_mode == TU_ICC_MESH_ROUTE_XY;
+        if (!x_first && cluster->mesh_routing_mode != TU_ICC_MESH_ROUTE_YX)
+            return -1;
+        for (int dimension = 0; dimension < 2; ++dimension) {
+            bool route_x = dimension == 0 ? x_first : !x_first;
+            if (route_x) {
+                while (cur % cols != dst_col) {
+                    uint32_t next = (cur % cols < dst_col) ? cur + 1 : cur - 1;
+                    if (next >= n || next / cols != cur / cols) return -1;
+                    add_link_service(links, n, cur, next, service);
+                    cur = next;
+                }
+            } else {
+                while (cur / cols != dst_row) {
+                    uint32_t next = (cur / cols < dst_row) ? cur + cols : cur - cols;
+                    if (next >= n) return -1;
+                    add_link_service(links, n, cur, next, service);
+                    cur = next;
+                }
+            }
         }
         return 0;
     }
@@ -517,6 +528,8 @@ void tu_cluster_print_stats(const tu_cluster_t *cluster) {
            cluster->switching_mode);
     printf("  Contention mode:    %d (0=ideal-parallel, 1=shared-link bound)\n",
            cluster->contention_mode);
+    printf("  Mesh routing:       %s\n",
+           cluster->mesh_routing_mode == TU_ICC_MESH_ROUTE_YX ? "YX" : "XY");
     printf("  Link width:         %u bytes/cycle\n", cluster->link_bytes_per_cycle);
     printf("  ICC messages:       %lu\n",
            (unsigned long)cluster->stats.total_icc_messages);

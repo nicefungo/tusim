@@ -89,6 +89,7 @@ typedef struct tu_cluster_t {
     uint32_t        hop_latency;
     int             switching_mode;
     int             contention_mode;
+    int             mesh_routing_mode;
     uint32_t        link_bytes_per_cycle;
 
     /* Statistics */
@@ -213,7 +214,7 @@ uint64_t tu_cluster_estimate_transfer_cycles(const tu_cluster_t *cluster,
                                               uint32_t size_bytes);
 
 /* Estimate messages injected simultaneously. RING uses shortest-path routing
- * (clockwise on ties); MESH uses deterministic dimension-order XY. */
+ * (clockwise on ties); MESH uses configured deterministic XY or YX routing. */
 int tu_cluster_estimate_traffic_cycles(const tu_cluster_t *cluster,
                                        const tu_icc_message_t *messages,
                                        uint32_t message_count,

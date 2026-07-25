@@ -89,6 +89,7 @@
 | `interconnect_mode` | 0 | int | 0=None, 1=Ring, 2=Mesh |
 | `icc_switching_mode` | 0 | int | 0=Legacy hop-only, 1=Cut-through, 2=Store-and-forward |
 | `icc_contention_mode` | 0 | int | 0=Ideal parallel links, 1=Shared-link lower bound |
+| `icc_mesh_routing_mode` | 0 | int | 0=Deterministic XY, 1=Deterministic YX |
 | `icc_link_bytes_per_cycle` | 16 | uint32 | Physical link payload width |
 | `icc_router_latency_cycles` | 5 | uint32 | Per-hop router/link latency |
 

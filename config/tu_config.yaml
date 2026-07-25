@@ -72,6 +72,11 @@ tu:
     enabled: false
     num_cores: 1
     interconnect: "none"  # none | ring | mesh | crossbar
+    switching: "legacy_hop_only"  # legacy_hop_only | cut_through | store_and_forward
+    contention: "ideal_parallel"  # ideal_parallel | shared_link
+    mesh_routing: "xy"     # xy | yx deterministic dimension order
+    link_bytes_per_cycle: 16
+    router_latency_cycles: 5
     cache_coherence: false
 
   # ---- Performance Model ----

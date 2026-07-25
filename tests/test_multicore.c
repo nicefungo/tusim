@@ -432,7 +432,49 @@ static void test_icc_contention_modes(void) {
     PASS();
 }
 
-/* ---- Test 12: ICC broadcast ---- */
+/* ---- Test 12: Deterministic mesh routing order ---- */
+static void test_icc_mesh_routing_modes(void) {
+    TEST("ICC deterministic mesh routing XY/YX");
+    tu_runtime_config_t cfg = tu_runtime_config_default();
+    cfg.icc_switching_mode = TU_ICC_SWITCH_CUT_THROUGH;
+    cfg.icc_contention_mode = TU_ICC_CONTENTION_SHARED_LINK;
+    cfg.icc_link_bytes_per_cycle = 16;
+    cfg.icc_router_latency_cycles = 5;
+
+    /* Nine messages fan from the non-root top row into the non-root left
+     * column. XY funnels all nine through 1->0; YX spreads them first. */
+    tu_icc_message_t messages[9];
+    uint32_t count = 0;
+    for (uint32_t src_col = 1; src_col < 4; ++src_col)
+        for (uint32_t dst_row = 1; dst_row < 4; ++dst_row)
+            messages[count++] = (tu_icc_message_t){
+                .src_core_id = src_col, .dst_core_id = dst_row * 4,
+                .size_bytes = 1024};
+
+    tu_icc_traffic_stats_t xy, yx;
+    cfg.icc_mesh_routing_mode = TU_ICC_MESH_ROUTE_XY;
+    tu_cluster_t *cl = tu_cluster_create(16, TU_TOPOLOGY_MESH, 4, &cfg);
+    CHECK(cl != NULL, "XY cluster create failed");
+    CHECK(tu_cluster_estimate_traffic_cycles(cl, messages, count, &xy) == 0,
+          "XY estimate failed");
+    tu_cluster_destroy(cl);
+
+    cfg.icc_mesh_routing_mode = TU_ICC_MESH_ROUTE_YX;
+    cl = tu_cluster_create(16, TU_TOPOLOGY_MESH, 4, &cfg);
+    CHECK(cl != NULL, "YX cluster create failed");
+    CHECK(tu_cluster_estimate_traffic_cycles(cl, messages, count, &yx) == 0,
+          "YX estimate failed");
+    CHECK(xy.bottleneck_link_cycles == 576, "XY bottleneck must carry nine messages");
+    CHECK(yx.bottleneck_link_cycles == 192, "YX bottleneck must carry three messages");
+    CHECK(xy.estimated_cycles == 606 && yx.estimated_cycles == 222,
+          "routing order must change asymmetric traffic latency");
+    CHECK(xy.bottleneck_src == 0 && xy.bottleneck_dst == 4,
+          "wrong deterministic XY bottleneck link");
+    tu_cluster_destroy(cl);
+    PASS();
+}
+
+/* ---- Test 13: ICC broadcast ---- */
 static void test_icc_broadcast(void) {
     TEST("ICC broadcast");
     tu_runtime_config_t cfg = tu_runtime_config_default();
@@ -578,6 +620,7 @@ int main(void) {
     test_icc_send();
     test_icc_switching_modes();
     test_icc_contention_modes();
+    test_icc_mesh_routing_modes();
     test_icc_broadcast();
     test_allreduce_sum();
     test_barrier();

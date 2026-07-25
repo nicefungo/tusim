@@ -161,6 +161,9 @@ extern "C" {
 #define TU_ICC_CONTENTION_IDEAL_PARALLEL 0
 #define TU_ICC_CONTENTION_SHARED_LINK    1
 #define TU_ICC_CONTENTION_MODE           TU_ICC_CONTENTION_IDEAL_PARALLEL
+#define TU_ICC_MESH_ROUTE_XY             0
+#define TU_ICC_MESH_ROUTE_YX             1
+#define TU_ICC_MESH_ROUTING_MODE         TU_ICC_MESH_ROUTE_XY
 
 /* ================================================================
  * Performance Model
@@ -244,6 +247,7 @@ typedef struct {
     double   verify_tolerance;
     int      icc_switching_mode;
     int      icc_contention_mode;
+    int      icc_mesh_routing_mode;
     uint32_t icc_link_bytes_per_cycle;
     uint32_t icc_router_latency_cycles;
 } tu_runtime_config_t;
@@ -263,6 +267,7 @@ static inline tu_runtime_config_t tu_runtime_config_default(void) {
         .verify_tolerance  = TU_VERIFY_ERROR_TOLERANCE,
         .icc_switching_mode = TU_ICC_SWITCHING_MODE,
         .icc_contention_mode = TU_ICC_CONTENTION_MODE,
+        .icc_mesh_routing_mode = TU_ICC_MESH_ROUTING_MODE,
         .icc_link_bytes_per_cycle = TU_ICC_LINK_BYTES_PER_CYCLE,
         .icc_router_latency_cycles = TU_ICC_ROUTER_LATENCY_CYCLES,
     };

@@ -16,6 +16,7 @@ test-dataflow
 test-dataflow-sweep
 test-interconnect-switching-sweep
 test-interconnect-contention-sweep
+test-interconnect-routing-sweep
 test-rounding-sweep
 test-attention-sweep
 test-pooling-sweep

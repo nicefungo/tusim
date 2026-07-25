@@ -75,6 +75,7 @@
       "interconnect": "none",
       "switching": "legacy_hop_only",
       "contention": "ideal_parallel",
+      "mesh_routing": "xy",
       "link_bytes_per_cycle": 16,
       "router_latency_cycles": 5,
       "cache_coherence": false

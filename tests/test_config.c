@@ -249,17 +249,19 @@ int main(void) {
         const char *json =
             "{\"tu\":{\"multicore\":{\"enabled\":true,\"num_cores\":8,"
             "\"interconnect\":\"mesh\",\"switching\":\"cut_through\","
-            "\"contention\":\"shared_link\","
+            "\"contention\":\"shared_link\",\"mesh_routing\":\"yx\","
             "\"link_bytes_per_cycle\":32,\"router_latency_cycles\":3}}}";
         tu_config_t cfg;
         CHECK(tu_config_load_string(json, &cfg, NULL, 0) == 0, "ICC config parse");
         CHECK(cfg.icc_switching_mode == TU_ICC_SWITCH_CUT_THROUGH, "switching mode");
         CHECK(cfg.icc_contention_mode == TU_ICC_CONTENTION_SHARED_LINK, "contention mode");
+        CHECK(cfg.icc_mesh_routing_mode == TU_ICC_MESH_ROUTE_YX, "mesh routing mode");
         CHECK(cfg.icc_link_bytes_per_cycle == 32, "link width");
         CHECK(cfg.icc_router_latency_cycles == 3, "router latency");
         tu_runtime_config_t rt = tu_config_to_runtime(&cfg);
         CHECK(rt.icc_switching_mode == TU_ICC_SWITCH_CUT_THROUGH, "runtime switching");
         CHECK(rt.icc_contention_mode == TU_ICC_CONTENTION_SHARED_LINK, "runtime contention");
+        CHECK(rt.icc_mesh_routing_mode == TU_ICC_MESH_ROUTE_YX, "runtime mesh routing");
         CHECK(rt.icc_link_bytes_per_cycle == 32, "runtime link width");
         PASS();
     }
@@ -280,6 +282,10 @@ int main(void) {
             "{\"tu\":{\"multicore\":{\"contention\":\"magic_queue\"}}}",
             &cfg, err, sizeof(err)) != 0, "unsupported contention accepted");
         CHECK(strstr(err, "contention") != NULL, "wrong contention validation error");
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"multicore\":{\"mesh_routing\":\"adaptive_magic\"}}}",
+            &cfg, err, sizeof(err)) != 0, "unsupported mesh routing accepted");
+        CHECK(strstr(err, "mesh_routing") != NULL, "wrong mesh routing validation error");
         PASS();
     }
 

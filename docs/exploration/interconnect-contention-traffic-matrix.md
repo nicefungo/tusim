@@ -89,6 +89,6 @@ This equation is exact for the focused one-link overlap/disjoint-link tests but 
 
 ## Limitations and next questions
 
-`shared_link` is a lower bound, not a finite-queue simulator. It omits injection timestamps, packet headers/flit size, queue depth, arbitration, virtual channels, backpressure, head-of-line blocking, router pipeline occupancy, and deadlock. It also fixes RING tie-breaking and MESH XY routing. Therefore the results support traffic-aware topology comparison but not a final topology or router microarchitecture decision.
+`shared_link` is a lower bound, not a finite-queue simulator. It omits injection timestamps, packet headers/flit size, queue depth, arbitration, virtual channels, backpressure, head-of-line blocking, router pipeline occupancy, and deadlock. RING tie-breaking remains fixed; MESH routing now supports deterministic XY and YX as documented in `interconnect-mesh-routing-order.md`. Therefore the results support traffic-aware topology comparison but not a final topology or router microarchitecture decision.
 
-A future routing-policy comparison (XY/YX, ring tie direction, or adaptive minimal routing) is implementation-worthy only after its arbitration/path-selection contract is specified. A finite FIFO/backpressure model should follow compiler or collective traces so queue depth is explored against realistic burst timing rather than arbitrary simultaneous traffic alone.
+Adaptive minimal routing and ring tie-direction studies remain implementation-worthy only after their arbitration/path-selection contracts are specified. A finite FIFO/backpressure model should follow compiler or collective traces so queue depth is explored against realistic burst timing rather than arbitrary simultaneous traffic alone.
