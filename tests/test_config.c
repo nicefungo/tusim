@@ -12,6 +12,7 @@
  */
 
 #include "tu_cmodel.h"
+#include "compute/dataflow/dataflow_interface.h"
 #include "infra/config.h"
 #include "infra/json_reader.h"
 #include "test_framework.h"
@@ -168,7 +169,8 @@ int main(void) {
             "    \"pe_array\": {"
             "      \"rows\": 32,"
             "      \"cols\": 32,"
-            "      \"dataflow\": \"output_stationary\""
+            "      \"dataflow\": \"output_stationary\","
+            "      \"pipeline_depth\": 4"
             "    }"
             "  },"
             "  \"memory\": {"
@@ -191,6 +193,10 @@ int main(void) {
         CHECK(cfg.pe_rows == 32, "rows");
         CHECK(cfg.pe_cols == 32, "cols");
         CHECK(cfg.dataflow_mode == 1, "dataflow=OS");
+        CHECK(cfg.pe_pipeline_depth == 4, "pipeline depth");
+        tu_runtime_config_t rt = tu_config_to_runtime(&cfg);
+        CHECK(rt.dataflow_mode == 1, "runtime dataflow=OS");
+        CHECK(rt.pe_pipeline_depth == 4, "runtime pipeline depth");
         CHECK(cfg.sram_w_size_kb == 256, "w_size");
         CHECK(cfg.sram_num_banks == 64, "banks");
         CHECK(cfg.sram_bank_width == 8, "bank_width");
@@ -289,6 +295,23 @@ int main(void) {
         PASS();
     }
 
+    TEST("Config: reject unavailable or misspelled dataflow");
+    {
+        tu_config_t cfg;
+        char err[160];
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"compute\":{\"pe_array\":{\"dataflow\":\"wieght_stationary\"}}}}",
+            &cfg, err, sizeof(err)) != 0, "misspelled dataflow accepted");
+        CHECK(strstr(err, "dataflow") != NULL, "wrong dataflow validation error");
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"compute\":{\"pe_array\":{\"dataflow\":\"no_local_reuse\"}}}}",
+            &cfg, err, sizeof(err)) != 0, "unimplemented NLR accepted");
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"compute\":{\"pe_array\":{\"pipeline_depth\":0}}}}",
+            &cfg, err, sizeof(err)) != 0, "zero pipeline depth accepted");
+        PASS();
+    }
+
     TEST("Config: to runtime conversion");
     {
         tu_config_t cfg;
@@ -308,11 +331,18 @@ int main(void) {
         tu_config_t cfg;
         tu_config_default(&cfg);
         cfg.pe_rows = 8; cfg.pe_cols = 8;
+        cfg.pe_pipeline_depth = 4;
+        cfg.dataflow_mode = TU_DATAFLOW_OUTPUT_STATIONARY;
 
         int err = tu_init_from_config(&cfg);
         CHECK(err == 0, "init");
         CHECK(g_tu.rt_cfg.pe_rows == 8, "rt_pe_rows");
         CHECK(g_tu.rt_cfg.pe_cols == 8, "rt_pe_cols");
+        CHECK(g_tu.rt_cfg.pe_pipeline_depth == 4, "rt_pipeline_depth");
+        CHECK(g_tu.rt_cfg.dataflow_mode == TU_DATAFLOW_OUTPUT_STATIONARY,
+              "rt_dataflow_mode");
+        CHECK(strcmp(tu_get_dataflow_name(), "output_stationary") == 0,
+              "active config dataflow");
 
         /* Small MMA: 8×8×8, W=all 1.0, A=all 2.0 → O[m][n] = 8*2 = 16.0 */
         fp16_t w[64], a[64];

@@ -98,7 +98,7 @@ void tu_init_with_config(const tu_runtime_config_t *cfg) {
     tu_dataflow_register(tu_dataflow_ws_create());
     tu_dataflow_register(tu_dataflow_os_create());
     tu_dataflow_register(tu_dataflow_rs_create());
-    tu_set_dataflow(TU_DATAFLOW_MODE);  /* Default from tu_config.h */
+    tu_set_dataflow(cfg->dataflow_mode);
 
     TU_LOG_INFO(TU_COMP_CORE, "Initialized: %u×%u PE, %u KB SRAM, dataflow=%s",
                 cfg->pe_rows, cfg->pe_cols,
@@ -254,7 +254,7 @@ void tu_mma(uint16_t M, uint16_t N, uint16_t K,
 
         uint64_t df_cycles = tu_dataflow_execute_mma(
             g_tu.dataflow, &W_t, &A_t, &O_t,
-            pe_rows, pe_cols, pe_cols, TU_PE_PIPELINE_DEPTH);
+            pe_rows, pe_cols, pe_cols, g_tu.rt_cfg.pe_pipeline_depth);
 
         g_tu.total_mma_tiles += g_tu.dataflow->total_tiles;
         g_tu.total_mma_flops += g_tu.dataflow->total_flops;

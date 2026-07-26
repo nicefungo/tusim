@@ -236,6 +236,8 @@ extern "C" {
 typedef struct {
     uint16_t pe_rows;
     uint16_t pe_cols;
+    uint16_t pe_pipeline_depth;
+    int      dataflow_mode;
     uint32_t sram_w_size;
     uint32_t sram_a_size;
     uint32_t sram_o_size;
@@ -256,6 +258,8 @@ static inline tu_runtime_config_t tu_runtime_config_default(void) {
     return (tu_runtime_config_t){
         .pe_rows           = TU_PE_ROWS,
         .pe_cols           = TU_PE_COLS,
+        .pe_pipeline_depth = TU_PE_PIPELINE_DEPTH,
+        .dataflow_mode     = TU_DATAFLOW_MODE,
         .sram_w_size       = TU_SRAM_W_SIZE,
         .sram_a_size       = TU_SRAM_A_SIZE,
         .sram_o_size       = TU_SRAM_O_SIZE,

@@ -99,12 +99,12 @@ static bool parse_opt_bool(const tu_json_value_t *obj, const char *key, bool *ou
 }
 
 static int parse_dataflow_str(const char *s) {
-    if (!s) return 0;
+    if (!s) return -1;
     if (strcmp(s, "weight_stationary") == 0) return 0;
     if (strcmp(s, "output_stationary") == 0) return 1;
     if (strcmp(s, "row_stationary") == 0) return 2;
-    if (strcmp(s, "no_local_reuse") == 0) return 3;
-    return 0;
+    /* NLR is reserved in the public enum but has no executable plugin. */
+    return -1;
 }
 
 static int parse_dram_type_str(const char *s) {
@@ -244,6 +244,8 @@ tu_runtime_config_t tu_config_to_runtime(const struct tu_config_t *cfg) {
     tu_runtime_config_t rt; memset(&rt, 0, sizeof(rt));
     rt.pe_rows          = cfg->pe_rows;
     rt.pe_cols          = cfg->pe_cols;
+    rt.pe_pipeline_depth = cfg->pe_pipeline_depth;
+    rt.dataflow_mode    = cfg->dataflow_mode;
     rt.sram_w_size      = cfg->sram_w_size_kb * 1024;
     rt.sram_a_size      = cfg->sram_a_size_kb * 1024;
     rt.sram_o_size      = cfg->sram_o_size_kb * 1024;
@@ -291,7 +293,11 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
             const tu_json_value_t *df = tu_json_get(pe, "dataflow");
             if (df && df->type == TU_JSON_STRING)
                 cfg->dataflow_mode = parse_dataflow_str(tu_json_as_string(df, NULL));
-            parse_opt_uint16(pe, "pipeline_depth", &cfg->pe_pipeline_depth, 16);
+            int64_t pipeline_depth;
+            if (parse_opt_int64(pe, "pipeline_depth", &pipeline_depth))
+                cfg->pe_pipeline_depth =
+                    (pipeline_depth >= 1 && pipeline_depth <= 16) ?
+                    (uint16_t)pipeline_depth : 0;
         }
         parse_opt_uint16(c, "mac_units_per_pe", &cfg->mac_units_per_pe, 16);
         const tu_json_value_t *sp = tu_json_get(c, "supported_precisions");
@@ -532,6 +538,19 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
             snprintf(error_buf, error_size, "pe_cols must be [1,1024], got %u", cfg->pe_cols);
         return -1;
     }
+    if (cfg->pe_pipeline_depth < 1 || cfg->pe_pipeline_depth > 16) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "pe pipeline_depth must be [1,16], got %u",
+                     cfg->pe_pipeline_depth);
+        return -1;
+    }
+    if (cfg->dataflow_mode < 0 || cfg->dataflow_mode > 2) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "dataflow must be weight_stationary, output_stationary, or row_stationary");
+        return -1;
+    }
     if (cfg->sram_w_size_kb == 0 || cfg->sram_a_size_kb == 0 || cfg->sram_o_size_kb == 0) {
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size, "SRAM buffers must be > 0 KB");
@@ -711,7 +730,7 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             cfg->pe_pipeline_depth);
     fprintf(out, "| `mac_units_per_pe` | %u | uint16 | MAC units per PE |\n",
             cfg->mac_units_per_pe);
-    fprintf(out, "| `dataflow_mode` | %d | int | 0=WS, 1=OS, 2=RS, 3=NLR |\n",
+    fprintf(out, "| `dataflow_mode` | %d | int | 0=WS, 1=OS, 2=RS (NLR reserved, not executable) |\n",
             cfg->dataflow_mode);
     fprintf(out, "| `dataflow_via_plugin` | %s | bool | Use pluggable dataflow dispatcher |\n\n",
             fmt_bool(cfg->dataflow_via_plugin));

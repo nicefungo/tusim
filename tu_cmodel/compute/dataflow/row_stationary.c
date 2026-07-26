@@ -38,45 +38,11 @@
  */
 
 #include "dataflow_interface.h"
+#include "tu_precision.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-
-/* ---- FP16 ↔ FP32 conversion (local, matching WS/OS patterns) ---- */
-
-static float fp16_to_fp32_rs(uint16_t h) {
-    uint32_t sign     = (h >> 15) & 1;
-    uint32_t exp_raw  = (h >> 10) & 0x1F;
-    uint32_t mantissa = h & 0x3FF;
-
-    if (exp_raw == 0) {
-        /* Zero or subnormal */
-        if (mantissa == 0) return sign ? -0.0f : 0.0f;
-        /* Subnormal: normalize */
-        int shift = __builtin_clz(mantissa) - 21;
-        if (shift < 0) shift = 0;
-        mantissa = (mantissa << shift) & 0x3FF;
-        int exp = 1 - 15 - (10 - shift);
-        uint32_t fp32 = (sign << 31) | ((uint32_t)(exp + 127) << 23) | (mantissa << 13);
-        float v;
-        memcpy(&v, &fp32, sizeof(v));
-        return v;
-    } else if (exp_raw == 0x1F) {
-        /* Infinity or NaN */
-        if (mantissa == 0) return sign ? -INFINITY : INFINITY;
-        uint32_t fp32 = (sign << 31) | (0xFF << 23) | (mantissa << 13);
-        float v;
-        memcpy(&v, &fp32, sizeof(v));
-        return v;
-    } else {
-        /* Normal */
-        uint32_t fp32 = (sign << 31) | ((uint32_t)(exp_raw - 15 + 127) << 23) | (mantissa << 13);
-        float v;
-        memcpy(&v, &fp32, sizeof(v));
-        return v;
-    }
-}
 
 /* ---- Row-Stationary Plugin ---- */
 
@@ -155,9 +121,9 @@ static uint64_t rs_execute_tile(tu_dataflow_plugin_t *plugin,
         for (uint16_t n = 0; n < n_count; n++) {
             float psum = 0.0f;
             for (uint16_t k = 0; k < k_count; k++) {
-                float w_val = fp16_to_fp32_rs(
+                float w_val = tu_fp16_to_fp32(
                     W_fp16[(m_start + m) * W_stride_el + (k_start + k)]);
-                float a_val = fp16_to_fp32_rs(
+                float a_val = tu_fp16_to_fp32(
                     A_fp16[(k_start + k) * A_stride_el + (n_start + n)]);
                 psum += w_val * a_val;
 
@@ -193,28 +159,25 @@ static uint64_t rs_execute_tile(tu_dataflow_plugin_t *plugin,
 }
 
 static uint64_t rs_get_fill_cycles(const tu_dataflow_plugin_t *plugin,
-                                    uint16_t tile_n, uint16_t tile_k) {
-    (void)tile_k;
+                                    uint16_t n_count, uint16_t k_count,
+                                    uint16_t pipeline_depth) {
+    (void)plugin; (void)k_count;
     /*
      * RS fill: similar to WS because A still streams through columns.
      * However, W rows are pre-distributed so fill is slightly less than WS.
      * WS uses pipeline_depth * tile_n; RS uses (pipeline_depth - 1) * tile_n + 1
      * reflecting the fact that W doesn't need to stream into place.
      */
-    uint16_t pd = 2;
-    rs_impl_t *rs = (rs_impl_t *)plugin->impl_data;
-    if (rs && rs->pipeline_depth > 0) pd = rs->pipeline_depth;
-    if (pd <= 1) return 0;
-    return (uint64_t)(pd - 1) * tile_n + 1;
+    if (pipeline_depth <= 1) return 0;
+    return (uint64_t)(pipeline_depth - 1) * n_count + 1;
 }
 
 static uint64_t rs_get_drain_cycles(const tu_dataflow_plugin_t *plugin,
-                                     uint16_t tile_m) {
-    uint16_t pd = 2;
-    rs_impl_t *rs = (rs_impl_t *)plugin->impl_data;
-    if (rs && rs->pipeline_depth > 0) pd = rs->pipeline_depth;
-    if (pd <= 1) return 0;
-    return (uint64_t)(pd - 1) * tile_m;
+                                     uint16_t m_count,
+                                     uint16_t pipeline_depth) {
+    (void)plugin;
+    if (pipeline_depth <= 1) return 0;
+    return (uint64_t)(pipeline_depth - 1) * m_count;
 }
 
 static uint64_t rs_get_compute_cycles(const tu_dataflow_plugin_t *plugin,

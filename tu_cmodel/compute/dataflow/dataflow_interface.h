@@ -119,7 +119,8 @@ struct tu_dataflow_plugin_t {
      * OS: 0 (vector engine has no systolic fill)
      */
     uint64_t (*get_fill_cycles)(const tu_dataflow_plugin_t *plugin,
-                                uint16_t tile_n, uint16_t tile_k);
+                                uint16_t n_count, uint16_t k_count,
+                                uint16_t pipeline_depth);
 
     /*
      * Get pipeline drain cycles (overhead after last MAC until result is complete).
@@ -127,7 +128,8 @@ struct tu_dataflow_plugin_t {
      * OS: 0 or small constant
      */
     uint64_t (*get_drain_cycles)(const tu_dataflow_plugin_t *plugin,
-                                 uint16_t tile_m);
+                                 uint16_t m_count,
+                                 uint16_t pipeline_depth);
 
     /*
      * Get compute cycles for a tile.

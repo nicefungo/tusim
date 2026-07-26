@@ -70,7 +70,8 @@ uint64_t tu_dataflow_execute_mma(tu_dataflow_plugin_t *plugin,
 
                 /* Pipeline fill cycles */
                 if (plugin->get_fill_cycles) {
-                    total_cycles += plugin->get_fill_cycles(plugin, tile_n, tile_k);
+                    total_cycles += plugin->get_fill_cycles(
+                        plugin, n_count, k_count, pipeline_depth);
                 }
 
                 /* Execute the tile through the selected dataflow */
@@ -81,7 +82,8 @@ uint64_t tu_dataflow_execute_mma(tu_dataflow_plugin_t *plugin,
 
                 /* Pipeline drain cycles */
                 if (plugin->get_drain_cycles) {
-                    total_cycles += plugin->get_drain_cycles(plugin, tile_m);
+                    total_cycles += plugin->get_drain_cycles(
+                        plugin, m_count, pipeline_depth);
                 }
             }
         }

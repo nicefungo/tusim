@@ -1,5 +1,10 @@
 # Dataflow Sweep: WS vs OS vs RS for GEMM 128×128×256
 
+> **Superseded for comparative evidence (2026-07-26):** the harness selected
+> process-global state before core swap-in, used a non-failing pairwise check,
+> and evaluated formulas separate from the live per-K-tile dispatcher. See
+> `dataflow-plugin-executable-reaudit.md` for fail-closed executable evidence.
+
 **Date:** 2026-06-10
 **Question:** How does row-stationary (RS) dataflow compare to weight-stationary (WS) and output-stationary (OS) for a medium GEMM workload? What's the cycle cost of fill/drain overhead?
 **Hypothesis:** RS splits the difference between WS and OS — its reduced fill/drain (pd-1 vs pd) gives a partial speedup over WS, but the fundamental requirement to flow data through the array still imposes overhead that OS avoids entirely.

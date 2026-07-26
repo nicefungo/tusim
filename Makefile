@@ -263,7 +263,7 @@ test-norm: tests/test_normalization.c libtucmodel.a
 
 # ---- Test: Dataflow plugins (A4) ----
 test-dataflow: tests/test_dataflow.c libtucmodel.a
-	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< ./libtucmodel.a $(LDFLAGS)
 	./test-dataflow
 
 # ---- Test: Structured Logging (Q2) ----
@@ -363,7 +363,7 @@ test-bench: tests/test_benchmark.c libtucmodel.a
 
 # ---- Test: Dataflow Sweep (exploration harness) ----
 test-dataflow-sweep: tests/test_dataflow_sweep.c libtucmodel.a
-	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< ./libtucmodel.a $(LDFLAGS)
 	./test-dataflow-sweep
 
 # ---- Test: Rounding Mode Sweep (exploration harness) ----

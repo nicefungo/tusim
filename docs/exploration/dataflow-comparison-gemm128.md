@@ -1,5 +1,9 @@
 # Dataflow Comparison: WS vs OS for GEMM 128×128×K
 
+> **Superseded for comparative evidence (2026-07-26):** this analytical study
+> does not match the live per-K-tile dispatcher accounting and predates working
+> config-to-runtime selection. See `dataflow-plugin-executable-reaudit.md`.
+
 **Date:** 2026-06-04
 **Question:** Does output-stationary dataflow reduce cycle count compared to weight-stationary for typical GEMM workloads? At what K does the choice matter?
 **Hypothesis:** OS eliminates systolic fill/drain overhead (2×ceil(N/cols) + 2×ceil(M/rows) cycles), giving an advantage for small-K workloads where fill/drain is a larger fraction of total cycles.
@@ -79,7 +83,7 @@ total_bytes = (M×K + K×N + M×N) × 2   (FP16 W, A, O)
 
 **Do not optimize for dataflow choice at this stage.** For the GEMM-heavy workloads typical of transformer FFN layers and convolutions, both WS and OS dataflows produce nearly identical throughput. The dominant bottleneck is **DMA bandwidth** (5,120 cycles for 160 KB at 32 B/cycle), not dataflow pipeline latency.
 
-**Design implication:** Focus architecture exploration on:
+**Historical design implication (not revalidated by the live dispatcher):** Focus architecture exploration on:
 1. **DMA bandwidth** — bus width, number of channels, double-buffered transfers
 2. **SRAM sizing** — larger buffers reduce DMA transfer count for tiled workloads
 3. **Tiled execution** — pipelining DMA and compute, not dataflow microarchitecture

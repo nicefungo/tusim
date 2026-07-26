@@ -13,7 +13,7 @@
 | `pe_cols` | 16 | uint16 | PE array width (columns) |
 | `pe_pipeline_depth` | 2 | uint16 | Pipeline stages per MAC |
 | `mac_units_per_pe` | 1 | uint16 | MAC units per PE |
-| `dataflow_mode` | 0 | int | 0=WS, 1=OS, 2=RS, 3=NLR |
+| `dataflow_mode` | 0 | int | 0=WS, 1=OS, 2=RS (NLR reserved, not executable) |
 | `dataflow_via_plugin` | `true` | bool | Use pluggable dataflow dispatcher |
 
 ## 2. Precision & Data Types
