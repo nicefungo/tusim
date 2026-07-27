@@ -200,6 +200,69 @@ static void test_core_isolation(void) {
     PASS();
 }
 
+/* ---- Per-core dataflow selection and execution isolation ---- */
+static void test_core_dataflow_isolation(void) {
+    TEST("per-core WS/OS/RS dataflow isolation");
+    tu_runtime_config_t cfg = tu_runtime_config_default();
+    cfg.pe_pipeline_depth = 2;
+    tu_core_t *cores[3] = {
+        tu_core_create_with_id(0, &cfg),
+        tu_core_create_with_id(1, &cfg),
+        tu_core_create_with_id(2, &cfg),
+    };
+    CHECK(cores[0] && cores[1] && cores[2], "core create failed");
+
+    const tu_dataflow_id_t modes[3] = {
+        TU_DATAFLOW_WEIGHT_STATIONARY,
+        TU_DATAFLOW_OUTPUT_STATIONARY,
+        TU_DATAFLOW_ROW_STATIONARY,
+    };
+    for (int i = 0; i < 3; ++i) {
+        CHECK(tu_core_set_dataflow(cores[i], modes[i]) == 0,
+              "valid per-core dataflow rejected");
+        CHECK(tu_core_get_dataflow(cores[i]) == modes[i],
+              "per-core dataflow not retained");
+    }
+    CHECK(strcmp(tu_core_get_dataflow_name(cores[0]), "weight_stationary") == 0,
+          "wrong WS active name");
+    CHECK(strcmp(tu_core_get_dataflow_name(cores[1]), "output_stationary") == 0,
+          "wrong OS active name");
+    CHECK(strcmp(tu_core_get_dataflow_name(cores[2]), "row_stationary") == 0,
+          "wrong RS active name");
+    CHECK(tu_core_set_dataflow(cores[1], TU_DATAFLOW_NO_LOCAL_REUSE) != 0,
+          "unsupported NLR accepted");
+    CHECK(tu_core_get_dataflow(cores[1]) == TU_DATAFLOW_OUTPUT_STATIONARY,
+          "failed setter changed active mode");
+
+    enum { M = 31, N = 19, K = 17 };
+    fp16_t w[M * K], a[K * N];
+    fp32_t out[3][M * N];
+    for (int i = 0; i < M * K; ++i)
+        w[i] = tu_fp32_to_fp16((float)((i % 7) - 3) * 0.25f);
+    for (int i = 0; i < K * N; ++i)
+        a[i] = tu_fp32_to_fp16((float)((i % 5) - 2) * 0.5f);
+
+    const uint64_t expected_cycles[3] = {468, 88, 276};
+    for (int i = 0; i < 3; ++i) {
+        tu_core_dma_load_w(cores[i], w, 0, sizeof(w));
+        tu_core_dma_load_a(cores[i], a, 0, sizeof(a));
+        uint64_t before = cores[i]->state.estimated_cycles;
+        tu_core_mma(cores[i], M, N, K, 0, 0, 0, false);
+        CHECK(cores[i]->state.estimated_cycles - before == expected_cycles[i],
+              "per-core mode did not drive expected live cycle path");
+        CHECK(tu_core_get_dataflow(cores[i]) == modes[i],
+              "MMA changed retained per-core mode");
+        tu_core_dma_store_o(cores[i], out[i], 0, sizeof(out[i]));
+    }
+    CHECK(memcmp(out[0], out[1], sizeof(out[0])) == 0,
+          "WS and OS outputs differ");
+    CHECK(memcmp(out[0], out[2], sizeof(out[0])) == 0,
+          "WS and RS outputs differ");
+
+    for (int i = 0; i < 3; ++i) tu_core_destroy(cores[i]);
+    PASS();
+}
+
 /* ---- Test 5: Cluster creation (ring) ---- */
 static void test_cluster_ring(void) {
     TEST("cluster ring creation");
@@ -613,6 +676,7 @@ int main(void) {
     test_core_dma();
     test_core_mma();
     test_core_isolation();
+    test_core_dataflow_isolation();
     test_cluster_ring();
     test_cluster_mesh();
     test_hop_distance();

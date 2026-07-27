@@ -4,6 +4,7 @@
  */
 
 #include "tu_core.h"
+#include "compute/dataflow/dataflow_registry.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -196,6 +197,30 @@ void tu_core_dma_store_o(tu_core_t *core, void *host_ptr,
 }
 
 /* ---- MMA Convenience ---- */
+
+int tu_core_set_dataflow(tu_core_t *core, tu_dataflow_id_t dataflow_id) {
+    if (!core || !core->initialized) return -1;
+
+    tu_dataflow_plugin_t *plugin = tu_dataflow_lookup(dataflow_id);
+    if (!plugin) return -1;
+
+    core->state.dataflow = plugin;
+    if (plugin->init) plugin->init(plugin);
+    return 0;
+}
+
+tu_dataflow_id_t tu_core_get_dataflow(const tu_core_t *core) {
+    if (!core || !core->initialized || !core->state.dataflow)
+        return TU_DATAFLOW_COUNT;
+    return core->state.dataflow->id;
+}
+
+const char *tu_core_get_dataflow_name(const tu_core_t *core) {
+    if (!core || !core->initialized || !core->state.dataflow ||
+        !core->state.dataflow->name)
+        return "none";
+    return core->state.dataflow->name;
+}
 
 void tu_core_mma(tu_core_t *core,
                  uint16_t M, uint16_t N, uint16_t K,

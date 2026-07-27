@@ -383,10 +383,8 @@ void tu_cmdq_sync_all(void) {
 int tu_set_dataflow(int dataflow_id) {
     tu_dataflow_plugin_t *plugin = tu_dataflow_lookup((tu_dataflow_id_t)dataflow_id);
     if (!plugin) {
-        TU_LOG_WARN(TU_COMP_DF, "dataflow id=%d not registered, falling back to WS",
-                dataflow_id);
-        plugin = tu_dataflow_lookup(TU_DATAFLOW_WEIGHT_STATIONARY);
-        if (!plugin) return -1;
+        TU_LOG_WARN(TU_COMP_DF, "dataflow id=%d not registered", dataflow_id);
+        return -1;
     }
     /* Clean up previous plugin if replaced */
     /* (We don't destroy plugins — they're owned by the registry) */

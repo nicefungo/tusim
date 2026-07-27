@@ -387,6 +387,18 @@ static void test_dataflow_switch(void) {
     PASS;
 }
 
+static void test_unsupported_dataflow_rejected(void) {
+    TEST("unsupported global dataflow rejected without fallback");
+    tu_init();
+    ASSERT(tu_set_dataflow(TU_DATAFLOW_OUTPUT_STATIONARY) == 0,
+           "OS setup failed");
+    ASSERT(tu_set_dataflow(TU_DATAFLOW_NO_LOCAL_REUSE) == -1,
+           "unregistered NLR did not fail");
+    ASSERT(strcmp(tu_get_dataflow_name(), "output_stationary") == 0,
+           "failed selection changed active dataflow");
+    PASS;
+}
+
 /* ---- Test 6: Edge tiles ---- */
 
 static void test_edge_tiles(void) {
@@ -456,6 +468,7 @@ int main(void) {
     test_rs_vs_ws_equivalence();
     test_ws_vs_os_equivalence();
     test_dataflow_switch();
+    test_unsupported_dataflow_rejected();
     test_edge_tiles();
 
     printf("\n=== Results: %d passed, %d failed ===\n\n", tests_passed, tests_failed);

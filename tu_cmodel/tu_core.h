@@ -19,6 +19,7 @@
 
 #include "tu_cmodel.h"
 #include "tu_config.h"
+#include "compute/dataflow/dataflow_interface.h"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -123,6 +124,15 @@ void tu_core_dma_store_o(tu_core_t *core, void *host_ptr,
                           uint32_t tu_offset, uint32_t size_bytes);
 
 /* ---- MMA Convenience (forwarded to core's compute engine) ---- */
+
+/*
+ * Select/query the dataflow retained by this core's state snapshot.
+ * Selection is isolated from g_tu and from other cores. Unsupported IDs are
+ * rejected without changing the active mode.
+ */
+int tu_core_set_dataflow(tu_core_t *core, tu_dataflow_id_t dataflow_id);
+tu_dataflow_id_t tu_core_get_dataflow(const tu_core_t *core);
+const char *tu_core_get_dataflow_name(const tu_core_t *core);
 
 void tu_core_mma(tu_core_t *core,
                  uint16_t M, uint16_t N, uint16_t K,
