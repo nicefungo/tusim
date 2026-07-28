@@ -102,6 +102,8 @@
 | `detailed_stalls` | `false` | bool | Detailed stall breakdown |
 | `trace_enabled` | `false` | bool | VCD execution trace |
 | `trace_max_events` | 65536 | uint32 | Max trace events |
+| `power_tech_node` | 0 | int | 0=Auto, 1=45nm, 2=28nm, 3=16nm, 4=7nm, 5=5nm, 6=3nm |
+| `power_clock_freq_mhz` | 0.0 | double | 0=Auto heuristic; otherwise explicit modeled clock MHz |
 
 ## 8. Sparsity
 

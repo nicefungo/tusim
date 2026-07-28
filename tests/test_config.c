@@ -158,6 +158,8 @@ int main(void) {
         CHECK(cfg.cycle_model == 2, "cycle");
         CHECK(cfg.counters_enabled, "counters");
         CHECK(cfg.dataflow_mode == 0, "dataflow");
+        CHECK(cfg.power_tech_node == 0, "power tech auto default");
+        CHECK(cfg.power_clock_freq_mhz == 0.0, "power clock auto default");
         PASS();
     }
 
@@ -309,6 +311,26 @@ int main(void) {
         CHECK(tu_config_load_string(
             "{\"tu\":{\"compute\":{\"pe_array\":{\"pipeline_depth\":0}}}}",
             &cfg, err, sizeof(err)) != 0, "zero pipeline depth accepted");
+        PASS();
+    }
+
+    TEST("Config: power assumptions parse + validation");
+    {
+        tu_config_t cfg;
+        char err[160];
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"power\":{\"tech_node\":\"16nm\",\"clock_freq_mhz\":750.0}}}",
+            &cfg, err, sizeof(err)) == 0, "power config parse");
+        CHECK(cfg.power_tech_node == 3, "16nm selection");
+        CHECK(cfg.power_clock_freq_mhz == 750.0, "explicit clock");
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"power\":{\"tech_node\":\"12nm\"}}}",
+            &cfg, err, sizeof(err)) != 0, "unsupported node accepted");
+        CHECK(strstr(err, "tech_node") != NULL, "wrong power node error");
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"power\":{\"clock_freq_mhz\":-1}}}",
+            &cfg, err, sizeof(err)) != 0, "negative clock accepted");
+        CHECK(strstr(err, "clock_freq_mhz") != NULL, "wrong power clock error");
         PASS();
     }
 

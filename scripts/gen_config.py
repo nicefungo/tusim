@@ -100,6 +100,7 @@ def generate_header(config, output_path):
     isa = c['isa']
     mc = c['multicore']
     perf = c['performance']
+    power = c['power']
     prec = c['precision']
     sparsity = c['sparsity']
     verify = c['verification']
@@ -264,6 +265,12 @@ def generate_header(config, output_path):
     L(f'#define TU_COUNTERS_ENABLED           {1 if ctr["enabled"] else 0}')
     L(f'#define TU_COUNTERS_DETAILED_STALLS   {1 if ctr["detailed_stalls"] else 0}')
     L(f'#define TU_TRACE_ENABLED              {1 if tr["enabled"] else 0}')
+    L('')
+
+    # Power-model architecture assumptions
+    tech_map = {'auto': 0, '45nm': 1, '28nm': 2, '16nm': 3, '7nm': 4, '5nm': 5, '3nm': 6}
+    L(f'#define TU_POWER_TECH_NODE            {tech_map[power["tech_node"]]}')
+    L(f'#define TU_POWER_CLOCK_FREQ_MHZ       {power["clock_freq_mhz"]}')
     L('')
 
     # Precision

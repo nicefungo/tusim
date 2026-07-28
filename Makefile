@@ -8,7 +8,7 @@ LDFLAGS ?= -lm
 TU_DIR     = tu_cmodel
 COMPILER   = compiler/onnx_to_tu.py
 
-.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline test-agen test-multicore test-multicore-sweep test-multicore-dataflow-sweep test-multicast test-scatter-gather test-trace test-errors test-config test-dataflow test-logging test-rounding test-fp8 test-softmax test-double test-random test-full test-context test-context-switch-sweep test-compress test-weight-compression-sweep test-sparsity test-sparsity-sweep test-scheduler test-liveness test-tf32 test-bench test-power test-debug test-dataflow-sweep test-rounding-sweep test-attention-sweep test-pooling-sweep test-softmax-sweep test-conv-sweep test-norm-sweep test-norm-attention-sweep test-conv-groups-sweep test-conv-pool-cascade test-mma-activation-sweep test-softmax-attention-sweep
+.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline test-agen test-multicore test-multicore-sweep test-multicore-dataflow-sweep test-multicast test-scatter-gather test-trace test-errors test-config test-dataflow test-logging test-rounding test-fp8 test-softmax test-double test-random test-full test-context test-context-switch-sweep test-compress test-weight-compression-sweep test-sparsity test-sparsity-sweep test-scheduler test-liveness test-tf32 test-bench test-power test-power-assumptions-sweep test-debug test-dataflow-sweep test-rounding-sweep test-attention-sweep test-pooling-sweep test-softmax-sweep test-conv-sweep test-norm-sweep test-norm-attention-sweep test-conv-groups-sweep test-conv-pool-cascade test-mma-activation-sweep test-softmax-attention-sweep
 
 all: libtucmodel.a libtucmodel.so
 
@@ -323,8 +323,13 @@ test-agen: tests/test_address_gen.c libtucmodel.a
 
 # ---- Test: Power/Energy Model (E4) ----
 test-power: tests/test_power_model.c libtucmodel.a
-	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< ./libtucmodel.a $(LDFLAGS)
 	./test-power
+
+# ---- Sweep: explicit process-node and clock assumptions ----
+test-power-assumptions-sweep: tests/test_power_assumptions_sweep.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
+	./test-power-assumptions-sweep
 
 # ---- Test: Debug & Observability (I3) ----
 test-debug: tests/test_debug.c libtucmodel.a
@@ -584,6 +589,6 @@ clean:
 	rm -f test-dataflow test-elementwise test-bf16 test-memhier test-norm test-logging
 	rm -f test-int-quant test-conv test-random
 	rm -f test-rounding test-fp8 test-attention test-perf test-pool test-pipeline
-	rm -f test-agen test-multicore test-multicore-sweep test-multicore-dataflow-sweep test-compress test-errors test-config test-softmax test-double test-context test-context-switch-sweep test-compress test-weight-compression-sweep test-sparsity test-sparsity-sweep test-scheduler test-scheduler-sweep test-interconnect-topology-sweep test-interconnect-switching-sweep test-interconnect-contention-sweep test-interconnect-routing-sweep test-liveness test-power test-dpi test-dataflow-sweep test-rounding-sweep test-attention-sweep test-pooling-sweep test-softmax-sweep test-conv-sweep test-norm-sweep test-norm-attention-sweep test-conv-groups-sweep test-conv-pool-cascade test-mma-activation-sweep test-softmax-attention-sweep
+	rm -f test-agen test-multicore test-multicore-sweep test-multicore-dataflow-sweep test-compress test-errors test-config test-softmax test-double test-context test-context-switch-sweep test-compress test-weight-compression-sweep test-sparsity test-sparsity-sweep test-scheduler test-scheduler-sweep test-interconnect-topology-sweep test-interconnect-switching-sweep test-interconnect-contention-sweep test-interconnect-routing-sweep test-liveness test-power test-power-assumptions-sweep test-dpi test-dataflow-sweep test-rounding-sweep test-attention-sweep test-pooling-sweep test-softmax-sweep test-conv-sweep test-norm-sweep test-norm-attention-sweep test-conv-groups-sweep test-conv-pool-cascade test-mma-activation-sweep test-softmax-attention-sweep
 	rm -f /tmp/gpt_block_tu /tmp/gpt_block_tu.c /tmp/test_asm
 	rm -rf build/ci_reports

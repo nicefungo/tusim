@@ -143,6 +143,17 @@ static int parse_conflict_str(const char *s) {
     return 1;
 }
 
+static int parse_power_tech_node_str(const char *s) {
+    if (!s || strcmp(s, "auto") == 0) return 0;
+    if (strcmp(s, "45nm") == 0) return 1;
+    if (strcmp(s, "28nm") == 0) return 2;
+    if (strcmp(s, "16nm") == 0) return 3;
+    if (strcmp(s, "7nm") == 0) return 4;
+    if (strcmp(s, "5nm") == 0) return 5;
+    if (strcmp(s, "3nm") == 0) return 6;
+    return -1;
+}
+
 /* ---- Default configuration ---- */
 
 void tu_config_default(struct tu_config_t *cfg) {
@@ -224,6 +235,10 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->trace_enabled       = false;
     cfg->trace_file[0]       = '\0';
     cfg->trace_max_events    = 65536;
+
+    /* AUTO preserves the historical process/frequency heuristic. */
+    cfg->power_tech_node      = 0;
+    cfg->power_clock_freq_mhz = 0.0;
 
     cfg->sparsity_enabled    = false;
     cfg->sparsity_2of4       = false;
@@ -467,6 +482,15 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
         }
     }
 
+    /* Power-model process and clock are explicit physical assumptions. */
+    const tu_json_value_t *power = tu_json_get(tu, "power");
+    if (power) {
+        const tu_json_value_t *tn = tu_json_get(power, "tech_node");
+        if (tn && tn->type == TU_JSON_STRING)
+            cfg->power_tech_node = parse_power_tech_node_str(tu_json_as_string(tn, NULL));
+        parse_opt_double(power, "clock_freq_mhz", &cfg->power_clock_freq_mhz);
+    }
+
     /* Precision */
     const tu_json_value_t *pr = tu_json_get(tu, "precision");
     if (pr) {
@@ -612,6 +636,18 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
     if (cfg->icc_router_latency_cycles == UINT32_MAX) {
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size, "interconnect router_latency_cycles is out of range");
+        return -1;
+    }
+    if (cfg->power_tech_node < 0 || cfg->power_tech_node > 6) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "power tech_node must be auto, 45nm, 28nm, 16nm, 7nm, 5nm, or 3nm");
+        return -1;
+    }
+    if (!(cfg->power_clock_freq_mhz >= 0.0 && cfg->power_clock_freq_mhz <= 10000.0)) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "power clock_freq_mhz must be 0 (auto) or in (0,10000]");
         return -1;
     }
     if (cfg->compression_type < 0 || cfg->compression_type > 4) {
@@ -876,8 +912,12 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             fmt_bool(cfg->detailed_stalls));
     fprintf(out, "| `trace_enabled` | %s | bool | VCD execution trace |\n",
             fmt_bool(cfg->trace_enabled));
-    fprintf(out, "| `trace_max_events` | %u | uint32 | Max trace events |\n\n",
+    fprintf(out, "| `trace_max_events` | %u | uint32 | Max trace events |\n",
             cfg->trace_max_events);
+    fprintf(out, "| `power_tech_node` | %d | int | 0=Auto, 1=45nm, 2=28nm, 3=16nm, 4=7nm, 5=5nm, 6=3nm |\n",
+            cfg->power_tech_node);
+    fprintf(out, "| `power_clock_freq_mhz` | %.1f | double | 0=Auto heuristic; otherwise explicit modeled clock MHz |\n\n",
+            cfg->power_clock_freq_mhz);
 
     /* ---- Sparsity ---- */
     fprintf(out, "## 8. Sparsity\n\n");

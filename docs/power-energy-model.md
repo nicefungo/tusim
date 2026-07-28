@@ -183,8 +183,10 @@ cfg.pe_cols = 64;
 cfg.counters_enabled = true;
 
 tu_power_model_t pm;
+cfg.power_tech_node = TU_POWER_CONFIG_TECH_16NM;
+cfg.power_clock_freq_mhz = 750.0;             // 0 keeps legacy clock heuristic
 tu_power_model_from_config(&pm, &cfg);
-// → Auto-selects tech node (7nm for medium, 5nm for large arrays)
+// → Explicit process and clock override historical size/BW heuristics
 // → Estimates chip area from PE count + SRAM sizes
 ```
 
@@ -203,7 +205,7 @@ tu_power_model_from_config(&pm, &cfg);
 
 ## Configuration
 
-The power model auto-configures from `tu_config_t`. Technology node selection heuristic:
+The power model accepts explicit `power.tech_node` (`45nm`, `28nm`, `16nm`, `7nm`, `5nm`, `3nm`) and `power.clock_freq_mhz`. `auto`/0 preserves the historical heuristic:
 
 | PE Array Size | Selected Node | Rationale |
 |---------------|---------------|-----------|
@@ -212,7 +214,7 @@ The power model auto-configures from `tu_config_t`. Technology node selection he
 | ≥ 128×128 | 5nm | Datacenter/training |
 | BW > 500 GB/s | 2 GHz clock | High-bandwidth config |
 
-Override explicitly via `tu_power_model_set_tech_node()` after init.
+Prefer the canonical JSON/YAML fields for reproducible studies. `tu_power_model_set_tech_node()` remains available for direct API experiments. Explicit clock selection changes time conversion and leakage duration but does not scale voltage-dependent dynamic energy; it must not be described as a DVFS model. See `exploration/power-process-clock-assumptions.md`.
 
 ## Calibration Sources
 
@@ -259,7 +261,7 @@ Override explicitly via `tu_power_model_set_tech_node()` after init.
 - **P2.9 Integration:** Feed power metrics into comparative benchmarking framework for TOPS/W Pareto analysis
 - **CACTI/Accelergy integration:** Replace hardcoded tables with a live CACTI call for arbitrary SRAM configurations
 - **Thermal modeling:** Extend from energy to temperature (θJA-based junction temperature estimation)
-- **Voltage/frequency scaling:** Model DVFS states with corresponding energy changes
+- **Voltage/frequency scaling:** Explicit clock assumptions now exist, but real DVFS still requires voltage-dependent dynamic/leakage energy, feasible operating points, transition overhead, and thermal/power-delivery constraints
 - **Multi-core power:** Per-core energy accounting with inter-core communication energy
 
 ## References

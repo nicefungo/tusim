@@ -96,7 +96,9 @@
 
     "power": {
       "enabled": false,
-      "model": "none"
+      "model": "none",
+      "tech_node": "auto",
+      "clock_freq_mhz": 0.0
     },
 
     "precision": {

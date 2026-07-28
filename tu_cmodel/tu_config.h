@@ -178,6 +178,10 @@ extern "C" {
 #define TU_COUNTERS_DETAILED_STALLS   0
 #define TU_TRACE_ENABLED              0
 
+/* Power-model architecture assumptions: AUTO preserves legacy heuristics. */
+#define TU_POWER_TECH_NODE            0
+#define TU_POWER_CLOCK_FREQ_MHZ       0.0
+
 /* ================================================================
  * Logging & Trace (Q2)
  * ================================================================ */

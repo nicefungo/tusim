@@ -612,22 +612,25 @@ void tu_power_model_from_config(tu_power_model_t *pm,
                                  const tu_config_t *config) {
     if (!pm || !config) return;
 
-    /* Determine technology node from config */
+    /* Explicit selection is preferred for architecture studies; AUTO
+     * preserves the historical array-size heuristic. */
     tu_tech_node_t node = TU_TECH_NODE_7NM; /* Default */
 
-    if (config->pe_rows <= 16 && config->pe_cols <= 16) {
-        /* Small arrays: default to 7nm for mobile, 5nm for edge */
-        node = TU_TECH_NODE_7NM;
-    } else if (config->pe_rows >= 128 && config->pe_cols >= 128) {
-        /* Large arrays: datacenter-grade at 5nm */
-        node = TU_TECH_NODE_5NM;
+    if (config->power_tech_node > 0 && config->power_tech_node <= TU_TECH_NODE_COUNT) {
+        node = (tu_tech_node_t)(config->power_tech_node - 1);
+    } else {
+        if (config->pe_rows <= 16 && config->pe_cols <= 16) {
+            node = TU_TECH_NODE_7NM;
+        } else if (config->pe_rows >= 128 && config->pe_cols >= 128) {
+            node = TU_TECH_NODE_5NM;
+        }
     }
 
-    /* Use a conservative default clock frequency if not set */
-    double freq = 1000.0; /* 1 GHz default */
-    if (config->dram_bandwidth_gbps > 500.0) {
-        /* High bandwidth config → likely datacenter, higher clock */
-        freq = 2000.0;
+    double freq = config->power_clock_freq_mhz;
+    if (freq == 0.0) {
+        freq = 1000.0;
+        if (config->dram_bandwidth_gbps > 500.0)
+            freq = 2000.0;
     }
 
     tu_power_model_init(pm, node, freq);

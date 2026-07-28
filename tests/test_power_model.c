@@ -488,6 +488,13 @@ static void test_power_config_integration(void) {
     ASSERT_EQ(pm.tech_node, TU_TECH_NODE_5NM, "large→5nm");
     ASSERT_DOUBLE_NEAR(pm.clock_freq_mhz, 2000.0, 1.0, "large freq");
     ASSERT_TRUE(pm.estimated_area_mm2 > 10.0, "large area estimate too small");
+
+    /* Explicit assumptions must override both heuristics. */
+    large_cfg.power_tech_node = TU_POWER_CONFIG_TECH_16NM;
+    large_cfg.power_clock_freq_mhz = 750.0;
+    tu_power_model_from_config(&pm, &large_cfg);
+    ASSERT_EQ(pm.tech_node, TU_TECH_NODE_16NM, "explicit 16nm");
+    ASSERT_DOUBLE_NEAR(pm.clock_freq_mhz, 750.0, 0.01, "explicit clock");
     PASS();
 }
 

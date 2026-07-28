@@ -26,6 +26,18 @@
 extern "C" {
 #endif
 
+/* Canonical power-process selection. Zero is AUTO so legacy zero-initialized
+ * configuration structs retain the historical heuristic. */
+typedef enum {
+    TU_POWER_CONFIG_TECH_AUTO = 0,
+    TU_POWER_CONFIG_TECH_45NM = 1,
+    TU_POWER_CONFIG_TECH_28NM = 2,
+    TU_POWER_CONFIG_TECH_16NM = 3,
+    TU_POWER_CONFIG_TECH_7NM  = 4,
+    TU_POWER_CONFIG_TECH_5NM  = 5,
+    TU_POWER_CONFIG_TECH_3NM  = 6
+} tu_power_config_tech_t;
+
 /* ================================================================
  * Full Configuration Struct
  * ================================================================
@@ -121,6 +133,10 @@ typedef struct tu_config_t {
     bool     trace_enabled;
     char     trace_file[256];
     uint32_t trace_max_events;
+
+    /* ---- Power / Physical Assumptions ---- */
+    int      power_tech_node;       /* tu_power_config_tech_t */
+    double   power_clock_freq_mhz;  /* 0=auto heuristic, otherwise explicit modeled clock */
 
     /* ---- Sparsity ---- */
     bool     sparsity_enabled;
