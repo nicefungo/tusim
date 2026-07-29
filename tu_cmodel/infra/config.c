@@ -154,6 +154,13 @@ static int parse_power_tech_node_str(const char *s) {
     return -1;
 }
 
+static int parse_dram_row_policy_str(const char *s) {
+    if (!s || strcmp(s, "legacy") == 0) return TU_DRAM_CONFIG_ROW_LEGACY;
+    if (strcmp(s, "open_page") == 0) return TU_DRAM_CONFIG_ROW_OPEN_PAGE;
+    if (strcmp(s, "closed_page") == 0) return TU_DRAM_CONFIG_ROW_CLOSED_PAGE;
+    return -1;
+}
+
 /* ---- Default configuration ---- */
 
 void tu_config_default(struct tu_config_t *cfg) {
@@ -196,6 +203,8 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->dram_bandwidth_gbps = 256.0;
     cfg->dram_channels       = 8;
     cfg->dram_model_row_conflicts = false;
+    cfg->dram_row_policy      = TU_DRAM_CONFIG_ROW_LEGACY;
+    cfg->dram_row_miss_penalty_cycles = 10;
     cfg->dram_latency_read   = 50;
     cfg->dram_latency_write  = 50;
 
@@ -362,6 +371,13 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
                 cfg->dram_type = parse_dram_type_str(tu_json_as_string(dt, NULL));
             parse_opt_double(dram, "bandwidth_gbps", &cfg->dram_bandwidth_gbps);
             parse_opt_bool(dram, "model_row_conflicts", &cfg->dram_model_row_conflicts);
+            const tu_json_value_t *rp = tu_json_get(dram, "row_policy");
+            if (rp && rp->type == TU_JSON_STRING)
+                cfg->dram_row_policy = parse_dram_row_policy_str(tu_json_as_string(rp, NULL));
+            int64_t row_penalty;
+            if (parse_opt_int64(dram, "row_miss_penalty_cycles", &row_penalty))
+                cfg->dram_row_miss_penalty_cycles =
+                    (row_penalty >= 0 && row_penalty <= 1000000) ? (uint32_t)row_penalty : UINT32_MAX;
         }
     }
 
@@ -602,6 +618,18 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
             snprintf(error_buf, error_size, "queue_depth must be > 0");
         return -1;
     }
+    if (cfg->dram_row_policy < TU_DRAM_CONFIG_ROW_LEGACY ||
+        cfg->dram_row_policy > TU_DRAM_CONFIG_ROW_CLOSED_PAGE) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DRAM row_policy must be legacy, open_page, or closed_page");
+        return -1;
+    }
+    if (cfg->dram_row_miss_penalty_cycles == UINT32_MAX) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size, "DRAM row_miss_penalty_cycles is out of range");
+        return -1;
+    }
     if (cfg->interconnect_mode < 0 || cfg->interconnect_mode > 2) {
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size, "interconnect mode must be none, ring, or mesh");
@@ -834,6 +862,10 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             cfg->dram_channels);
     fprintf(out, "| `dram_model_row_conflicts` | %s | bool | Model row buffer hit/miss |\n\n",
             fmt_bool(cfg->dram_model_row_conflicts));
+    fprintf(out, "| `dram_row_policy` | %d | int | 0=Legacy, 1=Open-page, 2=Closed-page |\n",
+            cfg->dram_row_policy);
+    fprintf(out, "| `dram_row_miss_penalty_cycles` | %u | uint32 | Added activate/precharge penalty per modeled miss |\n\n",
+            cfg->dram_row_miss_penalty_cycles);
 
     /* ---- DMA ---- */
     fprintf(out, "## 4. DMA Engine\n\n");

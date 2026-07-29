@@ -228,8 +228,13 @@ test-dma: tests/test_dma.c libtucmodel.a
 
 # ---- Test: DRAM model ----
 test-dram: tests/test_dram.c libtucmodel.a
-	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
 	./test-dram
+
+.PHONY: test-dram-row-policy-sweep
+test-dram-row-policy-sweep: tests/test_dram_row_policy_sweep.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
+	./test-dram-row-policy-sweep
 
 # ---- Test: ISA definitions ----
 test-isa: tests/test_isa.c libtucmodel.a
@@ -585,7 +590,7 @@ config-docs: libtucmodel.a
 # ---- Clean ----
 clean:
 	rm -f $(TU_DIR)/*.o $(TU_DIR)/memory/*.o $(TU_DIR)/sparsity/*.o $(TU_DIR)/isa/*.o $(TU_DIR)/compute/*.o $(TU_DIR)/compute/dataflow/*.o $(TU_DIR)/infra/*.o $(TU_DIR)/perf/*.o $(TU_DIR)/bindings/*.o libtucmodel.a libtucmodel.so
-	rm -f test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-golden-full
+	rm -f test-cmodel test-cmdq test-dma test-dram test-dram-row-policy-sweep test-isa test-golden test-golden-full
 	rm -f test-dataflow test-elementwise test-bf16 test-memhier test-norm test-logging
 	rm -f test-int-quant test-conv test-random
 	rm -f test-rounding test-fp8 test-attention test-perf test-pool test-pipeline

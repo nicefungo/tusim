@@ -39,6 +39,8 @@
         "type": "ideal",
         "bandwidth_gbps": 256.0,
         "model_row_conflicts": false,
+        "row_policy": "legacy",
+        "row_miss_penalty_cycles": 10,
         "core_clock_ghz": 1.0
       }
     },

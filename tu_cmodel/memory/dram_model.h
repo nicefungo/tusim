@@ -32,6 +32,8 @@
 extern "C" {
 #endif
 
+struct tu_config_t;
+
 /* ---- DRAM Types ---- */
 typedef enum {
     TU_DRAM_TYPE_IDEAL       = 0,  /* Zero-latency, infinite bandwidth */
@@ -44,6 +46,12 @@ typedef enum {
     TU_DRAM_TYPE_CUSTOM      = 7,  /* User-defined parameters */
     TU_DRAM_TYPE_COUNT
 } tu_dram_type_t;
+
+typedef enum {
+    TU_DRAM_ROW_LEGACY = 0,
+    TU_DRAM_ROW_OPEN_PAGE = 1,
+    TU_DRAM_ROW_CLOSED_PAGE = 2
+} tu_dram_row_policy_mode_t;
 
 /* ---- DRAM Timing Parameters ---- */
 typedef struct {
@@ -72,6 +80,7 @@ typedef struct {
     uint64_t  total_write_cycles;     /* Aggregate write cycles */
     uint64_t  total_stall_cycles;     /* Cycles stalled on bandwidth contention */
     uint64_t  total_row_conflicts;    /* Row buffer misses */
+    uint64_t  total_row_hits;         /* Reuse of an already-open bank row */
 
     /* Derived metrics */
     double    effective_read_bandwidth;   /* Actual achieved read BW in GB/s */
@@ -100,6 +109,9 @@ typedef struct {
     /* Per-channel access tracking (for channel parallelism) */
     uint64_t *channel_available_cycle; /* Per-channel next-available cycle */
     uint32_t  num_channels;
+    tu_dram_row_policy_mode_t row_policy;
+    uint32_t row_miss_penalty_cycles;
+    uint64_t *open_rows;              /* channel×bank rows; UINT64_MAX=none */
 
 } tu_dram_model_t;
 
@@ -111,6 +123,8 @@ tu_dram_model_t *tu_dram_create(tu_dram_type_t type);
 /* Create a custom DRAM model with user-specified parameters. */
 tu_dram_model_t *tu_dram_create_custom(const tu_dram_params_t *params,
                                         const char *name);
+
+tu_dram_model_t *tu_dram_create_from_config(const struct tu_config_t *cfg);
 
 /* Destroy and free a DRAM model. */
 void tu_dram_destroy(tu_dram_model_t *dram);
@@ -176,6 +190,10 @@ void tu_dram_set_core_clock(tu_dram_model_t *dram, double core_clock_ghz);
 
 /* Enable/disable row buffer conflict modeling. */
 void tu_dram_set_row_modeling(tu_dram_model_t *dram, bool enabled);
+
+bool tu_dram_set_row_policy(tu_dram_model_t *dram,
+                            tu_dram_row_policy_mode_t policy,
+                            uint32_t miss_penalty_cycles);
 
 #ifdef __cplusplus
 }

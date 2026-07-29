@@ -7,6 +7,7 @@
  */
 
 #include "tu_cmodel/memory/dram_model.h"
+#include "tu_cmodel/infra/config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -298,6 +299,96 @@ static void test_all_types_valid(void) {
 done:;
 }
 
+static tu_dram_model_t *make_row_test_dram(tu_dram_row_policy_mode_t policy) {
+    tu_dram_params_t p = {
+        .clock_ghz = 1.0, .bandwidth_gbps = 64.0,
+        .read_latency_cycles = 50, .write_latency_cycles = 40,
+        .bus_width_bytes = 8, .burst_length = 64,
+        .channels = 1, .banks_per_channel = 4,
+        .row_buffer_size = 256, .model_row_conflicts = false
+    };
+    tu_dram_model_t *dram = tu_dram_create_custom(&p, "row-test");
+    if (dram) tu_dram_set_row_policy(dram, policy, 20);
+    return dram;
+}
+
+static void test_open_page_row_tracking(void) {
+    TEST("Open-page row hits and misses");
+    tu_dram_model_t *dram = make_row_test_dram(TU_DRAM_ROW_OPEN_PAGE);
+    CHECK(dram != NULL, "create failed");
+    uint64_t cycles, stall;
+    tu_dram_read(dram, 0, 64, &cycles, &stall);
+    CHECK(cycles == 70, "first access must miss");
+    tu_dram_read(dram, 64, 64, &cycles, &stall);
+    CHECK(cycles == 50, "same-row access must hit");
+    tu_dram_write(dram, 4096, 64, &cycles, &stall);
+    CHECK(cycles == 60, "different-row write must miss");
+    CHECK(dram->stats.total_row_conflicts == 2, "wrong miss count");
+    CHECK(dram->stats.total_row_hits == 1, "wrong hit count");
+    tu_dram_destroy(dram);
+    PASS();
+done:;
+}
+
+static void test_closed_page_and_reset(void) {
+    TEST("Closed-page policy and reset");
+    tu_dram_model_t *dram = make_row_test_dram(TU_DRAM_ROW_CLOSED_PAGE);
+    CHECK(dram != NULL, "create failed");
+    uint64_t cycles, stall;
+    tu_dram_read(dram, 0, 64, &cycles, &stall);
+    CHECK(cycles == 70, "closed read miss");
+    tu_dram_read(dram, 64, 64, &cycles, &stall);
+    CHECK(cycles == 70, "closed sequential read must miss");
+    CHECK(dram->stats.total_row_conflicts == 2, "closed miss count");
+    tu_dram_reset(dram);
+    CHECK(dram->stats.total_row_conflicts == 0 && dram->stats.total_row_hits == 0,
+          "reset row stats");
+    tu_dram_destroy(dram);
+    PASS();
+done:;
+}
+
+static void test_legacy_row_compatibility(void) {
+    TEST("Legacy row-conflict compatibility");
+    tu_dram_model_t *dram = make_row_test_dram(TU_DRAM_ROW_LEGACY);
+    CHECK(dram != NULL, "create failed");
+    tu_dram_set_row_modeling(dram, true);
+    uint64_t cycles, stall;
+    tu_dram_read(dram, 0, 64, &cycles, &stall);
+    CHECK(cycles == 70, "legacy read penalty changed");
+    tu_dram_write(dram, 0, 64, &cycles, &stall);
+    CHECK(cycles == 40, "legacy write must remain unpenalized");
+    CHECK(dram->stats.total_row_conflicts == 1, "legacy conflict count");
+    CHECK(dram->stats.total_row_hits == 0, "legacy must not synthesize hits");
+    tu_dram_destroy(dram);
+    PASS();
+done:;
+}
+
+static void test_row_policy_config_path(void) {
+    TEST("Row policy canonical config path");
+    const char *json = "{\"tu\":{\"memory\":{\"dram\":{"
+                       "\"type\":\"ddr5\",\"row_policy\":\"open_page\","
+                       "\"row_miss_penalty_cycles\":23}}}}";
+    tu_config_t cfg;
+    CHECK(tu_config_load_string(json, &cfg, NULL, 0) == 0, "config parse");
+    CHECK(cfg.dram_row_policy == TU_DRAM_CONFIG_ROW_OPEN_PAGE, "policy parse");
+    CHECK(cfg.dram_row_miss_penalty_cycles == 23, "penalty parse");
+    tu_dram_model_t *dram = tu_dram_create_from_config(&cfg);
+    CHECK(dram != NULL, "create from config");
+    CHECK(dram->row_policy == TU_DRAM_ROW_OPEN_PAGE, "policy propagation");
+    CHECK(dram->row_miss_penalty_cycles == 23, "penalty propagation");
+    tu_dram_destroy(dram);
+
+    char err[128];
+    CHECK(tu_config_load_string(
+        "{\"tu\":{\"memory\":{\"dram\":{\"row_policy\":\"magic\"}}}}",
+        &cfg, err, sizeof(err)) != 0, "invalid policy accepted");
+    CHECK(strstr(err, "row_policy") != NULL, "wrong validation error");
+    PASS();
+done:;
+}
+
 /* ---- Main ---- */
 int main(void) {
     printf("\n=== TU DRAM Model Tests ===\n\n");
@@ -314,6 +405,10 @@ int main(void) {
     test_peak_bw_per_cycle();
     test_print_stats();
     test_all_types_valid();
+    test_open_page_row_tracking();
+    test_closed_page_and_reset();
+    test_legacy_row_compatibility();
+    test_row_policy_config_path();
 
     printf("\n=== Results: %d/%d passed ===\n", tests_passed, tests_run);
     return (tests_passed == tests_run) ? 0 : 1;

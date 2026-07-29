@@ -85,6 +85,11 @@ extern "C" {
 #define TU_LATENCY_SRAM_WRITE   1
 #define TU_LATENCY_DRAM_READ    50
 #define TU_LATENCY_DRAM_WRITE   50
+#define TU_DRAM_ROW_POLICY_LEGACY       0
+#define TU_DRAM_ROW_POLICY_OPEN_PAGE    1
+#define TU_DRAM_ROW_POLICY_CLOSED_PAGE  2
+#define TU_DRAM_ROW_POLICY       0
+#define TU_DRAM_ROW_MISS_PENALTY_CYCLES 10
 
 /* ================================================================
  * SRAM Bandwidth Model (M2)

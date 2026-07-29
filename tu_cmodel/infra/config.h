@@ -38,6 +38,13 @@ typedef enum {
     TU_POWER_CONFIG_TECH_3NM  = 6
 } tu_power_config_tech_t;
 
+/* Zero preserves the historical boolean model for legacy callers. */
+typedef enum {
+    TU_DRAM_CONFIG_ROW_LEGACY = 0,
+    TU_DRAM_CONFIG_ROW_OPEN_PAGE = 1,
+    TU_DRAM_CONFIG_ROW_CLOSED_PAGE = 2
+} tu_dram_row_policy_t;
+
 /* ================================================================
  * Full Configuration Struct
  * ================================================================
@@ -90,6 +97,8 @@ typedef struct tu_config_t {
     double   dram_bandwidth_gbps;
     uint32_t dram_channels;
     bool     dram_model_row_conflicts;
+    int      dram_row_policy;       /* legacy=0, open-page=1, closed-page=2 */
+    uint32_t dram_row_miss_penalty_cycles;
     double   dram_latency_read;
     double   dram_latency_write;
 

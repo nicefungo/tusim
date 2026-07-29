@@ -9,6 +9,7 @@ test-cmdq
 test-cmdq-dbg
 test-dma
 test-dram
+test-dram-row-policy-sweep
 test-isa
 test-golden
 test-golden-full

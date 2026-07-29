@@ -194,6 +194,13 @@ def generate_header(config, output_path):
     L(f'#define TU_LATENCY_SRAM_WRITE   {lat["sram_write"]}')
     L(f'#define TU_LATENCY_DRAM_READ    {lat["dram_read"]}')
     L(f'#define TU_LATENCY_DRAM_WRITE   {lat["dram_write"]}')
+    dram = mem['dram']
+    row_policy_map = {'legacy': 0, 'open_page': 1, 'closed_page': 2}
+    L('#define TU_DRAM_ROW_POLICY_LEGACY       0')
+    L('#define TU_DRAM_ROW_POLICY_OPEN_PAGE    1')
+    L('#define TU_DRAM_ROW_POLICY_CLOSED_PAGE  2')
+    L(f'#define TU_DRAM_ROW_POLICY       {row_policy_map[dram["row_policy"]]}')
+    L(f'#define TU_DRAM_ROW_MISS_PENALTY_CYCLES {dram["row_miss_penalty_cycles"]}')
     L('')
 
     # DMA
