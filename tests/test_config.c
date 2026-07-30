@@ -158,6 +158,8 @@ int main(void) {
         CHECK(cfg.cycle_model == 2, "cycle");
         CHECK(cfg.counters_enabled, "counters");
         CHECK(cfg.dataflow_mode == 0, "dataflow");
+        CHECK(cfg.dram_address_mapping == TU_DRAM_CONFIG_ADDR_BURST_INTERLEAVED,
+              "DRAM burst mapping default");
         CHECK(cfg.power_tech_node == 0, "power tech auto default");
         CHECK(cfg.power_clock_freq_mhz == 0.0, "power clock auto default");
         PASS();

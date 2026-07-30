@@ -105,6 +105,7 @@ tu_dram_model_t *tu_dram_create(tu_dram_type_t type) {
     dram->params = dram_presets[type];
     dram->num_channels = dram->params.channels;
     dram->row_policy = TU_DRAM_ROW_LEGACY;
+    dram->address_mapping = TU_DRAM_ADDR_BURST_INTERLEAVED;
     dram->row_miss_penalty_cycles = 10;
 
     /* Allocate per-channel state */
@@ -129,6 +130,7 @@ tu_dram_model_t *tu_dram_create_custom(const tu_dram_params_t *params,
     dram->params = *params;
     dram->num_channels = params->channels;
     dram->row_policy = TU_DRAM_ROW_LEGACY;
+    dram->address_mapping = TU_DRAM_ADDR_BURST_INTERLEAVED;
     dram->row_miss_penalty_cycles = 10;
 
     if (!allocate_runtime_state(dram)) {
@@ -164,6 +166,11 @@ tu_dram_model_t *tu_dram_create_from_config(const struct tu_config_t *cfg) {
     if (!tu_dram_set_row_policy(dram,
             (tu_dram_row_policy_mode_t)cfg->dram_row_policy,
             cfg->dram_row_miss_penalty_cycles)) {
+        tu_dram_destroy(dram);
+        return NULL;
+    }
+    if (!tu_dram_set_address_mapping(dram,
+            (tu_dram_address_mapping_mode_t)cfg->dram_address_mapping)) {
         tu_dram_destroy(dram);
         return NULL;
     }
@@ -213,27 +220,55 @@ static void ensure_bandwidth(tu_dram_model_t *dram) {
     }
 }
 
-/* ---- Internal: pick channel for address (simple round-robin channel interleaving) ---- */
+/* ---- Internal: configurable channel/bank/row address mapping ---- */
 
-static uint32_t addr_to_channel(const tu_dram_model_t *dram, uint64_t addr) {
-    if (dram->num_channels <= 1) return 0;
-    /* Interleave at burst granularity */
-    return (addr / dram->params.burst_length) % dram->num_channels;
-}
-
-static uint64_t explicit_row_penalty(tu_dram_model_t *dram, uint64_t addr) {
-    if (dram->row_policy == TU_DRAM_ROW_LEGACY) return 0;
+bool tu_dram_decode_address(const tu_dram_model_t *dram, uint64_t addr,
+                            uint32_t *channel_out, uint32_t *bank_out,
+                            uint64_t *row_out) {
+    if (!dram || dram->num_channels == 0 ||
+        dram->params.banks_per_channel == 0 ||
+        dram->params.burst_length == 0 ||
+        dram->address_mapping < TU_DRAM_ADDR_BURST_INTERLEAVED ||
+        dram->address_mapping > TU_DRAM_ADDR_ROW_INTERLEAVED) return false;
 
     uint64_t bursts_per_row = dram->params.row_buffer_size /
                               dram->params.burst_length;
     if (bursts_per_row == 0) bursts_per_row = 1;
     uint64_t burst = addr / dram->params.burst_length;
-    uint32_t channel = addr_to_channel(dram, addr);
-    uint64_t channel_burst = burst / dram->num_channels;
-    uint32_t bank = (uint32_t)((channel_burst / bursts_per_row) %
+    uint32_t channel;
+    uint64_t channel_group;
+
+    if (dram->address_mapping == TU_DRAM_ADDR_ROW_INTERLEAVED) {
+        uint64_t row_group = burst / bursts_per_row;
+        channel = (uint32_t)(row_group % dram->num_channels);
+        channel_group = row_group / dram->num_channels;
+    } else {
+        channel = (uint32_t)(burst % dram->num_channels);
+        uint64_t channel_burst = burst / dram->num_channels;
+        channel_group = channel_burst / bursts_per_row;
+    }
+
+    uint32_t bank = (uint32_t)(channel_group %
                                dram->params.banks_per_channel);
-    uint64_t row = channel_burst /
-                   (bursts_per_row * dram->params.banks_per_channel);
+    uint64_t row = channel_group / dram->params.banks_per_channel;
+    if (channel_out) *channel_out = channel;
+    if (bank_out) *bank_out = bank;
+    if (row_out) *row_out = row;
+    return true;
+}
+
+static uint32_t addr_to_channel(const tu_dram_model_t *dram, uint64_t addr) {
+    uint32_t channel = 0;
+    (void)tu_dram_decode_address(dram, addr, &channel, NULL, NULL);
+    return channel;
+}
+
+static uint64_t explicit_row_penalty(tu_dram_model_t *dram, uint64_t addr) {
+    if (dram->row_policy == TU_DRAM_ROW_LEGACY) return 0;
+
+    uint32_t channel = 0, bank = 0;
+    uint64_t row = 0;
+    if (!tu_dram_decode_address(dram, addr, &channel, &bank, &row)) return 0;
 
     if (dram->row_policy == TU_DRAM_ROW_CLOSED_PAGE) {
         dram->stats.total_row_conflicts++;
@@ -481,6 +516,16 @@ bool tu_dram_set_row_policy(tu_dram_model_t *dram,
         policy > TU_DRAM_ROW_CLOSED_PAGE) return false;
     dram->row_policy = policy;
     dram->row_miss_penalty_cycles = miss_penalty_cycles;
+    size_t row_count = (size_t)dram->num_channels * dram->params.banks_per_channel;
+    for (size_t i = 0; i < row_count; ++i) dram->open_rows[i] = UINT64_MAX;
+    return true;
+}
+
+bool tu_dram_set_address_mapping(tu_dram_model_t *dram,
+                                 tu_dram_address_mapping_mode_t mapping) {
+    if (!dram || mapping < TU_DRAM_ADDR_BURST_INTERLEAVED ||
+        mapping > TU_DRAM_ADDR_ROW_INTERLEAVED) return false;
+    dram->address_mapping = mapping;
     size_t row_count = (size_t)dram->num_channels * dram->params.banks_per_channel;
     for (size_t i = 0; i < row_count; ++i) dram->open_rows[i] = UINT64_MAX;
     return true;

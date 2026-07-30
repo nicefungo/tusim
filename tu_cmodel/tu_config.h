@@ -89,6 +89,9 @@ extern "C" {
 #define TU_DRAM_ROW_POLICY_OPEN_PAGE    1
 #define TU_DRAM_ROW_POLICY_CLOSED_PAGE  2
 #define TU_DRAM_ROW_POLICY       0
+#define TU_DRAM_ADDR_MAPPING_BURST_INTERLEAVED 0
+#define TU_DRAM_ADDR_MAPPING_ROW_INTERLEAVED   1
+#define TU_DRAM_ADDR_MAPPING     0
 #define TU_DRAM_ROW_MISS_PENALTY_CYCLES 10
 
 /* ================================================================

@@ -10,6 +10,7 @@ test-cmdq-dbg
 test-dma
 test-dram
 test-dram-row-policy-sweep
+test-dram-address-mapping-sweep
 test-isa
 test-golden
 test-golden-full

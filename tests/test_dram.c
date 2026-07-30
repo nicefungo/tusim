@@ -366,17 +366,22 @@ done:;
 }
 
 static void test_row_policy_config_path(void) {
-    TEST("Row policy canonical config path");
+    TEST("Row policy and address mapping canonical config path");
     const char *json = "{\"tu\":{\"memory\":{\"dram\":{"
                        "\"type\":\"ddr5\",\"row_policy\":\"open_page\","
+                       "\"address_mapping\":\"row_interleaved\","
                        "\"row_miss_penalty_cycles\":23}}}}";
     tu_config_t cfg;
     CHECK(tu_config_load_string(json, &cfg, NULL, 0) == 0, "config parse");
     CHECK(cfg.dram_row_policy == TU_DRAM_CONFIG_ROW_OPEN_PAGE, "policy parse");
+    CHECK(cfg.dram_address_mapping == TU_DRAM_CONFIG_ADDR_ROW_INTERLEAVED,
+          "mapping parse");
     CHECK(cfg.dram_row_miss_penalty_cycles == 23, "penalty parse");
     tu_dram_model_t *dram = tu_dram_create_from_config(&cfg);
     CHECK(dram != NULL, "create from config");
     CHECK(dram->row_policy == TU_DRAM_ROW_OPEN_PAGE, "policy propagation");
+    CHECK(dram->address_mapping == TU_DRAM_ADDR_ROW_INTERLEAVED,
+          "mapping propagation");
     CHECK(dram->row_miss_penalty_cycles == 23, "penalty propagation");
     tu_dram_destroy(dram);
 
@@ -385,6 +390,55 @@ static void test_row_policy_config_path(void) {
         "{\"tu\":{\"memory\":{\"dram\":{\"row_policy\":\"magic\"}}}}",
         &cfg, err, sizeof(err)) != 0, "invalid policy accepted");
     CHECK(strstr(err, "row_policy") != NULL, "wrong validation error");
+    CHECK(tu_config_load_string(
+        "{\"tu\":{\"memory\":{\"dram\":{\"address_mapping\":\"xor_magic\"}}}}",
+        &cfg, err, sizeof(err)) != 0, "invalid mapping accepted");
+    CHECK(strstr(err, "address_mapping") != NULL, "wrong mapping validation error");
+    PASS();
+done:;
+}
+
+static void test_address_mapping_decode(void) {
+    TEST("Burst and row address mapping decode");
+    tu_dram_params_t p = {
+        .clock_ghz = 1.0, .bandwidth_gbps = 64.0,
+        .read_latency_cycles = 50, .write_latency_cycles = 40,
+        .bus_width_bytes = 8, .burst_length = 64,
+        .channels = 4, .banks_per_channel = 4,
+        .row_buffer_size = 256, .model_row_conflicts = false
+    };
+    tu_dram_model_t *dram = tu_dram_create_custom(&p, "mapping-test");
+    CHECK(dram != NULL, "create failed");
+    uint32_t channel = 99, bank = 99;
+    uint64_t row = 99;
+    CHECK(tu_dram_decode_address(dram, 256, &channel, &bank, &row),
+          "burst decode failed");
+    CHECK(channel == 0 && bank == 0 && row == 0, "burst decode mismatch");
+    CHECK(tu_dram_decode_address(dram, 64, &channel, &bank, &row),
+          "burst stripe decode failed");
+    CHECK(channel == 1 && bank == 0 && row == 0, "burst stripe mismatch");
+
+    CHECK(tu_dram_set_row_policy(dram, TU_DRAM_ROW_OPEN_PAGE, 20),
+          "open-page set failed");
+    uint64_t cycles = 0, stall = 0;
+    tu_dram_read(dram, 0, 64, &cycles, &stall);
+    CHECK(cycles == 70, "initial row access must miss");
+    tu_dram_read(dram, 0, 64, &cycles, &stall);
+    CHECK(cycles == 50, "repeated row access must hit");
+
+    CHECK(tu_dram_set_address_mapping(dram, TU_DRAM_ADDR_ROW_INTERLEAVED),
+          "row mapping set failed");
+    CHECK(tu_dram_decode_address(dram, 256, &channel, &bank, &row),
+          "row decode failed");
+    CHECK(channel == 1 && bank == 0 && row == 0, "row decode mismatch");
+    tu_dram_read(dram, 0, 64, &cycles, &stall);
+    CHECK(cycles == 70, "mapping switch did not clear open-row state");
+    CHECK(!tu_dram_set_address_mapping(dram, (tu_dram_address_mapping_mode_t)9),
+          "invalid mapping accepted");
+    dram->address_mapping = (tu_dram_address_mapping_mode_t)9;
+    CHECK(!tu_dram_decode_address(dram, 0, &channel, &bank, &row),
+          "invalid live mapping decoded with fallback");
+    tu_dram_destroy(dram);
     PASS();
 done:;
 }
@@ -409,6 +463,7 @@ int main(void) {
     test_closed_page_and_reset();
     test_legacy_row_compatibility();
     test_row_policy_config_path();
+    test_address_mapping_decode();
 
     printf("\n=== Results: %d/%d passed ===\n", tests_passed, tests_run);
     return (tests_passed == tests_run) ? 0 : 1;

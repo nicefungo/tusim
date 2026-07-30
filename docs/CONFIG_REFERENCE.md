@@ -53,6 +53,10 @@
 | `dram_channels` | 8 | uint32 | DRAM channel count |
 | `dram_model_row_conflicts` | `false` | bool | Model row buffer hit/miss |
 
+| `dram_row_policy` | 0 | int | 0=Legacy, 1=Open-page, 2=Closed-page |
+| `dram_address_mapping` | 0 | int | 0=Burst-interleaved, 1=Row-interleaved |
+| `dram_row_miss_penalty_cycles` | 10 | uint32 | Added activate/precharge penalty per modeled miss |
+
 ## 4. DMA Engine
 
 | Field | Value | Type | Description |

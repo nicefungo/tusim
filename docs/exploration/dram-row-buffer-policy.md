@@ -28,7 +28,7 @@ Canonical JSON/YAML under `tu.memory.dram` now accepts:
 
 Accepted policies are `legacy`, `open_page`, and `closed_page`. The miss penalty is validated in `[0, 1,000,000]` cycles. `tu_dram_create_from_config()` propagates the canonical DRAM type, bandwidth, channels, read/write latency, legacy boolean, row policy, and penalty into the executable model. Generated and checked-in headers expose matching constants.
 
-The explicit model tracks one open row per channel/bank. Address mapping is deterministic burst interleaving across channels, then row-sized column groups across banks. Open-page accesses hit only when the mapped bank retains the requested row. Closed-page accesses are always misses. Reads and writes both participate in explicit row policy; the compatibility mode preserves the old read-only behavior.
+The explicit model tracks one open row per channel/bank. Address mapping is runtime-selectable between burst interleaving across channels and row-buffer-sized interleaving; `burst_interleaved` preserves the historical default. Open-page accesses hit only when the mapped bank retains the requested row. Closed-page accesses are always misses. Reads and writes both participate in explicit row policy; the compatibility mode preserves the old read-only behavior. Address-mapping trade-offs are measured separately in `dram-address-mapping.md`.
 
 ## Sweep
 
@@ -60,7 +60,7 @@ For this exact sequential pattern, open page lowers modeled service cycles by 27
 - **Numerical accuracy:** Unchanged; both policies transfer identical bytes.
 - **Control complexity:** Open page needs row-state tracking and conflict policy. Closed page is simpler and more deterministic. Scheduling, fairness, and adaptive timeout policies are unmodeled.
 - **Verification burden:** Both read and write paths, row hits, conflicts, reset behavior, canonical parse/validation, propagation, and malformed policy rejection are gated. The deterministic mapping is documented and tested, but not calibrated to a specific memory controller.
-- **Compiler/runtime:** Compilers can improve open-page locality through tensor placement, tiling, and request ordering. Closed page reduces dependence on those choices. The cmodel does not yet expose address-mapping selection or compiler trace replay.
+- **Compiler/runtime:** Compilers can improve open-page locality through tensor placement, tiling, request ordering, and the now-explicit address-mapping contract. Mapping alternatives and their stride/channel trade-offs are covered in `dram-address-mapping.md`; compiler trace replay remains absent.
 - **Physical limitations:** tRCD and tRP are collapsed into one configurable penalty. Command buses, tRAS/tRC/tCCD, refresh, bank groups, request queues, reordering, write draining, controller page timeout, and calibrated DRAM timing are absent. Returned service cycles and contention stalls remain separate accounting fields.
 
 ## Verification

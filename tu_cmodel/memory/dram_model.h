@@ -53,6 +53,11 @@ typedef enum {
     TU_DRAM_ROW_CLOSED_PAGE = 2
 } tu_dram_row_policy_mode_t;
 
+typedef enum {
+    TU_DRAM_ADDR_BURST_INTERLEAVED = 0,
+    TU_DRAM_ADDR_ROW_INTERLEAVED = 1
+} tu_dram_address_mapping_mode_t;
+
 /* ---- DRAM Timing Parameters ---- */
 typedef struct {
     double    clock_ghz;          /* DRAM clock frequency in GHz */
@@ -110,6 +115,7 @@ typedef struct {
     uint64_t *channel_available_cycle; /* Per-channel next-available cycle */
     uint32_t  num_channels;
     tu_dram_row_policy_mode_t row_policy;
+    tu_dram_address_mapping_mode_t address_mapping;
     uint32_t row_miss_penalty_cycles;
     uint64_t *open_rows;              /* channel×bank rows; UINT64_MAX=none */
 
@@ -194,6 +200,13 @@ void tu_dram_set_row_modeling(tu_dram_model_t *dram, bool enabled);
 bool tu_dram_set_row_policy(tu_dram_model_t *dram,
                             tu_dram_row_policy_mode_t policy,
                             uint32_t miss_penalty_cycles);
+
+bool tu_dram_set_address_mapping(tu_dram_model_t *dram,
+                                 tu_dram_address_mapping_mode_t mapping);
+
+/* Decode an address according to the active channel/bank/row mapping. */
+bool tu_dram_decode_address(const tu_dram_model_t *dram, uint64_t addr,
+                            uint32_t *channel, uint32_t *bank, uint64_t *row);
 
 #ifdef __cplusplus
 }

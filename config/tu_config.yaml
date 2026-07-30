@@ -52,6 +52,7 @@ tu:
       bandwidth_gbps: 256.0
       model_row_conflicts: false
       row_policy: "legacy"  # legacy | open_page | closed_page
+      address_mapping: "burst_interleaved"  # burst_interleaved | row_interleaved
       row_miss_penalty_cycles: 10
       core_clock_ghz: 1.0
 

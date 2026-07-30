@@ -45,6 +45,12 @@ typedef enum {
     TU_DRAM_CONFIG_ROW_CLOSED_PAGE = 2
 } tu_dram_row_policy_t;
 
+/* Zero preserves the historical burst-granularity channel striping. */
+typedef enum {
+    TU_DRAM_CONFIG_ADDR_BURST_INTERLEAVED = 0,
+    TU_DRAM_CONFIG_ADDR_ROW_INTERLEAVED = 1
+} tu_dram_address_mapping_t;
+
 /* ================================================================
  * Full Configuration Struct
  * ================================================================
@@ -98,6 +104,7 @@ typedef struct tu_config_t {
     uint32_t dram_channels;
     bool     dram_model_row_conflicts;
     int      dram_row_policy;       /* legacy=0, open-page=1, closed-page=2 */
+    int      dram_address_mapping;  /* burst-interleaved=0, row-interleaved=1 */
     uint32_t dram_row_miss_penalty_cycles;
     double   dram_latency_read;
     double   dram_latency_write;
