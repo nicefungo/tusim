@@ -50,9 +50,10 @@ tu:
     dram:
       type: "ideal"       # ideal | hbm2 | hbm2e | hbm3 | ddr4 | ddr5 | lpddr5 | custom
       bandwidth_gbps: 256.0
+      channels: 8          # power of two required by xor_interleaved
       model_row_conflicts: false
       row_policy: "legacy"  # legacy | open_page | closed_page
-      address_mapping: "burst_interleaved"  # burst_interleaved | row_interleaved
+      address_mapping: "burst_interleaved"  # burst_interleaved | row_interleaved | xor_interleaved
       row_miss_penalty_cycles: 10
       core_clock_ghz: 1.0
 

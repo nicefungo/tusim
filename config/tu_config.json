@@ -38,6 +38,7 @@
       "dram": {
         "type": "ideal",
         "bandwidth_gbps": 256.0,
+        "channels": 8,
         "model_row_conflicts": false,
         "row_policy": "legacy",
         "address_mapping": "burst_interleaved",

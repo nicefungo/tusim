@@ -200,9 +200,11 @@ def generate_header(config, output_path):
     L('#define TU_DRAM_ROW_POLICY_OPEN_PAGE    1')
     L('#define TU_DRAM_ROW_POLICY_CLOSED_PAGE  2')
     L(f'#define TU_DRAM_ROW_POLICY       {row_policy_map[dram["row_policy"]]}')
-    address_mapping_map = {'burst_interleaved': 0, 'row_interleaved': 1}
+    address_mapping_map = {'burst_interleaved': 0, 'row_interleaved': 1,
+                           'xor_interleaved': 2}
     L('#define TU_DRAM_ADDR_MAPPING_BURST_INTERLEAVED 0')
     L('#define TU_DRAM_ADDR_MAPPING_ROW_INTERLEAVED   1')
+    L('#define TU_DRAM_ADDR_MAPPING_XOR_INTERLEAVED   2')
     L(f'#define TU_DRAM_ADDR_MAPPING     {address_mapping_map[dram["address_mapping"]]}')
     L(f'#define TU_DRAM_ROW_MISS_PENALTY_CYCLES {dram["row_miss_penalty_cycles"]}')
     L('')

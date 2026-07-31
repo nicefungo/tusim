@@ -369,18 +369,18 @@ static void test_row_policy_config_path(void) {
     TEST("Row policy and address mapping canonical config path");
     const char *json = "{\"tu\":{\"memory\":{\"dram\":{"
                        "\"type\":\"ddr5\",\"row_policy\":\"open_page\","
-                       "\"address_mapping\":\"row_interleaved\","
+                       "\"address_mapping\":\"xor_interleaved\","
                        "\"row_miss_penalty_cycles\":23}}}}";
     tu_config_t cfg;
     CHECK(tu_config_load_string(json, &cfg, NULL, 0) == 0, "config parse");
     CHECK(cfg.dram_row_policy == TU_DRAM_CONFIG_ROW_OPEN_PAGE, "policy parse");
-    CHECK(cfg.dram_address_mapping == TU_DRAM_CONFIG_ADDR_ROW_INTERLEAVED,
+    CHECK(cfg.dram_address_mapping == TU_DRAM_CONFIG_ADDR_XOR_INTERLEAVED,
           "mapping parse");
     CHECK(cfg.dram_row_miss_penalty_cycles == 23, "penalty parse");
     tu_dram_model_t *dram = tu_dram_create_from_config(&cfg);
     CHECK(dram != NULL, "create from config");
     CHECK(dram->row_policy == TU_DRAM_ROW_OPEN_PAGE, "policy propagation");
-    CHECK(dram->address_mapping == TU_DRAM_ADDR_ROW_INTERLEAVED,
+    CHECK(dram->address_mapping == TU_DRAM_ADDR_XOR_INTERLEAVED,
           "mapping propagation");
     CHECK(dram->row_miss_penalty_cycles == 23, "penalty propagation");
     tu_dram_destroy(dram);
@@ -399,7 +399,7 @@ done:;
 }
 
 static void test_address_mapping_decode(void) {
-    TEST("Burst and row address mapping decode");
+    TEST("Burst, row, and XOR address mapping decode");
     tu_dram_params_t p = {
         .clock_ghz = 1.0, .bandwidth_gbps = 64.0,
         .read_latency_cycles = 50, .write_latency_cycles = 40,
@@ -433,12 +433,44 @@ static void test_address_mapping_decode(void) {
     CHECK(channel == 1 && bank == 0 && row == 0, "row decode mismatch");
     tu_dram_read(dram, 0, 64, &cycles, &stall);
     CHECK(cycles == 70, "mapping switch did not clear open-row state");
+
+    CHECK(tu_dram_set_address_mapping(dram, TU_DRAM_ADDR_XOR_INTERLEAVED),
+          "XOR mapping set failed");
+    CHECK(tu_dram_decode_address(dram, 1024, &channel, &bank, &row),
+          "XOR decode failed");
+    CHECK(channel == 1 && bank == 1 && row == 0, "XOR decode mismatch");
     CHECK(!tu_dram_set_address_mapping(dram, (tu_dram_address_mapping_mode_t)9),
           "invalid mapping accepted");
     dram->address_mapping = (tu_dram_address_mapping_mode_t)9;
     CHECK(!tu_dram_decode_address(dram, 0, &channel, &bank, &row),
           "invalid live mapping decoded with fallback");
     tu_dram_destroy(dram);
+    PASS();
+done:;
+}
+
+static void test_xor_mapping_constraints(void) {
+    TEST("XOR mapping power-of-two channel constraint");
+    tu_dram_params_t p = {
+        .clock_ghz = 1.0, .bandwidth_gbps = 64.0,
+        .read_latency_cycles = 50, .write_latency_cycles = 40,
+        .bus_width_bytes = 8, .burst_length = 64,
+        .channels = 3, .banks_per_channel = 4,
+        .row_buffer_size = 256, .model_row_conflicts = false
+    };
+    tu_dram_model_t *dram = tu_dram_create_custom(&p, "xor-invalid");
+    CHECK(dram != NULL, "create failed");
+    CHECK(!tu_dram_set_address_mapping(dram, TU_DRAM_ADDR_XOR_INTERLEAVED),
+          "XOR accepted non-power-of-two channels");
+    tu_dram_destroy(dram);
+
+    tu_config_t cfg;
+    char err[160];
+    CHECK(tu_config_load_string(
+        "{\"tu\":{\"memory\":{\"dram\":{\"channels\":3,"
+        "\"address_mapping\":\"xor_interleaved\"}}}}",
+        &cfg, err, sizeof(err)) != 0, "config accepted unsupported XOR geometry");
+    CHECK(strstr(err, "power-of-two") != NULL, "wrong XOR geometry error");
     PASS();
 done:;
 }
@@ -464,6 +496,7 @@ int main(void) {
     test_legacy_row_compatibility();
     test_row_policy_config_path();
     test_address_mapping_decode();
+    test_xor_mapping_constraints();
 
     printf("\n=== Results: %d/%d passed ===\n", tests_passed, tests_run);
     return (tests_passed == tests_run) ? 0 : 1;

@@ -55,7 +55,8 @@ typedef enum {
 
 typedef enum {
     TU_DRAM_ADDR_BURST_INTERLEAVED = 0,
-    TU_DRAM_ADDR_ROW_INTERLEAVED = 1
+    TU_DRAM_ADDR_ROW_INTERLEAVED = 1,
+    TU_DRAM_ADDR_XOR_INTERLEAVED = 2
 } tu_dram_address_mapping_mode_t;
 
 /* ---- DRAM Timing Parameters ---- */

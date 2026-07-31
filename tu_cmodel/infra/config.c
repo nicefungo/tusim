@@ -166,6 +166,8 @@ static int parse_dram_address_mapping_str(const char *s) {
         return TU_DRAM_CONFIG_ADDR_BURST_INTERLEAVED;
     if (strcmp(s, "row_interleaved") == 0)
         return TU_DRAM_CONFIG_ADDR_ROW_INTERLEAVED;
+    if (strcmp(s, "xor_interleaved") == 0)
+        return TU_DRAM_CONFIG_ADDR_XOR_INTERLEAVED;
     return -1;
 }
 
@@ -379,6 +381,10 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
             if (dt && dt->type == TU_JSON_STRING)
                 cfg->dram_type = parse_dram_type_str(tu_json_as_string(dt, NULL));
             parse_opt_double(dram, "bandwidth_gbps", &cfg->dram_bandwidth_gbps);
+            int64_t dram_channels;
+            if (parse_opt_int64(dram, "channels", &dram_channels))
+                cfg->dram_channels = (dram_channels > 0 && dram_channels <= 1024)
+                    ? (uint32_t)dram_channels : 0;
             parse_opt_bool(dram, "model_row_conflicts", &cfg->dram_model_row_conflicts);
             const tu_json_value_t *rp = tu_json_get(dram, "row_policy");
             if (rp && rp->type == TU_JSON_STRING)
@@ -638,11 +644,24 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
                      "DRAM row_policy must be legacy, open_page, or closed_page");
         return -1;
     }
+    if (cfg->dram_channels == 0 || cfg->dram_channels > 1024) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size, "DRAM channels must be in [1,1024]");
+        return -1;
+    }
     if (cfg->dram_address_mapping < TU_DRAM_CONFIG_ADDR_BURST_INTERLEAVED ||
-        cfg->dram_address_mapping > TU_DRAM_CONFIG_ADDR_ROW_INTERLEAVED) {
+        cfg->dram_address_mapping > TU_DRAM_CONFIG_ADDR_XOR_INTERLEAVED) {
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
-                     "DRAM address_mapping must be burst_interleaved or row_interleaved");
+                     "DRAM address_mapping must be burst_interleaved, row_interleaved, or xor_interleaved");
+        return -1;
+    }
+    if (cfg->dram_address_mapping == TU_DRAM_CONFIG_ADDR_XOR_INTERLEAVED &&
+        (cfg->dram_channels == 0 ||
+         (cfg->dram_channels & (cfg->dram_channels - 1)) != 0)) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DRAM xor_interleaved mapping requires a power-of-two channel count");
         return -1;
     }
     if (cfg->dram_row_miss_penalty_cycles == UINT32_MAX) {
@@ -884,7 +903,7 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             fmt_bool(cfg->dram_model_row_conflicts));
     fprintf(out, "| `dram_row_policy` | %d | int | 0=Legacy, 1=Open-page, 2=Closed-page |\n",
             cfg->dram_row_policy);
-    fprintf(out, "| `dram_address_mapping` | %d | int | 0=Burst-interleaved, 1=Row-interleaved |\n",
+    fprintf(out, "| `dram_address_mapping` | %d | int | 0=Burst-interleaved, 1=Row-interleaved, 2=XOR-interleaved |\n",
             cfg->dram_address_mapping);
     fprintf(out, "| `dram_row_miss_penalty_cycles` | %u | uint32 | Added activate/precharge penalty per modeled miss |\n\n",
             cfg->dram_row_miss_penalty_cycles);

@@ -229,7 +229,7 @@ bool tu_dram_decode_address(const tu_dram_model_t *dram, uint64_t addr,
         dram->params.banks_per_channel == 0 ||
         dram->params.burst_length == 0 ||
         dram->address_mapping < TU_DRAM_ADDR_BURST_INTERLEAVED ||
-        dram->address_mapping > TU_DRAM_ADDR_ROW_INTERLEAVED) return false;
+        dram->address_mapping > TU_DRAM_ADDR_XOR_INTERLEAVED) return false;
 
     uint64_t bursts_per_row = dram->params.row_buffer_size /
                               dram->params.burst_length;
@@ -243,9 +243,16 @@ bool tu_dram_decode_address(const tu_dram_model_t *dram, uint64_t addr,
         channel = (uint32_t)(row_group % dram->num_channels);
         channel_group = row_group / dram->num_channels;
     } else {
-        channel = (uint32_t)(burst % dram->num_channels);
+        uint32_t base_channel = (uint32_t)(burst % dram->num_channels);
         uint64_t channel_burst = burst / dram->num_channels;
         channel_group = channel_burst / bursts_per_row;
+        channel = base_channel;
+        if (dram->address_mapping == TU_DRAM_ADDR_XOR_INTERLEAVED) {
+            if ((dram->num_channels & (dram->num_channels - 1)) != 0)
+                return false;
+            channel = base_channel ^
+                      (uint32_t)(channel_group & (dram->num_channels - 1));
+        }
     }
 
     uint32_t bank = (uint32_t)(channel_group %
@@ -524,7 +531,10 @@ bool tu_dram_set_row_policy(tu_dram_model_t *dram,
 bool tu_dram_set_address_mapping(tu_dram_model_t *dram,
                                  tu_dram_address_mapping_mode_t mapping) {
     if (!dram || mapping < TU_DRAM_ADDR_BURST_INTERLEAVED ||
-        mapping > TU_DRAM_ADDR_ROW_INTERLEAVED) return false;
+        mapping > TU_DRAM_ADDR_XOR_INTERLEAVED) return false;
+    if (mapping == TU_DRAM_ADDR_XOR_INTERLEAVED &&
+        (dram->num_channels == 0 ||
+         (dram->num_channels & (dram->num_channels - 1)) != 0)) return false;
     dram->address_mapping = mapping;
     size_t row_count = (size_t)dram->num_channels * dram->params.banks_per_channel;
     for (size_t i = 0; i < row_count; ++i) dram->open_rows[i] = UINT64_MAX;

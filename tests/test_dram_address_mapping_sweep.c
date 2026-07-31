@@ -1,4 +1,4 @@
-/* Exploration: DRAM burst-interleaved versus row-interleaved mapping. */
+/* Exploration: DRAM burst, row, and XOR-interleaved address mappings. */
 #include <inttypes.h>
 #include <stdio.h>
 
@@ -88,6 +88,8 @@ int main(void) {
                              "burst_interleaved", TU_DRAM_ADDR_BURST_INTERLEAVED);
         failures += run_case(patterns[i].name, patterns[i].pattern,
                              "row_interleaved", TU_DRAM_ADDR_ROW_INTERLEAVED);
+        failures += run_case(patterns[i].name, patterns[i].pattern,
+                             "xor_interleaved", TU_DRAM_ADDR_XOR_INTERLEAVED);
     }
     if (failures) {
         fprintf(stderr, "FAIL: %d invalid rows\n", failures);
