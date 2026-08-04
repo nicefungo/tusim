@@ -207,6 +207,21 @@ def generate_header(config, output_path):
     L('#define TU_DRAM_ADDR_MAPPING_XOR_INTERLEAVED   2')
     L(f'#define TU_DRAM_ADDR_MAPPING     {address_mapping_map[dram["address_mapping"]]}')
     L(f'#define TU_DRAM_ROW_MISS_PENALTY_CYCLES {dram["row_miss_penalty_cycles"]}')
+    refresh_map = {'none': 0, 'all_bank': 1, 'per_bank': 2}
+    refresh_sched_map = {'fixed': 0, 'deferred': 1}
+    refresh = dram['refresh']
+    L('#define TU_DRAM_REFRESH_MODE_NONE      0')
+    L('#define TU_DRAM_REFRESH_MODE_ALL_BANK  1')
+    L('#define TU_DRAM_REFRESH_MODE_PER_BANK  2')
+    L(f'#define TU_DRAM_REFRESH_MODE          {refresh_map[refresh["mode"]]}')
+    L('#define TU_DRAM_REFRESH_SCHED_FIXED    0')
+    L('#define TU_DRAM_REFRESH_SCHED_DEFERRED 1')
+    L(f'#define TU_DRAM_REFRESH_SCHEDULING    {refresh_sched_map[refresh["scheduling"]]}')
+    L(f'#define TU_DRAM_REFRESH_RATE          {refresh["rate"]}')
+    L(f'#define TU_DRAM_TREFI_NS              {refresh["trefi_ns"]}')
+    L(f'#define TU_DRAM_TRFC_NS               {refresh["trfc_ns"]}')
+    L(f'#define TU_DRAM_TRFC_PB_NS            {refresh["trfc_pb_ns"]}')
+    L(f'#define TU_DRAM_REFRESH_MAX_DEFERRAL_NS {refresh["max_deferral_ns"]}')
     L('')
 
     # DMA

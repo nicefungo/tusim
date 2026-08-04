@@ -219,6 +219,92 @@ int main(void) {
         PASS();
     }
 
+    TEST("Config: DRAM refresh defaults");
+    {
+        tu_config_t cfg;
+        tu_config_default(&cfg);
+        CHECK(cfg.dram_refresh_mode == TU_DRAM_CONFIG_REFRESH_NONE,
+              "refresh none default");
+        CHECK(cfg.dram_refresh_scheduling == TU_DRAM_CONFIG_REFRESH_SCHED_FIXED,
+              "fixed scheduling default");
+        CHECK(cfg.dram_refresh_rate == 1, "rate default");
+        CHECK(cfg.dram_trefi_ns == 7800, "trefi default");
+        CHECK(cfg.dram_trfc_ns == 350, "trfc default");
+        CHECK(cfg.dram_trfc_pb_ns == 90, "trfc_pb default");
+        CHECK(cfg.dram_refresh_max_deferral_ns == 7800, "deferral default");
+        PASS();
+    }
+
+    TEST("Config: DRAM refresh parse + validation");
+    {
+        const char *json =
+            "{\"tu\":{\"memory\":{\"dram\":{\"type\":\"ddr5\","
+            "\"refresh\":{\"mode\":\"all_bank\",\"scheduling\":\"deferred\","
+            "\"rate\":2,\"trefi_ns\":3900,\"trfc_ns\":280,"
+            "\"trfc_pb_ns\":70,\"max_deferral_ns\":1950}}}}}";
+        tu_config_t cfg;
+        CHECK(tu_config_load_string(json, &cfg, NULL, 0) == 0, "refresh parse");
+        CHECK(cfg.dram_refresh_mode == TU_DRAM_CONFIG_REFRESH_ALL_BANK, "mode");
+        CHECK(cfg.dram_refresh_scheduling == TU_DRAM_CONFIG_REFRESH_SCHED_DEFERRED,
+              "scheduling");
+        CHECK(cfg.dram_refresh_rate == 2, "rate");
+        CHECK(cfg.dram_trefi_ns == 3900, "trefi");
+        CHECK(cfg.dram_refresh_max_deferral_ns == 1950, "deferral");
+        CHECK(tu_config_validate(&cfg, NULL, 0) == 0, "valid refresh config");
+
+        /* Defaults preserved when the block is absent. */
+        CHECK(tu_config_load_string("{\"tu\":{\"memory\":{\"dram\":{\"type\":\"ddr5\"}}}}",
+                                    &cfg, NULL, 0) == 0, "no-block parse");
+        CHECK(cfg.dram_refresh_mode == TU_DRAM_CONFIG_REFRESH_NONE, "mode absent");
+        CHECK(cfg.dram_refresh_rate == 1, "rate absent");
+        CHECK(cfg.dram_trefi_ns == 7800, "trefi absent");
+        PASS();
+    }
+
+    TEST("Config: DRAM refresh validation failures");
+    {
+        tu_config_t cfg;
+        char err[160];
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"memory\":{\"dram\":{\"refresh\":{\"mode\":\"all_bank\","
+            "\"rate\":3}}}}}",
+            &cfg, err, sizeof(err)) != 0, "rate 3 accepted");
+        CHECK(strstr(err, "refresh rate") != NULL, "wrong rate error");
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"memory\":{\"dram\":{\"refresh\":{\"mode\":\"all_bank\","
+            "\"max_deferral_ns\":99999}}}}}",
+            &cfg, err, sizeof(err)) != 0, "deferral > trefi accepted");
+        CHECK(strstr(err, "max_deferral") != NULL, "wrong deferral error");
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"memory\":{\"dram\":{\"refresh\":{\"mode\":\"staggered\"}}}}}",
+            &cfg, err, sizeof(err)) != 0, "unknown mode accepted");
+        CHECK(strstr(err, "refresh mode") != NULL, "wrong mode error");
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"memory\":{\"dram\":{\"refresh\":{\"scheduling\":\"smart\"}}}}}",
+            &cfg, err, sizeof(err)) != 0, "unknown scheduling accepted");
+        CHECK(strstr(err, "refresh scheduling") != NULL, "wrong scheduling error");
+        PASS();
+    }
+
+    TEST("Config: zero refresh fields keep legacy behavior");
+    {
+        tu_config_t cfg;
+        tu_config_default(&cfg);
+        /* Simulate a legacy caller that never touches refresh fields
+         * (or a memset-zeroed struct where only known fields are set). */
+        cfg.dram_refresh_mode = 0;
+        cfg.dram_refresh_scheduling = 0;
+        cfg.dram_refresh_rate = 0;
+        cfg.dram_trefi_ns = 0;
+        cfg.dram_trfc_ns = 0;
+        cfg.dram_trfc_pb_ns = 0;
+        cfg.dram_refresh_max_deferral_ns = 0;
+        CHECK(tu_config_validate(&cfg, NULL, 0) == 0, "zero refresh fields validate");
+        CHECK(cfg.dram_refresh_mode == TU_DRAM_CONFIG_REFRESH_NONE,
+              "zero mode is the legacy path");
+        PASS();
+    }
+
     TEST("Config: validation pass");
     {
         tu_config_t cfg;

@@ -475,6 +475,300 @@ static void test_xor_mapping_constraints(void) {
 done:;
 }
 
+/* ---- DRAM refresh (JEDEC tREFI/tRFC) ---- */
+
+/* 4-channel / 4-bank / 256 B row custom DRAM for refresh tests.
+ * Burst-interleaved decode: burst=addr/64, ch=burst%4, group=(burst/4)/4,
+ * bank=group%4. Addresses hitting distinct channels avoid contention noise. */
+static tu_dram_model_t *make_refresh_dram(void) {
+    tu_dram_params_t p = {
+        .clock_ghz = 1.0, .bandwidth_gbps = 64.0,
+        .read_latency_cycles = 50, .write_latency_cycles = 40,
+        .bus_width_bytes = 8, .burst_length = 64,
+        .channels = 4, .banks_per_channel = 4,
+        .row_buffer_size = 256, .model_row_conflicts = false
+    };
+    return tu_dram_create_custom(&p, "refresh-test");
+}
+
+static void test_refresh_all_bank_fixed(void) {
+    TEST("All-bank fixed refresh lockout");
+    tu_dram_model_t *dram = make_refresh_dram();
+    CHECK(dram != NULL, "create failed");
+    CHECK(tu_dram_set_refresh(dram, TU_DRAM_REFRESH_ALL_BANK,
+                              TU_DRAM_REFRESH_SCHEDULING_FIXED,
+                              1, 5000, 100, 30, 5000), "set refresh");
+    uint64_t cycles = 0, stall = 0;
+
+    /* Prime the bandwidth window (first refill at cycle 1001) so the
+     * coarse BW metering cannot mask refresh accounting. First refresh
+     * is scheduled at tREFI=5000. */
+    for (int i = 0; i < 1001; ++i) tu_dram_tick(dram);  /* T=1001 */
+    tu_dram_read(dram, 0, 64, &cycles, &stall);         /* ch0 */
+    CHECK(cycles == 50 && stall == 0, "pre-refresh access unperturbed");
+    CHECK(dram->stats.total_refresh_events == 0, "no refresh yet");
+
+    for (int i = 0; i < 3999; ++i) tu_dram_tick(dram);  /* T=5000 */
+    tu_dram_read(dram, 64, 64, &cycles, &stall);        /* ch1 */
+    CHECK(cycles == 150 && stall == 0, "access inside tRFC window stalls");
+    CHECK(dram->stats.total_refresh_events == 1, "one refresh fired");
+    CHECK(dram->stats.total_refresh_stall_cycles == 100, "refresh stall count");
+
+    for (int i = 0; i < 100; ++i) tu_dram_tick(dram);   /* T=5100 */
+    tu_dram_read(dram, 128, 64, &cycles, &stall);       /* ch2 */
+    CHECK(cycles == 50 && stall == 0, "access after window unperturbed");
+
+    for (int i = 0; i < 4900; ++i) tu_dram_tick(dram);  /* T=10000 */
+    tu_dram_read(dram, 192, 64, &cycles, &stall);       /* ch3 */
+    CHECK(cycles == 150 && stall == 0, "second refresh window stalls");
+    CHECK(dram->stats.total_refresh_events == 2, "two refreshes fired");
+    CHECK(dram->stats.total_refresh_stall_cycles == 200, "cumulative refresh stalls");
+    CHECK(dram->stats.total_stall_cycles == 0,
+          "refresh lockout kept out of the contention-stall domain");
+    PASS();
+done:;
+    tu_dram_destroy(dram);
+}
+
+static void test_refresh_per_bank_staggered(void) {
+    TEST("Per-bank staggered refresh isolates banks");
+    tu_dram_model_t *dram = make_refresh_dram();
+    CHECK(dram != NULL, "create failed");
+    CHECK(tu_dram_set_refresh(dram, TU_DRAM_REFRESH_PER_BANK,
+                              TU_DRAM_REFRESH_SCHEDULING_FIXED,
+                              1, 4000, 100, 40, 4000), "set refresh");
+    uint64_t cycles = 0, stall = 0;
+
+    /* Staggered schedules: bank b first refreshes at (b+1)*4000/4.
+     * Priming to 1001 also crosses bank0's refresh at 1000. */
+    for (int i = 0; i < 1001; ++i) tu_dram_tick(dram);  /* T=1001 */
+    CHECK(dram->stats.total_refresh_events == 1, "bank0 fired at 1000");
+
+    /* addr 2176: burst 34 → ch2, bank2 — not refreshing → unperturbed. */
+    tu_dram_read(dram, 2176, 64, &cycles, &stall);
+    CHECK(cycles == 50 && stall == 0, "other bank unperturbed during per-bank refresh");
+
+    for (int i = 0; i < 999; ++i) tu_dram_tick(dram);   /* T=2000 */
+    CHECK(dram->stats.total_refresh_events == 2, "bank1 fired at 2000");
+
+    /* addr 1024: burst 16 → ch0, bank1 — refreshing → pays tRFCpb remainder. */
+    tu_dram_read(dram, 1024, 64, &cycles, &stall);
+    CHECK(cycles == 90 && stall == 0, "refreshing bank stalls for tRFCpb");
+    CHECK(dram->stats.total_refresh_stall_cycles == 40, "per-bank stall count");
+
+    /* All banks fire exactly once over the first tREFI window. */
+    for (int i = 0; i < 2000; ++i) tu_dram_tick(dram);  /* T=4000 */
+    CHECK(dram->stats.total_refresh_events == 4, "all four banks refreshed once");
+    PASS();
+done:;
+    tu_dram_destroy(dram);
+}
+
+static void test_refresh_deferred_opportunistic(void) {
+    TEST("Deferred refresh fires at access or hard deadline");
+    tu_dram_model_t *dram = make_refresh_dram();
+    CHECK(dram != NULL, "create failed");
+    CHECK(tu_dram_set_refresh(dram, TU_DRAM_REFRESH_ALL_BANK,
+                              TU_DRAM_REFRESH_SCHEDULING_DEFERRED,
+                              1, 5000, 100, 30, 2000), "set refresh");
+    uint64_t cycles = 0, stall = 0;
+
+    for (int i = 0; i < 1001; ++i) tu_dram_tick(dram);  /* T=1001 */
+    tu_dram_read(dram, 0, 64, &cycles, &stall);         /* T=1001, ch0 */
+    CHECK(cycles == 50 && stall == 0, "pre-schedule access unperturbed");
+
+    /* Schedule at 5000, deadline at 7000. Access at 5100 fires it
+     * opportunistically at the access, paying the full tRFC. */
+    for (int i = 0; i < 4099; ++i) tu_dram_tick(dram);  /* T=5100 */
+    tu_dram_read(dram, 64, 64, &cycles, &stall);        /* ch1 */
+    CHECK(cycles == 150 && stall == 0, "opportunistic fire at access");
+    CHECK(dram->stats.total_refresh_events == 1, "opportunistic refresh counted");
+
+    /* Next schedule at 10000, deadline at 12000. No access before the
+     * deadline → tick fires it at the deadline. */
+    for (int i = 0; i < 5000; ++i) tu_dram_tick(dram);  /* T=10100 */
+    CHECK(dram->stats.total_refresh_events == 1, "no fire before deadline");
+    for (int i = 0; i < 1900; ++i) tu_dram_tick(dram);  /* T=12000: deadline passed */
+    CHECK(dram->stats.total_refresh_events == 2, "forced fire at deadline");
+    tu_dram_read(dram, 128, 64, &cycles, &stall);       /* ch2, T=12000 */
+    CHECK(cycles == 150 && stall == 0, "access overlapping forced refresh stalls");
+    CHECK(dram->stats.total_refresh_stall_cycles == 200, "deferred stall total");
+    PASS();
+done:;
+    tu_dram_destroy(dram);
+}
+
+static void test_refresh_rate_multiplier(void) {
+    TEST("Refresh rate multiplier doubles events at 2x");
+    tu_dram_model_t *dram = make_refresh_dram();
+    CHECK(dram != NULL, "create failed");
+
+    CHECK(tu_dram_set_refresh(dram, TU_DRAM_REFRESH_ALL_BANK,
+                              TU_DRAM_REFRESH_SCHEDULING_FIXED,
+                              2, 2000, 50, 30, 2000), "set refresh 2x");
+    for (int i = 0; i < 4000; ++i) tu_dram_tick(dram);
+    CHECK(dram->stats.total_refresh_events == 4, "2x rate fires every 1000 cycles");
+    tu_dram_destroy(dram);
+    dram = NULL;
+
+    dram = make_refresh_dram();
+    CHECK(dram != NULL, "create failed");
+    CHECK(tu_dram_set_refresh(dram, TU_DRAM_REFRESH_ALL_BANK,
+                              TU_DRAM_REFRESH_SCHEDULING_FIXED,
+                              1, 2000, 50, 30, 2000), "set refresh 1x");
+    for (int i = 0; i < 4000; ++i) tu_dram_tick(dram);
+    CHECK(dram->stats.total_refresh_events == 2, "1x rate fires every 2000 cycles");
+    PASS();
+done:;
+    tu_dram_destroy(dram);
+}
+
+static void test_refresh_none_compat(void) {
+    TEST("Refresh NONE preserves legacy behavior");
+    tu_dram_model_t *dram = make_refresh_dram();
+    CHECK(dram != NULL, "create failed");
+    CHECK(tu_dram_set_refresh(dram, TU_DRAM_REFRESH_NONE,
+                              TU_DRAM_REFRESH_SCHEDULING_FIXED,
+                              1, 1000, 100, 30, 1000), "set refresh none");
+    uint64_t cycles = 0, stall = 0;
+    /* Prime the bandwidth window, then a steady single-address stream. */
+    for (int i = 0; i < 1001; ++i) tu_dram_tick(dram);
+    for (int i = 0; i < 40; ++i) {
+        tu_dram_read(dram, 0, 64, &cycles, &stall);
+        if (cycles != 50 || stall != 0) { FAIL("legacy cycles changed"); goto done; }
+        for (int t = 0; t < 60; ++t) tu_dram_tick(dram);
+    }
+    CHECK(dram->stats.total_refresh_events == 0, "no refresh events");
+    CHECK(dram->stats.total_refresh_stall_cycles == 0, "no refresh stalls");
+    PASS();
+done:;
+    tu_dram_destroy(dram);
+}
+
+static void test_refresh_reset(void) {
+    TEST("Reset clears refresh state and counters");
+    tu_dram_model_t *dram = make_refresh_dram();
+    CHECK(dram != NULL, "create failed");
+    CHECK(tu_dram_set_refresh(dram, TU_DRAM_REFRESH_ALL_BANK,
+                              TU_DRAM_REFRESH_SCHEDULING_FIXED,
+                              1, 1000, 100, 30, 1000), "set refresh");
+    for (int i = 0; i < 1000; ++i) tu_dram_tick(dram);
+    CHECK(dram->stats.total_refresh_events == 1, "refresh fired before reset");
+    tu_dram_reset(dram);
+    CHECK(dram->stats.total_refresh_events == 0, "reset clears events");
+    CHECK(dram->current_cycle == 0, "reset rewinds clock");
+    uint64_t cycles = 0, stall = 0;
+    tu_dram_read(dram, 0, 64, &cycles, &stall);
+    CHECK(cycles == 50 && stall == 0, "schedule rebuilt after reset");
+    PASS();
+done:;
+    tu_dram_destroy(dram);
+}
+
+static void test_refresh_rejects(void) {
+    TEST("Refresh setter fails closed on unsupported input");
+    tu_dram_model_t *dram = make_refresh_dram();
+    CHECK(dram != NULL, "create failed");
+    CHECK(!tu_dram_set_refresh(dram, (tu_dram_refresh_mode_t)9,
+                               TU_DRAM_REFRESH_SCHEDULING_FIXED,
+                               1, 1000, 100, 30, 1000), "bad mode accepted");
+    CHECK(!tu_dram_set_refresh(dram, TU_DRAM_REFRESH_ALL_BANK,
+                               (tu_dram_refresh_scheduling_t)5,
+                               1, 1000, 100, 30, 1000), "bad scheduling accepted");
+    CHECK(!tu_dram_set_refresh(dram, TU_DRAM_REFRESH_ALL_BANK,
+                               TU_DRAM_REFRESH_SCHEDULING_FIXED,
+                               3, 1000, 100, 30, 1000), "bad rate accepted");
+    CHECK(!tu_dram_set_refresh(dram, TU_DRAM_REFRESH_ALL_BANK,
+                               TU_DRAM_REFRESH_SCHEDULING_DEFERRED,
+                               1, 1000, 100, 30, 2000),
+          "deferral beyond tREFI accepted");
+    CHECK(dram->refresh_mode == TU_DRAM_REFRESH_NONE, "failed setter must not mutate");
+    PASS();
+done:;
+    tu_dram_destroy(dram);
+}
+
+static void test_refresh_config_path(void) {
+    TEST("Refresh canonical config parse and propagation");
+    tu_dram_model_t *dram = NULL;
+    const char *json = "{\"tu\":{\"memory\":{\"dram\":{\"type\":\"ddr5\","
+                       "\"refresh\":{\"mode\":\"per_bank\",\"scheduling\":\"deferred\","
+                       "\"rate\":2,\"trefi_ns\":3900,\"trfc_ns\":280,"
+                       "\"trfc_pb_ns\":70,\"max_deferral_ns\":1950}}}}}";
+    tu_config_t cfg;
+    CHECK(tu_config_load_string(json, &cfg, NULL, 0) == 0, "config parse");
+    CHECK(cfg.dram_refresh_mode == TU_DRAM_CONFIG_REFRESH_PER_BANK, "mode parse");
+    CHECK(cfg.dram_refresh_scheduling == TU_DRAM_CONFIG_REFRESH_SCHED_DEFERRED,
+          "scheduling parse");
+    CHECK(cfg.dram_refresh_rate == 2, "rate parse");
+    CHECK(cfg.dram_trefi_ns == 3900, "trefi parse");
+    CHECK(cfg.dram_refresh_max_deferral_ns == 1950, "deferral parse");
+
+    dram = tu_dram_create_from_config(&cfg);
+    CHECK(dram != NULL, "create from config");
+    CHECK(dram->refresh_mode == TU_DRAM_REFRESH_PER_BANK, "mode propagation");
+    CHECK(dram->refresh_scheduling == TU_DRAM_REFRESH_SCHEDULING_DEFERRED,
+          "scheduling propagation");
+    CHECK(dram->refresh_rate == 2, "rate propagation");
+    CHECK(dram->refresh_trefi_cycles == 3900, "base trefi propagation");
+    CHECK(dram->refresh_trfc_pb_cycles == 70, "per-bank lockout propagation");
+    CHECK(dram->refresh_max_deferral_cycles == 1950, "deferral propagation");
+    tu_dram_destroy(dram);
+    dram = NULL;
+
+    /* Zero-initialized callers: mode 0 (NONE) and zero timings mean defaults. */
+    tu_config_t zc;
+    memset(&zc, 0, sizeof(zc));
+    zc.dram_type = TU_DRAM_TYPE_DDR5;
+    dram = tu_dram_create_from_config(&zc);
+    CHECK(dram != NULL, "zero-init create");
+    CHECK(dram->refresh_mode == TU_DRAM_REFRESH_NONE, "zero-init legacy mode");
+    CHECK(dram->refresh_rate == 1, "zero rate defaults to 1x");
+    CHECK(dram->refresh_trefi_cycles == 7800, "zero trefi defaults to 7800");
+    tu_dram_destroy(dram);
+    dram = NULL;
+
+    char err[128];
+    CHECK(tu_config_load_string(
+        "{\"tu\":{\"memory\":{\"dram\":{\"refresh\":{\"mode\":\"all_bank\","
+        "\"max_deferral_ns\":99999}}}}}",
+        &cfg, err, sizeof(err)) != 0, "deferral > tREFI accepted by validation");
+    CHECK(strstr(err, "max_deferral") != NULL, "wrong deferral error");
+    CHECK(tu_config_load_string(
+        "{\"tu\":{\"memory\":{\"dram\":{\"refresh\":{\"mode\":\"magic\"}}}}}",
+        &cfg, err, sizeof(err)) != 0, "invalid refresh mode accepted");
+    PASS();
+done:;
+    tu_dram_destroy(dram);
+}
+
+static void test_refresh_closes_rows(void) {
+    TEST("Refresh precharges open row buffers");
+    tu_dram_model_t *dram = make_refresh_dram();
+    CHECK(dram != NULL, "create failed");
+    CHECK(tu_dram_set_row_policy(dram, TU_DRAM_ROW_OPEN_PAGE, 20),
+          "open-page set failed");
+    CHECK(tu_dram_set_refresh(dram, TU_DRAM_REFRESH_ALL_BANK,
+                              TU_DRAM_REFRESH_SCHEDULING_FIXED,
+                              1, 1000, 100, 30, 1000), "set refresh");
+    uint64_t cycles = 0, stall = 0;
+    tu_dram_read(dram, 0, 64, &cycles, &stall);    /* ch0, bank0, row0: miss */
+    CHECK(cycles == 70, "first access misses");
+    for (int i = 0; i < 71; ++i) tu_dram_tick(dram);  /* T=71, clear channel */
+    tu_dram_read(dram, 256, 64, &cycles, &stall);  /* same ch0/bank0/row0: hit */
+    CHECK(cycles == 50, "same-row access hits");
+    CHECK(dram->stats.total_row_hits == 1, "one hit before refresh");
+
+    for (int i = 0; i < 929; ++i) tu_dram_tick(dram);  /* T=1000: refresh closes rows */
+    tu_dram_read(dram, 512, 64, &cycles, &stall);  /* ch0, bank0, row0, during refresh */
+    CHECK(cycles == 170, "refresh lockout plus reopened-row miss");
+    CHECK(dram->stats.total_row_hits == 1, "refresh invalidated the open row");
+    CHECK(dram->stats.total_row_conflicts == 2, "post-refresh access misses");
+    PASS();
+done:;
+    tu_dram_destroy(dram);
+}
+
 /* ---- Main ---- */
 int main(void) {
     printf("\n=== TU DRAM Model Tests ===\n\n");
@@ -497,6 +791,15 @@ int main(void) {
     test_row_policy_config_path();
     test_address_mapping_decode();
     test_xor_mapping_constraints();
+    test_refresh_all_bank_fixed();
+    test_refresh_per_bank_staggered();
+    test_refresh_deferred_opportunistic();
+    test_refresh_rate_multiplier();
+    test_refresh_none_compat();
+    test_refresh_reset();
+    test_refresh_rejects();
+    test_refresh_config_path();
+    test_refresh_closes_rows();
 
     printf("\n=== Results: %d/%d passed ===\n", tests_passed, tests_run);
     return (tests_passed == tests_run) ? 0 : 1;

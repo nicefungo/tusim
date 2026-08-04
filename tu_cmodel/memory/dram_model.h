@@ -59,6 +59,20 @@ typedef enum {
     TU_DRAM_ADDR_XOR_INTERLEAVED = 2
 } tu_dram_address_mapping_mode_t;
 
+/* Refresh model (JEDEC tREFI/tRFC). Subsystem enum family is disjoint from
+ * the generated TU_DRAM_REFRESH_MODE_* / TU_DRAM_REFRESH_SCHED_* macros and
+ * the canonical TU_DRAM_CONFIG_REFRESH_* enums (preprocessor namespace). */
+typedef enum {
+    TU_DRAM_REFRESH_NONE = 0,      /* Compatibility: no refresh overhead */
+    TU_DRAM_REFRESH_ALL_BANK = 1,  /* Traditional REFAB: whole device locks */
+    TU_DRAM_REFRESH_PER_BANK = 2   /* DDR5-style staggered per-bank refresh */
+} tu_dram_refresh_mode_t;
+
+typedef enum {
+    TU_DRAM_REFRESH_SCHEDULING_FIXED = 0,    /* Refresh at exact tREFI schedule */
+    TU_DRAM_REFRESH_SCHEDULING_DEFERRED = 1  /* Bounded postponement (≤ max deferral) */
+} tu_dram_refresh_scheduling_t;
+
 /* ---- DRAM Timing Parameters ---- */
 typedef struct {
     double    clock_ghz;          /* DRAM clock frequency in GHz */
@@ -84,9 +98,13 @@ typedef struct {
     /* Cycle accounting */
     uint64_t  total_read_cycles;      /* Aggregate read cycles */
     uint64_t  total_write_cycles;     /* Aggregate write cycles */
-    uint64_t  total_stall_cycles;     /* Cycles stalled on bandwidth contention */
+    uint64_t  total_stall_cycles;     /* Cycles stalled on contention */
     uint64_t  total_row_conflicts;    /* Row buffer misses */
     uint64_t  total_row_hits;         /* Reuse of an already-open bank row */
+
+    /* Refresh accounting (JEDEC tREFI/tRFC) */
+    uint64_t  total_refresh_events;       /* Refresh commands issued */
+    uint64_t  total_refresh_stall_cycles; /* Access cycles lost to refresh lockout */
 
     /* Derived metrics */
     double    effective_read_bandwidth;   /* Actual achieved read BW in GB/s */
@@ -119,6 +137,17 @@ typedef struct {
     tu_dram_address_mapping_mode_t address_mapping;
     uint32_t row_miss_penalty_cycles;
     uint64_t *open_rows;              /* channel×bank rows; UINT64_MAX=none */
+
+    /* Refresh state (JEDEC tREFI/tRFC; ns at 1 sim cycle = 1 ns) */
+    tu_dram_refresh_mode_t      refresh_mode;
+    tu_dram_refresh_scheduling_t refresh_scheduling;
+    uint32_t refresh_rate;                /* 1x, 2x, 4x; high-temp retention */
+    uint64_t refresh_trefi_cycles;        /* scheduled per-bank interval (rate-adjusted) */
+    uint64_t refresh_trfc_cycles;         /* all-bank lockout duration */
+    uint64_t refresh_trfc_pb_cycles;      /* per-bank lockout duration */
+    uint64_t refresh_max_deferral_cycles; /* deferred hard deadline (≤ trefi) */
+    uint64_t *refresh_next;               /* per-bank next scheduled refresh cycle */
+    uint64_t *refresh_until;              /* per-bank busy-until; 0 = idle */
 
 } tu_dram_model_t;
 
@@ -204,6 +233,18 @@ bool tu_dram_set_row_policy(tu_dram_model_t *dram,
 
 bool tu_dram_set_address_mapping(tu_dram_model_t *dram,
                                  tu_dram_address_mapping_mode_t mapping);
+
+/* Configure the refresh model. ns timings are converted at 1 sim cycle = 1 ns
+ * (the module's documented 1 GHz core-clock cycle domain). `rate` 0 is treated
+ * as 1x; `max_deferral_ns` 0 defaults to tREFI and is clamped to the effective
+ * interval internally. Returns false for unsupported mode/scheduling/rate or
+ * for max_deferral > tREFI. */
+bool tu_dram_set_refresh(tu_dram_model_t *dram,
+                         tu_dram_refresh_mode_t mode,
+                         tu_dram_refresh_scheduling_t scheduling,
+                         uint32_t rate,
+                         uint64_t trefi_ns, uint64_t trfc_ns,
+                         uint64_t trfc_pb_ns, uint64_t max_deferral_ns);
 
 /* Decode an address according to the active channel/bank/row mapping. */
 bool tu_dram_decode_address(const tu_dram_model_t *dram, uint64_t addr,

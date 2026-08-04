@@ -171,6 +171,19 @@ static int parse_dram_address_mapping_str(const char *s) {
     return -1;
 }
 
+static int parse_dram_refresh_mode_str(const char *s) {
+    if (!s || strcmp(s, "none") == 0) return TU_DRAM_CONFIG_REFRESH_NONE;
+    if (strcmp(s, "all_bank") == 0) return TU_DRAM_CONFIG_REFRESH_ALL_BANK;
+    if (strcmp(s, "per_bank") == 0) return TU_DRAM_CONFIG_REFRESH_PER_BANK;
+    return -1;
+}
+
+static int parse_dram_refresh_scheduling_str(const char *s) {
+    if (!s || strcmp(s, "fixed") == 0) return TU_DRAM_CONFIG_REFRESH_SCHED_FIXED;
+    if (strcmp(s, "deferred") == 0) return TU_DRAM_CONFIG_REFRESH_SCHED_DEFERRED;
+    return -1;
+}
+
 /* ---- Default configuration ---- */
 
 void tu_config_default(struct tu_config_t *cfg) {
@@ -218,6 +231,13 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->dram_row_miss_penalty_cycles = 10;
     cfg->dram_latency_read   = 50;
     cfg->dram_latency_write  = 50;
+    cfg->dram_refresh_mode       = TU_DRAM_CONFIG_REFRESH_NONE;
+    cfg->dram_refresh_scheduling = TU_DRAM_CONFIG_REFRESH_SCHED_FIXED;
+    cfg->dram_refresh_rate       = 1;
+    cfg->dram_trefi_ns           = 7800;
+    cfg->dram_trfc_ns            = 350;
+    cfg->dram_trfc_pb_ns         = 90;
+    cfg->dram_refresh_max_deferral_ns = 7800;
 
     cfg->dma_bus_width_bits  = 256;
     cfg->dma_max_burst_bytes = 64;
@@ -397,6 +417,33 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
             if (parse_opt_int64(dram, "row_miss_penalty_cycles", &row_penalty))
                 cfg->dram_row_miss_penalty_cycles =
                     (row_penalty >= 0 && row_penalty <= 1000000) ? (uint32_t)row_penalty : UINT32_MAX;
+            const tu_json_value_t *rf = tu_json_get(dram, "refresh");
+            if (rf && rf->type == TU_JSON_OBJECT) {
+                const tu_json_value_t *rm = tu_json_get(rf, "mode");
+                if (rm && rm->type == TU_JSON_STRING)
+                    cfg->dram_refresh_mode =
+                        parse_dram_refresh_mode_str(tu_json_as_string(rm, NULL));
+                const tu_json_value_t *rs = tu_json_get(rf, "scheduling");
+                if (rs && rs->type == TU_JSON_STRING)
+                    cfg->dram_refresh_scheduling =
+                        parse_dram_refresh_scheduling_str(tu_json_as_string(rs, NULL));
+                int64_t rv;
+                if (parse_opt_int64(rf, "rate", &rv))
+                    cfg->dram_refresh_rate =
+                        (rv >= 0 && rv <= 4) ? (uint32_t)rv : UINT32_MAX;
+                if (parse_opt_int64(rf, "trefi_ns", &rv))
+                    cfg->dram_trefi_ns =
+                        (rv >= 0 && rv <= 100000000) ? (uint32_t)rv : UINT32_MAX;
+                if (parse_opt_int64(rf, "trfc_ns", &rv))
+                    cfg->dram_trfc_ns =
+                        (rv >= 0 && rv <= 100000000) ? (uint32_t)rv : UINT32_MAX;
+                if (parse_opt_int64(rf, "trfc_pb_ns", &rv))
+                    cfg->dram_trfc_pb_ns =
+                        (rv >= 0 && rv <= 100000000) ? (uint32_t)rv : UINT32_MAX;
+                if (parse_opt_int64(rf, "max_deferral_ns", &rv))
+                    cfg->dram_refresh_max_deferral_ns =
+                        (rv >= 0 && rv <= 100000000) ? (uint32_t)rv : UINT32_MAX;
+            }
         }
     }
 
@@ -669,6 +716,47 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
             snprintf(error_buf, error_size, "DRAM row_miss_penalty_cycles is out of range");
         return -1;
     }
+    if (cfg->dram_refresh_mode < TU_DRAM_CONFIG_REFRESH_NONE ||
+        cfg->dram_refresh_mode > TU_DRAM_CONFIG_REFRESH_PER_BANK) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DRAM refresh mode must be none, all_bank, or per_bank");
+        return -1;
+    }
+    if (cfg->dram_refresh_scheduling < TU_DRAM_CONFIG_REFRESH_SCHED_FIXED ||
+        cfg->dram_refresh_scheduling > TU_DRAM_CONFIG_REFRESH_SCHED_DEFERRED) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DRAM refresh scheduling must be fixed or deferred");
+        return -1;
+    }
+    if (cfg->dram_refresh_rate != 0 && cfg->dram_refresh_rate != 1 &&
+        cfg->dram_refresh_rate != 2 && cfg->dram_refresh_rate != 4) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DRAM refresh rate must be 0 (default), 1x, 2x, or 4x");
+        return -1;
+    }
+    if (cfg->dram_trefi_ns == UINT32_MAX || cfg->dram_trfc_ns == UINT32_MAX ||
+        cfg->dram_trfc_pb_ns == UINT32_MAX ||
+        cfg->dram_refresh_max_deferral_ns == UINT32_MAX) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size, "DRAM refresh timing value is out of range");
+        return -1;
+    }
+    {
+        /* Zero fields mean "use defaults", so resolve them before comparing. */
+        uint64_t trefi = cfg->dram_trefi_ns ? cfg->dram_trefi_ns : 7800;
+        uint64_t mdef = cfg->dram_refresh_max_deferral_ns
+                            ? cfg->dram_refresh_max_deferral_ns : trefi;
+        if (cfg->dram_refresh_mode != TU_DRAM_CONFIG_REFRESH_NONE &&
+            mdef > trefi) {
+            if (error_buf && error_size > 0)
+                snprintf(error_buf, error_size,
+                         "DRAM refresh max_deferral_ns must not exceed trefi_ns");
+            return -1;
+        }
+    }
     if (cfg->interconnect_mode < 0 || cfg->interconnect_mode > 2) {
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size, "interconnect mode must be none, ring, or mesh");
@@ -905,8 +993,22 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             cfg->dram_row_policy);
     fprintf(out, "| `dram_address_mapping` | %d | int | 0=Burst-interleaved, 1=Row-interleaved, 2=XOR-interleaved |\n",
             cfg->dram_address_mapping);
-    fprintf(out, "| `dram_row_miss_penalty_cycles` | %u | uint32 | Added activate/precharge penalty per modeled miss |\n\n",
+    fprintf(out, "| `dram_row_miss_penalty_cycles` | %u | uint32 | Added activate/precharge penalty per modeled miss |\n",
             cfg->dram_row_miss_penalty_cycles);
+    fprintf(out, "| `dram_refresh_mode` | %d | int | 0=None (compat), 1=All-bank, 2=Per-bank (JEDEC tREFI/tRFC) |\n",
+            cfg->dram_refresh_mode);
+    fprintf(out, "| `dram_refresh_scheduling` | %d | int | 0=Fixed periodic, 1=Deferred (bounded postponement) |\n",
+            cfg->dram_refresh_scheduling);
+    fprintf(out, "| `dram_refresh_rate` | %u | uint32 | 1x/2x/4x refresh-rate multiplier (high-temp retention) |\n",
+            cfg->dram_refresh_rate);
+    fprintf(out, "| `dram_trefi_ns` | %u | uint32 | JEDEC tREFI per-bank refresh interval (ns) |\n",
+            cfg->dram_trefi_ns);
+    fprintf(out, "| `dram_trfc_ns` | %u | uint32 | All-bank refresh lockout tRFC (ns) |\n",
+            cfg->dram_trfc_ns);
+    fprintf(out, "| `dram_trfc_pb_ns` | %u | uint32 | Per-bank refresh lockout tRFCpb (ns) |\n",
+            cfg->dram_trfc_pb_ns);
+    fprintf(out, "| `dram_refresh_max_deferral_ns` | %u | uint32 | Deferred hard deadline (ns, ≤ tREFI) |\n\n",
+            cfg->dram_refresh_max_deferral_ns);
 
     /* ---- DMA ---- */
     fprintf(out, "## 4. DMA Engine\n\n");

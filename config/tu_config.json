@@ -43,7 +43,16 @@
         "row_policy": "legacy",
         "address_mapping": "burst_interleaved",
         "row_miss_penalty_cycles": 10,
-        "core_clock_ghz": 1.0
+        "core_clock_ghz": 1.0,
+        "refresh": {
+          "mode": "none",
+          "scheduling": "fixed",
+          "rate": 1,
+          "trefi_ns": 7800,
+          "trfc_ns": 350,
+          "trfc_pb_ns": 90,
+          "max_deferral_ns": 7800
+        }
       }
     },
 

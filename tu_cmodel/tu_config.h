@@ -94,6 +94,18 @@ extern "C" {
 #define TU_DRAM_ADDR_MAPPING_XOR_INTERLEAVED   2
 #define TU_DRAM_ADDR_MAPPING     0
 #define TU_DRAM_ROW_MISS_PENALTY_CYCLES 10
+#define TU_DRAM_REFRESH_MODE_NONE      0
+#define TU_DRAM_REFRESH_MODE_ALL_BANK  1
+#define TU_DRAM_REFRESH_MODE_PER_BANK  2
+#define TU_DRAM_REFRESH_MODE          0
+#define TU_DRAM_REFRESH_SCHED_FIXED    0
+#define TU_DRAM_REFRESH_SCHED_DEFERRED 1
+#define TU_DRAM_REFRESH_SCHEDULING    0
+#define TU_DRAM_REFRESH_RATE          1
+#define TU_DRAM_TREFI_NS              7800
+#define TU_DRAM_TRFC_NS               350
+#define TU_DRAM_TRFC_PB_NS            90
+#define TU_DRAM_REFRESH_MAX_DEFERRAL_NS 7800
 
 /* ================================================================
  * SRAM Bandwidth Model (M2)

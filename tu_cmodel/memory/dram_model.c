@@ -76,14 +76,25 @@ static bool allocate_runtime_state(tu_dram_model_t *dram) {
     size_t row_count = (size_t)dram->num_channels * dram->params.banks_per_channel;
     dram->channel_available_cycle = calloc(dram->num_channels, sizeof(uint64_t));
     dram->open_rows = malloc(row_count * sizeof(uint64_t));
-    if (!dram->channel_available_cycle || !dram->open_rows) {
+    dram->refresh_next = malloc(dram->params.banks_per_channel * sizeof(uint64_t));
+    dram->refresh_until = malloc(dram->params.banks_per_channel * sizeof(uint64_t));
+    if (!dram->channel_available_cycle || !dram->open_rows ||
+        !dram->refresh_next || !dram->refresh_until) {
         free(dram->channel_available_cycle);
         free(dram->open_rows);
+        free(dram->refresh_next);
+        free(dram->refresh_until);
         dram->channel_available_cycle = NULL;
         dram->open_rows = NULL;
+        dram->refresh_next = NULL;
+        dram->refresh_until = NULL;
         return false;
     }
     for (size_t i = 0; i < row_count; ++i) dram->open_rows[i] = UINT64_MAX;
+    for (uint32_t i = 0; i < dram->params.banks_per_channel; ++i) {
+        dram->refresh_next[i] = UINT64_MAX;  /* NONE mode: never fires */
+        dram->refresh_until[i] = 0;
+    }
     return true;
 }
 
@@ -91,6 +102,9 @@ const char *tu_dram_type_name(tu_dram_type_t type) {
     if (type >= TU_DRAM_TYPE_COUNT) return "unknown";
     return dram_names[type];
 }
+
+/* ---- Internal: refresh model (JEDEC tREFI/tRFC) ---- */
+static void refresh_init_state(tu_dram_model_t *dram); /* used by tu_dram_reset */
 
 /* ---- Lifecycle ---- */
 
@@ -174,6 +188,15 @@ tu_dram_model_t *tu_dram_create_from_config(const struct tu_config_t *cfg) {
         tu_dram_destroy(dram);
         return NULL;
     }
+    if (!tu_dram_set_refresh(dram,
+            (tu_dram_refresh_mode_t)cfg->dram_refresh_mode,
+            (tu_dram_refresh_scheduling_t)cfg->dram_refresh_scheduling,
+            cfg->dram_refresh_rate,
+            cfg->dram_trefi_ns, cfg->dram_trfc_ns,
+            cfg->dram_trfc_pb_ns, cfg->dram_refresh_max_deferral_ns)) {
+        tu_dram_destroy(dram);
+        return NULL;
+    }
     return dram;
 }
 
@@ -181,6 +204,8 @@ void tu_dram_destroy(tu_dram_model_t *dram) {
     if (!dram) return;
     free(dram->channel_available_cycle);
     free(dram->open_rows);
+    free(dram->refresh_next);
+    free(dram->refresh_until);
     free(dram);
 }
 
@@ -195,6 +220,7 @@ void tu_dram_reset(tu_dram_model_t *dram) {
            dram->num_channels * sizeof(uint64_t));
     size_t row_count = (size_t)dram->num_channels * dram->params.banks_per_channel;
     for (size_t i = 0; i < row_count; ++i) dram->open_rows[i] = UINT64_MAX;
+    refresh_init_state(dram);
 }
 
 /* ---- Internal: bandwidth metering ---- */
@@ -264,12 +290,6 @@ bool tu_dram_decode_address(const tu_dram_model_t *dram, uint64_t addr,
     return true;
 }
 
-static uint32_t addr_to_channel(const tu_dram_model_t *dram, uint64_t addr) {
-    uint32_t channel = 0;
-    (void)tu_dram_decode_address(dram, addr, &channel, NULL, NULL);
-    return channel;
-}
-
 static uint64_t explicit_row_penalty(tu_dram_model_t *dram, uint64_t addr) {
     if (dram->row_policy == TU_DRAM_ROW_LEGACY) return 0;
 
@@ -294,10 +314,121 @@ static uint64_t explicit_row_penalty(tu_dram_model_t *dram, uint64_t addr) {
 
 /* ---- Cycle & Timing ---- */
 
+/* ---- Internal: refresh model (JEDEC tREFI/tRFC) ---- */
+
+/* ns → sim cycles: the module's cycle domain assumes a 1 GHz core clock
+ * (1 sim cycle = 1 ns), consistent with the existing bandwidth/latency
+ * accounting. DRAM-clock-accurate conversion is uncalibrated. */
+static uint64_t refresh_ns_to_cycles(uint64_t ns) { return ns; }
+
+static uint64_t refresh_effective_interval(const tu_dram_model_t *dram) {
+    uint64_t rate = (dram->refresh_rate == 0) ? 1 : dram->refresh_rate;
+    uint64_t trefi = dram->refresh_trefi_cycles;
+    return (trefi + rate - 1) / rate;  /* ceil division; 1x/2x/4x only */
+}
+
+/* (Re)derive per-bank refresh schedule from the active mode/timings.
+ * ALL_BANK: a single global schedule (bank 0 slot); first refresh after one
+ * full interval so the model does not stall access at cycle 0.
+ * PER_BANK: stagger the first refresh of bank b at (b+1)*tREFI/B across the
+ * first interval so per-bank commands do not collide (DDR5-style spread). */
+static void refresh_init_state(tu_dram_model_t *dram) {
+    if (!dram->refresh_next || !dram->refresh_until) return;
+    uint32_t B = dram->params.banks_per_channel;
+    uint64_t trefi = refresh_effective_interval(dram);
+    for (uint32_t i = 0; i < B; ++i) {
+        dram->refresh_until[i] = 0;
+        dram->refresh_next[i] = UINT64_MAX;
+    }
+    if (dram->refresh_mode == TU_DRAM_REFRESH_ALL_BANK) {
+        dram->refresh_next[0] = trefi;
+    } else if (dram->refresh_mode == TU_DRAM_REFRESH_PER_BANK && B > 0) {
+        for (uint32_t i = 0; i < B; ++i)
+            dram->refresh_next[i] = ((uint64_t)(i + 1) * trefi) / B;
+    }
+    /* NONE: all slots stay UINT64_MAX — never fires. */
+}
+
+/*
+ * Bring refresh state up to cycle T.
+ * FIXED scheduling fires a due refresh exactly at its schedule (any access in
+ * the window pays the remainder). DEFERRED scheduling fires at the earlier of
+ * (a) an access to the bank after the schedule (opportunistic, `on_access`)
+ * or (b) the hard deadline schedule + max_deferral (`on_access` == false, or
+ * when the access arrives after the deadline). The deferred window is clamped
+ * to the effective interval so the worst-case actual interval never exceeds
+ * 2× the scheduled average.
+ * Firing a refresh precharges the row buffer (open-row state is invalidated),
+ * which is why row-policy accounting must run after this catch-up.
+ */
+static void refresh_catchup(tu_dram_model_t *dram, uint64_t T, bool on_access) {
+    if (!dram || dram->refresh_mode == TU_DRAM_REFRESH_NONE ||
+        dram->type == TU_DRAM_TYPE_IDEAL || !dram->refresh_next ||
+        !dram->refresh_until)
+        return;
+    uint32_t B = dram->params.banks_per_channel;
+    uint64_t trefi = refresh_effective_interval(dram);
+    uint64_t max_def = dram->refresh_max_deferral_cycles;
+    uint64_t dur = (dram->refresh_mode == TU_DRAM_REFRESH_ALL_BANK)
+                       ? dram->refresh_trfc_cycles
+                       : dram->refresh_trfc_pb_cycles;
+    uint32_t slots = (dram->refresh_mode == TU_DRAM_REFRESH_ALL_BANK) ? 1 : B;
+    for (uint32_t b = 0; b < slots; ++b) {
+        while (dram->refresh_next[b] <= T) {
+            bool fire = false;
+            uint64_t fire_at = 0;
+            if (dram->refresh_scheduling ==
+                TU_DRAM_REFRESH_SCHEDULING_FIXED) {
+                fire = true;
+                fire_at = dram->refresh_next[b];
+            } else {
+                uint64_t deadline = dram->refresh_next[b] + max_def;
+                if (on_access) {
+                    fire = true;
+                    fire_at = (deadline > T) ? T : deadline;
+                } else if (deadline <= T) {
+                    fire = true;
+                    fire_at = deadline;
+                }
+            }
+            if (!fire) break;  /* deferred: still within window, no access yet */
+            dram->refresh_until[b] = fire_at + dur;
+            dram->refresh_next[b] += trefi;
+            dram->stats.total_refresh_events++;
+            if (dram->row_policy != TU_DRAM_ROW_LEGACY) {
+                /* Refresh precharges the addressed bank(s) on every channel. */
+                if (dram->refresh_mode == TU_DRAM_REFRESH_ALL_BANK) {
+                    size_t row_count = (size_t)dram->num_channels * B;
+                    for (size_t i = 0; i < row_count; ++i)
+                        dram->open_rows[i] = UINT64_MAX;
+                } else {
+                    for (uint32_t ch = 0; ch < dram->num_channels; ++ch)
+                        dram->open_rows[(size_t)ch * B + b] = UINT64_MAX;
+                }
+            }
+        }
+    }
+}
+
+/* Cycles an access to `bank` must wait because its bank is refreshing. */
+static uint64_t refresh_stall_for(const tu_dram_model_t *dram, uint32_t bank,
+                                  uint64_t T) {
+    if (!dram || dram->refresh_mode == TU_DRAM_REFRESH_NONE ||
+        dram->type == TU_DRAM_TYPE_IDEAL || !dram->refresh_until)
+        return 0;
+    uint32_t slot = (dram->refresh_mode == TU_DRAM_REFRESH_ALL_BANK) ? 0 : bank;
+    if (dram->refresh_until[slot] > T)
+        return dram->refresh_until[slot] - T;
+    return 0;
+}
+
 void tu_dram_tick(tu_dram_model_t *dram) {
     if (!dram) return;
     dram->current_cycle++;
     ensure_bandwidth(dram);
+    /* Fire refreshes that reach their schedule/deadline even with no traffic
+     * so event counters and forced-lockout state stay accurate. */
+    refresh_catchup(dram, dram->current_cycle, false);
 }
 
 void tu_dram_read(tu_dram_model_t *dram, uint64_t addr,
@@ -319,11 +450,17 @@ void tu_dram_read(tu_dram_model_t *dram, uint64_t addr,
 
     ensure_bandwidth(dram);
 
-    uint32_t channel = addr_to_channel(dram, addr);
+    uint32_t channel = 0, bank = 0;
+    (void)tu_dram_decode_address(dram, addr, &channel, &bank, NULL);
     uint64_t stall = 0;
 
+    /* ---- Refresh lockout: catch up schedules, then wait out any window.
+     * Runs before row accounting because refresh precharges the row buffer. */
+    refresh_catchup(dram, dram->current_cycle, true);
+    uint64_t refresh_stall = refresh_stall_for(dram, bank, dram->current_cycle);
+
     /* ---- Latency ---- */
-    uint64_t base_latency = dram->params.read_latency_cycles;
+    uint64_t base_latency = dram->params.read_latency_cycles + refresh_stall;
 
     /* ---- Row buffer conflict modeling ---- */
     if (dram->row_policy != TU_DRAM_ROW_LEGACY) {
@@ -360,6 +497,7 @@ void tu_dram_read(tu_dram_model_t *dram, uint64_t addr,
     dram->stats.total_read_bytes += num_bytes;
     dram->stats.total_read_cycles += total_cycles;
     dram->stats.total_stall_cycles += stall;
+    dram->stats.total_refresh_stall_cycles += refresh_stall;
 
     if (cycles_out) *cycles_out = total_cycles;
     if (stall_out)  *stall_out = stall;
@@ -383,9 +521,15 @@ void tu_dram_write(tu_dram_model_t *dram, uint64_t addr,
 
     ensure_bandwidth(dram);
 
-    uint32_t channel = addr_to_channel(dram, addr);
+    uint32_t channel = 0, bank = 0;
+    (void)tu_dram_decode_address(dram, addr, &channel, &bank, NULL);
     uint64_t stall = 0;
-    uint64_t base_latency = dram->params.write_latency_cycles;
+
+    /* Refresh lockout before row accounting (refresh precharges rows). */
+    refresh_catchup(dram, dram->current_cycle, true);
+    uint64_t refresh_stall = refresh_stall_for(dram, bank, dram->current_cycle);
+
+    uint64_t base_latency = dram->params.write_latency_cycles + refresh_stall;
 
     if (dram->row_policy != TU_DRAM_ROW_LEGACY)
         base_latency += explicit_row_penalty(dram, addr);
@@ -410,6 +554,7 @@ void tu_dram_write(tu_dram_model_t *dram, uint64_t addr,
     dram->stats.total_write_bytes += num_bytes;
     dram->stats.total_write_cycles += total_cycles;
     dram->stats.total_stall_cycles += stall;
+    dram->stats.total_refresh_stall_cycles += refresh_stall;
 
     if (cycles_out) *cycles_out = total_cycles;
     if (stall_out)  *stall_out = stall;
@@ -476,6 +621,8 @@ void tu_dram_print_stats(const tu_dram_model_t *dram, FILE *out) {
         "  Stall cycles:          %lu\n"
         "  Row conflicts:         %lu\n"
         "  Row hits:              %lu\n"
+        "  Refresh events:        %lu\n"
+        "  Refresh stall cycles:  %lu\n"
         "  ─────────────────────────────────\n"
         "  Eff. read BW:          %.2f GB/s\n"
         "  Eff. write BW:         %.2f GB/s\n"
@@ -493,6 +640,8 @@ void tu_dram_print_stats(const tu_dram_model_t *dram, FILE *out) {
         (unsigned long)s.total_stall_cycles,
         (unsigned long)s.total_row_conflicts,
         (unsigned long)s.total_row_hits,
+        (unsigned long)s.total_refresh_events,
+        (unsigned long)s.total_refresh_stall_cycles,
         s.effective_read_bandwidth, s.effective_write_bandwidth,
         s.utilization * 100.0
     );
@@ -538,5 +687,40 @@ bool tu_dram_set_address_mapping(tu_dram_model_t *dram,
     dram->address_mapping = mapping;
     size_t row_count = (size_t)dram->num_channels * dram->params.banks_per_channel;
     for (size_t i = 0; i < row_count; ++i) dram->open_rows[i] = UINT64_MAX;
+    return true;
+}
+
+bool tu_dram_set_refresh(tu_dram_model_t *dram,
+                         tu_dram_refresh_mode_t mode,
+                         tu_dram_refresh_scheduling_t scheduling,
+                         uint32_t rate,
+                         uint64_t trefi_ns, uint64_t trfc_ns,
+                         uint64_t trfc_pb_ns, uint64_t max_deferral_ns) {
+    if (!dram || !dram->refresh_next || !dram->refresh_until) return false;
+    if (mode < TU_DRAM_REFRESH_NONE || mode > TU_DRAM_REFRESH_PER_BANK)
+        return false;
+    if (scheduling < TU_DRAM_REFRESH_SCHEDULING_FIXED ||
+        scheduling > TU_DRAM_REFRESH_SCHEDULING_DEFERRED)
+        return false;
+    if (rate != 0 && rate != 1 && rate != 2 && rate != 4) return false;
+
+    /* Zero fields mean "use defaults" (legacy zero-initialized callers). */
+    uint64_t trefi = (trefi_ns == 0) ? 7800 : trefi_ns;
+    uint64_t trfc  = (trfc_ns == 0) ? 350 : trfc_ns;
+    uint64_t trfc_pb = (trfc_pb_ns == 0) ? 90 : trfc_pb_ns;
+    uint64_t max_def = (max_deferral_ns == 0) ? trefi : max_deferral_ns;
+    if (max_def > trefi) return false;  /* cannot defer past next schedule */
+    if (mode != TU_DRAM_REFRESH_NONE &&
+        (trefi == 0 || trfc == 0 || trfc_pb == 0)) return false;
+
+    dram->refresh_mode = mode;
+    dram->refresh_scheduling = scheduling;
+    dram->refresh_rate = (rate == 0) ? 1 : rate;
+    dram->refresh_trefi_cycles = refresh_ns_to_cycles(trefi);
+    dram->refresh_trfc_cycles = refresh_ns_to_cycles(trfc);
+    dram->refresh_trfc_pb_cycles = refresh_ns_to_cycles(trfc_pb);
+    dram->refresh_max_deferral_cycles = refresh_ns_to_cycles(max_def);
+
+    refresh_init_state(dram);
     return true;
 }

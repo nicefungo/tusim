@@ -52,6 +52,20 @@ typedef enum {
     TU_DRAM_CONFIG_ADDR_XOR_INTERLEAVED = 2
 } tu_dram_address_mapping_t;
 
+/* Zero preserves the historical no-refresh model for legacy callers.
+ * Real DRAM always refreshes; `none` is the compatibility path only. */
+typedef enum {
+    TU_DRAM_CONFIG_REFRESH_NONE = 0,
+    TU_DRAM_CONFIG_REFRESH_ALL_BANK = 1,
+    TU_DRAM_CONFIG_REFRESH_PER_BANK = 2
+} tu_dram_config_refresh_mode_t;
+
+/* Zero = fixed periodic refresh issued at the schedule. */
+typedef enum {
+    TU_DRAM_CONFIG_REFRESH_SCHED_FIXED = 0,
+    TU_DRAM_CONFIG_REFRESH_SCHED_DEFERRED = 1
+} tu_dram_config_refresh_scheduling_t;
+
 /* ================================================================
  * Full Configuration Struct
  * ================================================================
@@ -109,6 +123,14 @@ typedef struct tu_config_t {
     uint32_t dram_row_miss_penalty_cycles;
     double   dram_latency_read;
     double   dram_latency_write;
+    /* DRAM refresh (JEDEC tREFI/tRFC); zero fields mean "use defaults". */
+    int      dram_refresh_mode;       /* none=0, all_bank=1, per_bank=2 */
+    int      dram_refresh_scheduling; /* fixed=0, deferred=1 */
+    uint32_t dram_refresh_rate;       /* 1x/2x/4x; 0 = default 1x */
+    uint32_t dram_trefi_ns;           /* per-bank refresh interval; 0 = default 7800 */
+    uint32_t dram_trfc_ns;            /* all-bank refresh duration; 0 = default 350 */
+    uint32_t dram_trfc_pb_ns;         /* per-bank refresh duration; 0 = default 90 */
+    uint32_t dram_refresh_max_deferral_ns; /* deferred hard deadline; 0 = default = tREFI */
 
     /* ---- DMA ---- */
     uint32_t dma_bus_width_bits;

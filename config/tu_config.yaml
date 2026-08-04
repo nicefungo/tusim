@@ -56,6 +56,14 @@ tu:
       address_mapping: "burst_interleaved"  # burst_interleaved | row_interleaved | xor_interleaved
       row_miss_penalty_cycles: 10
       core_clock_ghz: 1.0
+      refresh:
+        mode: "none"        # none | all_bank | per_bank
+        scheduling: "fixed" # fixed | deferred (opportunistic, bounded by max_deferral_ns)
+        rate: 1             # 1x | 2x | 4x refresh-rate multiplier (2x/4x for high-temp retention)
+        trefi_ns: 7800      # JEDEC tREFI: per-bank average refresh interval (DDR4-like default)
+        trfc_ns: 350        # JEDEC tRFC: all-bank refresh command duration
+        trfc_pb_ns: 90      # DDR5-style per-bank refresh duration (used by per_bank mode)
+        max_deferral_ns: 7800  # deferred-scheduling hard deadline (retention safety bound)
 
   # ---- DMA Engine ----
   dma:
