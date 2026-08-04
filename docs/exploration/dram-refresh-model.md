@@ -85,6 +85,41 @@ Readings (service deltas vs `none` in the same pattern):
 - **Open-page interaction:** refresh precharges rows; with 5 all-bank events, 10,012 misses occur (every access in the window misses the invalidated row; misses ≥ events holds). Per-bank open page costs 11.0% over the legacy steady baseline (2,220,575) versus 25.4% for all-bank open.
 - **NONE preserves legacy exactly:** 40,000×50 and 400×50 service, zero events, zero refresh stalls.
 
+## Phase-alignment sweep: how phase-dependent is the scheduling trade-off?
+
+The burst-idle rows above compare two phases; to test whether the fixed-vs-deferred reversal is a continuum or an anecdote, the phase sweep shifts the workload start across the full tREFI grid. Command: `make test-dram-refresh-phase-sweep`. Workload = `phase` idle cycles, then 8 × (50 reads at 1/cycle + 5,000 idle). ALL_BANK, tREFI=7800, tRFC=350. `overlap` = reads that paid a nonzero refresh remainder; `avg/read` = service/400.
+
+| Sched | Phase | Service | Events | Rstall | Overlap | Avg/read |
+|---|---|---:|---:|---:|---:|---:|
+| fixed | 0 | 20,000 | 5 | 0 | 0 | 50.00 |
+| defer | 0 | 85,100 | 4 | 65,100 | 200 | 212.75 |
+| fixed | 780 | 20,210 | 5 | 210 | 20 | 50.52 |
+| defer | 780 | 85,100 | 4 | 65,100 | 200 | 212.75 |
+| fixed | 1,560 | 20,000 | 5 | 0 | 0 | 50.00 |
+| defer | 1,560 | 85,100 | 4 | 65,100 | 200 | 212.75 |
+| fixed | 2,340 | 20,000 | 5 | 0 | 0 | 50.00 |
+| defer | 2,340 | 85,100 | 4 | 65,100 | 200 | 212.75 |
+| fixed | 3,120 | 20,000 | 5 | 0 | 0 | 50.00 |
+| defer | 3,120 | 85,100 | 4 | 65,100 | 200 | 212.75 |
+| fixed | 3,900 | 23,775 | 5 | 3,775 | 50 | 59.44 |
+| defer | 3,900 | 101,375 | 5 | 81,375 | 250 | 253.44 |
+| fixed | 4,680 | 20,000 | 5 | 0 | 0 | 50.00 |
+| defer | 4,680 | 101,375 | 5 | 81,375 | 250 | 253.44 |
+| fixed | 5,460 | 23,455 | 5 | 3,455 | 10 | 58.64 |
+| defer | 5,460 | 88,555 | 5 | 68,555 | 210 | 221.39 |
+| fixed | 6,240 | 21,775 | 5 | 1,775 | 50 | 54.44 |
+| defer | 6,240 | 101,375 | 5 | 81,375 | 250 | 253.44 |
+| fixed | 7,020 | 20,000 | 6 | 0 | 0 | 50.00 |
+| defer | 7,020 | 101,375 | 5 | 81,375 | 250 | 253.44 |
+| fixed | 7,800 | 36,275 | 6 | 16,275 | 50 | 90.69 |
+| defer | 7,800 | 101,375 | 5 | 81,375 | 250 | 253.44 |
+
+Readings:
+
+- **Fixed is a phase sawtooth:** zero refresh stall on 8 of 11 phases (windows land in idle), a 210-cycle tail catch at phase 780, partial-window hits (1,775–3,775) at phases 3,900–6,240, and a full 50-read burst paying 16,275 at phase 7,800 (+81% over baseline). The worst fixed row is still far below deferred's best.
+- **Deferred is phase-invariant and always bad here:** 85,100–101,375 (+325% to +407%) at every phase. The reason is structural: after each opportunistic fire at a burst, the next schedule shifts to fire+7,800 and the next deadline to fire+15,600; the workload's bursts recur every 5,050 cycles, so a burst always lands inside the schedule→deadline window and triggers the refresh it was meant to hide. Deferred can only hide refresh when the idle gap following a schedule point is long enough that no access arrives before the deadline — i.e., when idle gaps approach tREFI.
+- **Refined conclusion:** for workloads with inter-burst idle shorter than tREFI, deferred scheduling is strictly worse than fixed and cannot hide anything; its phase-invariance is a liability, not a robustness win. Deferred remains plausible only for workloads with ≥ tREFI-scale idle gaps (e.g., power-gated or batch-phase schedules), where it can merge refresh into long idle periods.
+
 ## Gain versus sacrifice
 
 - **Throughput (sustained):** Under steady traffic, per-bank refresh loses only ~1% of service cycles versus ~15% for all-bank at 1x, scaling to ~61% at 4x. A queue-aware controller could overlap all-bank refresh with buffered work, which is **unquantified** here (no request queue exists).
@@ -106,6 +141,7 @@ The cmodel has no request queue, reordering, bank groups, rank/subchannel geomet
 ```sh
 make test-dram                         # 27/27 (9 refresh-focused)
 make test-dram-refresh-sweep           # 18 rows, all accounting gates
+make test-dram-refresh-phase-sweep     # 22 rows (11 phases x fixed/deferred)
 make test-config                       # 26/26 (4 refresh-focused)
 make clean && make
 make test-quick
@@ -115,4 +151,4 @@ make config-docs                       # docs/CONFIG_REFERENCE.md refresh rows
 
 ## Actionable conclusion
 
-Preserve all modes. `none` stays the zero/default compatibility path. Per-bank refresh is the physically realistic choice for a DDR5-era controller and costs ~1% vs ~15% service under steady traffic in this model, at the price of per-bank control state and 4× commands; all-bank remains a valid low-complexity controller. Fixed scheduling is the conservative default; deferred is valuable only for workloads whose idle phases follow the schedule (its measured burst_idle case shows the opposite), so it should be selected per workload, never by default. Rate 2x/4x should be reserved for high-temperature retention requirements — it multiplies refresh cost linearly. Do not claim any mode is universally best: the measured scheduling reversal is exactly the phase dependence a real controller exhibits.
+Preserve all modes. `none` stays the zero/default compatibility path. Per-bank refresh is the physically realistic choice for a DDR5-era controller and costs ~1% vs ~15% service under steady traffic in this model, at the price of per-bank control state and 4× commands; all-bank remains a valid low-complexity controller. Fixed scheduling is the conservative default: the phase sweep shows it pays zero refresh stall on most phases of a burst-idle workload and its worst phase (+81%) is still far below deferred's phase-invariant +325–407%. Deferred is valuable only for workloads with idle gaps approaching tREFI, where it can genuinely hide refresh — its opportunistic trigger guarantees a fire at the first post-schedule access, so for workloads with sub-tREFI idle gaps it can never hide and is strictly worse than fixed. Rate 2x/4x should be reserved for high-temperature retention requirements — it multiplies refresh cost linearly. Do not claim any mode is universally best: the measured phase sawtooth and the deferred-structural-inferiority regime are exactly the workload dependence a real controller exhibits.

@@ -8,7 +8,7 @@ LDFLAGS ?= -lm
 TU_DIR     = tu_cmodel
 COMPILER   = compiler/onnx_to_tu.py
 
-.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline test-agen test-multicore test-multicore-sweep test-multicore-dataflow-sweep test-multicast test-scatter-gather test-trace test-errors test-config test-dataflow test-logging test-rounding test-fp8 test-softmax test-double test-random test-full test-context test-context-switch-sweep test-compress test-weight-compression-sweep test-sparsity test-sparsity-sweep test-scheduler test-liveness test-tf32 test-bench test-power test-power-assumptions-sweep test-debug test-dataflow-sweep test-rounding-sweep test-attention-sweep test-pooling-sweep test-softmax-sweep test-conv-sweep test-norm-sweep test-norm-attention-sweep test-conv-groups-sweep test-conv-pool-cascade test-mma-activation-sweep test-softmax-attention-sweep test-dram-refresh-sweep
+.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline test-agen test-multicore test-multicore-sweep test-multicore-dataflow-sweep test-multicast test-scatter-gather test-trace test-errors test-config test-dataflow test-logging test-rounding test-fp8 test-softmax test-double test-random test-full test-context test-context-switch-sweep test-compress test-weight-compression-sweep test-sparsity test-sparsity-sweep test-scheduler test-liveness test-tf32 test-bench test-power test-power-assumptions-sweep test-debug test-dataflow-sweep test-rounding-sweep test-attention-sweep test-pooling-sweep test-softmax-sweep test-conv-sweep test-norm-sweep test-norm-attention-sweep test-conv-groups-sweep test-conv-pool-cascade test-mma-activation-sweep test-softmax-attention-sweep test-dram-refresh-sweep test-dram-refresh-phase-sweep
 
 all: libtucmodel.a libtucmodel.so
 
@@ -245,6 +245,11 @@ test-dram-address-mapping-sweep: tests/test_dram_address_mapping_sweep.c libtucm
 test-dram-refresh-sweep: tests/test_dram_refresh_sweep.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
 	./test-dram-refresh-sweep
+
+.PHONY: test-dram-refresh-phase-sweep
+test-dram-refresh-phase-sweep: tests/test_dram_refresh_phase_sweep.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
+	./test-dram-refresh-phase-sweep
 
 # ---- Test: ISA definitions ----
 test-isa: tests/test_isa.c libtucmodel.a
@@ -600,7 +605,7 @@ config-docs: libtucmodel.a
 # ---- Clean ----
 clean:
 	rm -f $(TU_DIR)/*.o $(TU_DIR)/memory/*.o $(TU_DIR)/sparsity/*.o $(TU_DIR)/isa/*.o $(TU_DIR)/compute/*.o $(TU_DIR)/compute/dataflow/*.o $(TU_DIR)/infra/*.o $(TU_DIR)/perf/*.o $(TU_DIR)/bindings/*.o libtucmodel.a libtucmodel.so
-	rm -f test-cmodel test-cmdq test-dma test-dram test-dram-row-policy-sweep test-dram-address-mapping-sweep test-dram-refresh-sweep test-isa test-golden test-golden-full
+	rm -f test-cmodel test-cmdq test-dma test-dram test-dram-row-policy-sweep test-dram-address-mapping-sweep test-dram-refresh-sweep test-dram-refresh-phase-sweep test-isa test-golden test-golden-full
 	rm -f test-dataflow test-elementwise test-bf16 test-memhier test-norm test-logging
 	rm -f test-int-quant test-conv test-random
 	rm -f test-rounding test-fp8 test-attention test-perf test-pool test-pipeline
