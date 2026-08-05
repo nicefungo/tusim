@@ -13,6 +13,7 @@ test-dram-row-policy-sweep
 test-dram-address-mapping-sweep
 test-dram-refresh-sweep
 test-dram-refresh-phase-sweep
+test-dram-refresh-debt-sweep
 test-isa
 test-golden
 test-golden-full
