@@ -229,6 +229,7 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->dram_row_policy      = TU_DRAM_CONFIG_ROW_LEGACY;
     cfg->dram_address_mapping = TU_DRAM_CONFIG_ADDR_BURST_INTERLEAVED;
     cfg->dram_row_miss_penalty_cycles = 10;
+    cfg->dram_row_conflict_penalty_cycles = 0; /* inherit miss cost: compatibility */
     cfg->dram_latency_read   = 50;
     cfg->dram_latency_write  = 50;
     cfg->dram_refresh_mode       = TU_DRAM_CONFIG_REFRESH_NONE;
@@ -416,6 +417,9 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
             int64_t row_penalty;
             if (parse_opt_int64(dram, "row_miss_penalty_cycles", &row_penalty))
                 cfg->dram_row_miss_penalty_cycles =
+                    (row_penalty >= 0 && row_penalty <= 1000000) ? (uint32_t)row_penalty : UINT32_MAX;
+            if (parse_opt_int64(dram, "row_conflict_penalty_cycles", &row_penalty))
+                cfg->dram_row_conflict_penalty_cycles =
                     (row_penalty >= 0 && row_penalty <= 1000000) ? (uint32_t)row_penalty : UINT32_MAX;
             const tu_json_value_t *rf = tu_json_get(dram, "refresh");
             if (rf && rf->type == TU_JSON_OBJECT) {
@@ -711,9 +715,10 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
                      "DRAM xor_interleaved mapping requires a power-of-two channel count");
         return -1;
     }
-    if (cfg->dram_row_miss_penalty_cycles == UINT32_MAX) {
+    if (cfg->dram_row_miss_penalty_cycles == UINT32_MAX ||
+        cfg->dram_row_conflict_penalty_cycles == UINT32_MAX) {
         if (error_buf && error_size > 0)
-            snprintf(error_buf, error_size, "DRAM row_miss_penalty_cycles is out of range");
+            snprintf(error_buf, error_size, "DRAM row timing penalty is out of range");
         return -1;
     }
     if (cfg->dram_refresh_mode < TU_DRAM_CONFIG_REFRESH_NONE ||
@@ -995,6 +1000,8 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             cfg->dram_address_mapping);
     fprintf(out, "| `dram_row_miss_penalty_cycles` | %u | uint32 | Added activate/precharge penalty per modeled miss |\n",
             cfg->dram_row_miss_penalty_cycles);
+    fprintf(out, "| `dram_row_conflict_penalty_cycles` | %u | uint32 | Open-row replacement penalty; 0 inherits row_miss_penalty_cycles |\n",
+            cfg->dram_row_conflict_penalty_cycles);
     fprintf(out, "| `dram_refresh_mode` | %d | int | 0=None (compat), 1=All-bank, 2=Per-bank (JEDEC tREFI/tRFC) |\n",
             cfg->dram_refresh_mode);
     fprintf(out, "| `dram_refresh_scheduling` | %d | int | 0=Fixed periodic, 1=Deferred (bounded postponement) |\n",

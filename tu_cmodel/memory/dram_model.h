@@ -101,6 +101,8 @@ typedef struct {
     uint64_t  total_stall_cycles;     /* Cycles stalled on contention */
     uint64_t  total_row_conflicts;    /* Row buffer misses */
     uint64_t  total_row_hits;         /* Reuse of an already-open bank row */
+    uint64_t  total_row_empty_misses; /* Activate from precharged/closed state */
+    uint64_t  total_row_replacements; /* Precharge an open row, then activate */
 
     /* Refresh accounting (JEDEC tREFI/tRFC) */
     uint64_t  total_refresh_events;       /* Refresh commands issued */
@@ -135,7 +137,8 @@ typedef struct {
     uint32_t  num_channels;
     tu_dram_row_policy_mode_t row_policy;
     tu_dram_address_mapping_mode_t address_mapping;
-    uint32_t row_miss_penalty_cycles;
+    uint32_t row_miss_penalty_cycles;     /* Activate from closed state */
+    uint32_t row_conflict_penalty_cycles; /* Precharge + activate replacement */
     uint64_t *open_rows;              /* channel×bank rows; UINT64_MAX=none */
 
     /* Refresh state (JEDEC tREFI/tRFC; ns at 1 sim cycle = 1 ns) */
@@ -230,6 +233,13 @@ void tu_dram_set_row_modeling(tu_dram_model_t *dram, bool enabled);
 bool tu_dram_set_row_policy(tu_dram_model_t *dram,
                             tu_dram_row_policy_mode_t policy,
                             uint32_t miss_penalty_cycles);
+
+/* Configure separate closed-bank activation and open-row replacement costs.
+ * The legacy setter above assigns both costs the same value. */
+bool tu_dram_set_row_policy_timing(tu_dram_model_t *dram,
+                                   tu_dram_row_policy_mode_t policy,
+                                   uint32_t activate_penalty_cycles,
+                                   uint32_t conflict_penalty_cycles);
 
 bool tu_dram_set_address_mapping(tu_dram_model_t *dram,
                                  tu_dram_address_mapping_mode_t mapping);

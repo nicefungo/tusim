@@ -330,6 +330,35 @@ static void test_open_page_row_tracking(void) {
 done:;
 }
 
+static void test_split_row_timing(void) {
+    TEST("Split row activation and replacement timing");
+    tu_dram_model_t *dram = make_row_test_dram(TU_DRAM_ROW_OPEN_PAGE);
+    CHECK(dram != NULL, "create failed");
+    CHECK(tu_dram_set_row_policy_timing(dram, TU_DRAM_ROW_OPEN_PAGE, 20, 45),
+          "split timing set failed");
+    uint64_t cycles = 0, stall = 0;
+    tu_dram_read(dram, 0, 64, &cycles, &stall);
+    CHECK(cycles == 70, "closed-bank activation must use activate cost");
+    tu_dram_read(dram, 64, 64, &cycles, &stall);
+    CHECK(cycles == 50, "same-row access must hit");
+    tu_dram_read(dram, 4096, 64, &cycles, &stall);
+    CHECK(cycles == 95, "open-row replacement must use conflict cost");
+    CHECK(dram->stats.total_row_empty_misses == 1, "wrong empty-row count");
+    CHECK(dram->stats.total_row_replacements == 1, "wrong replacement count");
+    CHECK(dram->stats.total_row_conflicts == 2, "compat miss count changed");
+
+    CHECK(tu_dram_set_row_policy(dram, TU_DRAM_ROW_OPEN_PAGE, 17),
+          "legacy timing setter failed");
+    CHECK(dram->row_miss_penalty_cycles == 17 &&
+          dram->row_conflict_penalty_cycles == 17,
+          "legacy setter must preserve equal-cost behavior");
+    CHECK(!tu_dram_set_row_policy_timing(dram, (tu_dram_row_policy_mode_t)9,
+                                         1, 2), "invalid policy accepted");
+    PASS();
+done:;
+    tu_dram_destroy(dram);
+}
+
 static void test_closed_page_and_reset(void) {
     TEST("Closed-page policy and reset");
     tu_dram_model_t *dram = make_row_test_dram(TU_DRAM_ROW_CLOSED_PAGE);
@@ -370,19 +399,32 @@ static void test_row_policy_config_path(void) {
     const char *json = "{\"tu\":{\"memory\":{\"dram\":{"
                        "\"type\":\"ddr5\",\"row_policy\":\"open_page\","
                        "\"address_mapping\":\"xor_interleaved\","
-                       "\"row_miss_penalty_cycles\":23}}}}";
+                       "\"row_miss_penalty_cycles\":23,"
+                       "\"row_conflict_penalty_cycles\":41}}}}";
     tu_config_t cfg;
     CHECK(tu_config_load_string(json, &cfg, NULL, 0) == 0, "config parse");
     CHECK(cfg.dram_row_policy == TU_DRAM_CONFIG_ROW_OPEN_PAGE, "policy parse");
     CHECK(cfg.dram_address_mapping == TU_DRAM_CONFIG_ADDR_XOR_INTERLEAVED,
           "mapping parse");
     CHECK(cfg.dram_row_miss_penalty_cycles == 23, "penalty parse");
+    CHECK(cfg.dram_row_conflict_penalty_cycles == 41, "conflict penalty parse");
     tu_dram_model_t *dram = tu_dram_create_from_config(&cfg);
     CHECK(dram != NULL, "create from config");
     CHECK(dram->row_policy == TU_DRAM_ROW_OPEN_PAGE, "policy propagation");
     CHECK(dram->address_mapping == TU_DRAM_ADDR_XOR_INTERLEAVED,
           "mapping propagation");
     CHECK(dram->row_miss_penalty_cycles == 23, "penalty propagation");
+    CHECK(dram->row_conflict_penalty_cycles == 41, "conflict penalty propagation");
+    tu_dram_destroy(dram);
+
+    CHECK(tu_config_load_string(
+        "{\"tu\":{\"memory\":{\"dram\":{\"type\":\"ddr5\","
+        "\"row_policy\":\"open_page\",\"row_miss_penalty_cycles\":31}}}}",
+        &cfg, NULL, 0) == 0, "compat config parse");
+    CHECK(cfg.dram_row_conflict_penalty_cycles == 0, "absent conflict cost must inherit");
+    dram = tu_dram_create_from_config(&cfg);
+    CHECK(dram != NULL && dram->row_conflict_penalty_cycles == 31,
+          "absent conflict cost did not preserve equal-cost behavior");
     tu_dram_destroy(dram);
 
     char err[128];
@@ -394,6 +436,10 @@ static void test_row_policy_config_path(void) {
         "{\"tu\":{\"memory\":{\"dram\":{\"address_mapping\":\"xor_magic\"}}}}",
         &cfg, err, sizeof(err)) != 0, "invalid mapping accepted");
     CHECK(strstr(err, "address_mapping") != NULL, "wrong mapping validation error");
+    CHECK(tu_config_load_string(
+        "{\"tu\":{\"memory\":{\"dram\":{\"row_conflict_penalty_cycles\":-1}}}}",
+        &cfg, err, sizeof(err)) != 0, "invalid conflict penalty accepted");
+    CHECK(strstr(err, "row timing") != NULL, "wrong row timing validation error");
     PASS();
 done:;
 }
@@ -786,6 +832,7 @@ int main(void) {
     test_print_stats();
     test_all_types_valid();
     test_open_page_row_tracking();
+    test_split_row_timing();
     test_closed_page_and_reset();
     test_legacy_row_compatibility();
     test_row_policy_config_path();

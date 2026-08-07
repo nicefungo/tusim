@@ -121,6 +121,7 @@ tu_dram_model_t *tu_dram_create(tu_dram_type_t type) {
     dram->row_policy = TU_DRAM_ROW_LEGACY;
     dram->address_mapping = TU_DRAM_ADDR_BURST_INTERLEAVED;
     dram->row_miss_penalty_cycles = 10;
+    dram->row_conflict_penalty_cycles = 10;
 
     /* Allocate per-channel state */
     if (!allocate_runtime_state(dram)) {
@@ -146,6 +147,7 @@ tu_dram_model_t *tu_dram_create_custom(const tu_dram_params_t *params,
     dram->row_policy = TU_DRAM_ROW_LEGACY;
     dram->address_mapping = TU_DRAM_ADDR_BURST_INTERLEAVED;
     dram->row_miss_penalty_cycles = 10;
+    dram->row_conflict_penalty_cycles = 10;
 
     if (!allocate_runtime_state(dram)) {
         free(dram);
@@ -177,9 +179,12 @@ tu_dram_model_t *tu_dram_create_from_config(const struct tu_config_t *cfg) {
             return NULL;
         }
     }
-    if (!tu_dram_set_row_policy(dram,
+    if (!tu_dram_set_row_policy_timing(dram,
             (tu_dram_row_policy_mode_t)cfg->dram_row_policy,
-            cfg->dram_row_miss_penalty_cycles)) {
+            cfg->dram_row_miss_penalty_cycles,
+            cfg->dram_row_conflict_penalty_cycles
+                ? cfg->dram_row_conflict_penalty_cycles
+                : cfg->dram_row_miss_penalty_cycles)) {
         tu_dram_destroy(dram);
         return NULL;
     }
@@ -299,6 +304,7 @@ static uint64_t explicit_row_penalty(tu_dram_model_t *dram, uint64_t addr) {
 
     if (dram->row_policy == TU_DRAM_ROW_CLOSED_PAGE) {
         dram->stats.total_row_conflicts++;
+        dram->stats.total_row_empty_misses++;
         return dram->row_miss_penalty_cycles;
     }
 
@@ -307,9 +313,17 @@ static uint64_t explicit_row_penalty(tu_dram_model_t *dram, uint64_t addr) {
         dram->stats.total_row_hits++;
         return 0;
     }
-    dram->open_rows[idx] = row;
     dram->stats.total_row_conflicts++;
-    return dram->row_miss_penalty_cycles;
+    uint64_t penalty;
+    if (dram->open_rows[idx] == UINT64_MAX) {
+        dram->stats.total_row_empty_misses++;
+        penalty = dram->row_miss_penalty_cycles;
+    } else {
+        dram->stats.total_row_replacements++;
+        penalty = dram->row_conflict_penalty_cycles;
+    }
+    dram->open_rows[idx] = row;
+    return penalty;
 }
 
 /* ---- Cycle & Timing ---- */
@@ -621,6 +635,8 @@ void tu_dram_print_stats(const tu_dram_model_t *dram, FILE *out) {
         "  Stall cycles:          %lu\n"
         "  Row conflicts:         %lu\n"
         "  Row hits:              %lu\n"
+        "  Empty-row activates:   %lu\n"
+        "  Open-row replacements: %lu\n"
         "  Refresh events:        %lu\n"
         "  Refresh stall cycles:  %lu\n"
         "  ─────────────────────────────────\n"
@@ -640,6 +656,8 @@ void tu_dram_print_stats(const tu_dram_model_t *dram, FILE *out) {
         (unsigned long)s.total_stall_cycles,
         (unsigned long)s.total_row_conflicts,
         (unsigned long)s.total_row_hits,
+        (unsigned long)s.total_row_empty_misses,
+        (unsigned long)s.total_row_replacements,
         (unsigned long)s.total_refresh_events,
         (unsigned long)s.total_refresh_stall_cycles,
         s.effective_read_bandwidth, s.effective_write_bandwidth,
@@ -668,10 +686,20 @@ void tu_dram_set_row_modeling(tu_dram_model_t *dram, bool enabled) {
 bool tu_dram_set_row_policy(tu_dram_model_t *dram,
                             tu_dram_row_policy_mode_t policy,
                             uint32_t miss_penalty_cycles) {
+    return tu_dram_set_row_policy_timing(dram, policy,
+                                         miss_penalty_cycles,
+                                         miss_penalty_cycles);
+}
+
+bool tu_dram_set_row_policy_timing(tu_dram_model_t *dram,
+                                   tu_dram_row_policy_mode_t policy,
+                                   uint32_t activate_penalty_cycles,
+                                   uint32_t conflict_penalty_cycles) {
     if (!dram || policy < TU_DRAM_ROW_LEGACY ||
         policy > TU_DRAM_ROW_CLOSED_PAGE) return false;
     dram->row_policy = policy;
-    dram->row_miss_penalty_cycles = miss_penalty_cycles;
+    dram->row_miss_penalty_cycles = activate_penalty_cycles;
+    dram->row_conflict_penalty_cycles = conflict_penalty_cycles;
     size_t row_count = (size_t)dram->num_channels * dram->params.banks_per_channel;
     for (size_t i = 0; i < row_count; ++i) dram->open_rows[i] = UINT64_MAX;
     return true;

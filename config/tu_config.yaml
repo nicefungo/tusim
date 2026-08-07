@@ -55,6 +55,7 @@ tu:
       row_policy: "legacy"  # legacy | open_page | closed_page
       address_mapping: "burst_interleaved"  # burst_interleaved | row_interleaved | xor_interleaved
       row_miss_penalty_cycles: 10
+      row_conflict_penalty_cycles: 0  # 0 inherits miss cost; set > miss for precharge + activate
       core_clock_ghz: 1.0
       refresh:
         mode: "none"        # none | all_bank | per_bank

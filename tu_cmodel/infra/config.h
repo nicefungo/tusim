@@ -121,6 +121,7 @@ typedef struct tu_config_t {
     int      dram_row_policy;       /* legacy=0, open-page=1, closed-page=2 */
     int      dram_address_mapping;  /* burst=0, row=1, XOR-interleaved=2 */
     uint32_t dram_row_miss_penalty_cycles;
+    uint32_t dram_row_conflict_penalty_cycles; /* 0 = inherit miss penalty */
     double   dram_latency_read;
     double   dram_latency_write;
     /* DRAM refresh (JEDEC tREFI/tRFC); zero fields mean "use defaults". */

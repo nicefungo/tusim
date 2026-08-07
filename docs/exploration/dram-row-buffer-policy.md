@@ -3,6 +3,14 @@
 **Date:** 2026-07-29
 **Question:** How much does a realistic DRAM row-buffer policy change service time for contiguous tensor reads versus row-thrashing or bank-streaming address patterns?
 
+> **2026-08-07 follow-up:** This document's six-row table is the historical
+> equal-cost compatibility result. `dram-row-timing-split.md` separates an
+> empty-bank activation from an open-row replacement and supersedes the claim
+> that row thrash merely erases the open-page gain. With activate=20 and
+> replacement=40, closed-page is 21.95% lower service than open-page for the
+> same alternating-row pattern. The target now emits the complete 12-row
+> equal/split matrix.
+
 ## Hypothesis
 
 An open-page controller should reduce activate/precharge penalties when tensor DMA reuses a row, while a closed-page controller should be insensitive to locality and avoid retaining stale row state. The benefit should disappear for alternating-row traffic.
@@ -23,10 +31,11 @@ Canonical JSON/YAML under `tu.memory.dram` now accepts:
 
 ```json
 "row_policy": "legacy",
-"row_miss_penalty_cycles": 10
+"row_miss_penalty_cycles": 10,
+"row_conflict_penalty_cycles": 0
 ```
 
-Accepted policies are `legacy`, `open_page`, and `closed_page`. The miss penalty is validated in `[0, 1,000,000]` cycles. `tu_dram_create_from_config()` propagates the canonical DRAM type, bandwidth, channels, read/write latency, legacy boolean, row policy, and penalty into the executable model. Generated and checked-in headers expose matching constants.
+Accepted policies are `legacy`, `open_page`, and `closed_page`. Both timing penalties are validated in `[0, 1,000,000]` cycles. A conflict value of zero inherits the miss cost and preserves this document's historical equal-cost behavior. Nonzero values model a separately configured open-row replacement; see `dram-row-timing-split.md`. `tu_dram_create_from_config()` propagates the canonical DRAM type, bandwidth, channels, read/write latency, legacy boolean, row policy, and penalties into the executable model. Generated and checked-in headers expose matching constants.
 
 The explicit model tracks one open row per channel/bank. Address mapping is runtime-selectable between burst interleaving across channels and row-buffer-sized interleaving; `burst_interleaved` preserves the historical default. Open-page accesses hit only when the mapped bank retains the requested row. Closed-page accesses are always misses. Reads and writes both participate in explicit row policy; the compatibility mode preserves the old read-only behavior. Address-mapping trade-offs are measured separately in `dram-address-mapping.md`.
 
@@ -66,8 +75,8 @@ For this exact sequential pattern, open page lowers modeled service cycles by 27
 ## Verification
 
 ```sh
-make test-dram                       # 16/16
-make test-dram-row-policy-sweep      # 6 rows, complete hit/miss accounting
+make test-dram                       # 28/28 at the follow-up revision
+make test-dram-row-policy-sweep      # 12 rows, equal/split cost accounting
 python3 scripts/gen_config.py config/tu_config.yaml -o /tmp/tu_config.row-policy.h
 make clean && make
 make test-quick

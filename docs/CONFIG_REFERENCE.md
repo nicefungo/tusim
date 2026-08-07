@@ -56,6 +56,7 @@
 | `dram_row_policy` | 0 | int | 0=Legacy, 1=Open-page, 2=Closed-page |
 | `dram_address_mapping` | 0 | int | 0=Burst-interleaved, 1=Row-interleaved, 2=XOR-interleaved |
 | `dram_row_miss_penalty_cycles` | 10 | uint32 | Added activate/precharge penalty per modeled miss |
+| `dram_row_conflict_penalty_cycles` | 0 | uint32 | Open-row replacement penalty; 0 inherits row_miss_penalty_cycles |
 | `dram_refresh_mode` | 0 | int | 0=None (compat), 1=All-bank, 2=Per-bank (JEDEC tREFI/tRFC) |
 | `dram_refresh_scheduling` | 0 | int | 0=Fixed periodic, 1=Deferred (bounded postponement) |
 | `dram_refresh_rate` | 1 | uint32 | 1x/2x/4x refresh-rate multiplier (high-temp retention) |
