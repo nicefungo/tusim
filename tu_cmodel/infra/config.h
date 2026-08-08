@@ -124,6 +124,7 @@ typedef struct tu_config_t {
     uint32_t dram_row_conflict_penalty_cycles; /* 0 = inherit miss penalty */
     double   dram_latency_read;
     double   dram_latency_write;
+    double   dram_core_clock_ghz; /* TU/core cycle domain; 0 = compatibility 1 GHz */
     /* DRAM refresh (JEDEC tREFI/tRFC); zero fields mean "use defaults". */
     int      dram_refresh_mode;       /* none=0, all_bank=1, per_bank=2 */
     int      dram_refresh_scheduling; /* fixed=0, deferred=1 */

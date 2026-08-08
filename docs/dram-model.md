@@ -139,6 +139,7 @@ uint64_t tu_dram_peak_bw_per_cycle(const tu_dram_model_t *dram, double core_cloc
 
 ```c
 void tu_dram_set_core_clock(tu_dram_model_t *dram, double core_clock_ghz);
+bool tu_dram_configure_core_clock(tu_dram_model_t *dram, double core_clock_ghz);
 void tu_dram_set_row_modeling(tu_dram_model_t *dram, bool enabled);
 ```
 

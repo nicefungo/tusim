@@ -98,6 +98,10 @@ static bool allocate_runtime_state(tu_dram_model_t *dram) {
     return true;
 }
 
+static double effective_core_clock(const tu_dram_model_t *dram) {
+    return (dram && dram->core_clock_ghz > 0.0) ? dram->core_clock_ghz : 1.0;
+}
+
 const char *tu_dram_type_name(tu_dram_type_t type) {
     if (type >= TU_DRAM_TYPE_COUNT) return "unknown";
     return dram_names[type];
@@ -122,6 +126,7 @@ tu_dram_model_t *tu_dram_create(tu_dram_type_t type) {
     dram->address_mapping = TU_DRAM_ADDR_BURST_INTERLEAVED;
     dram->row_miss_penalty_cycles = 10;
     dram->row_conflict_penalty_cycles = 10;
+    dram->core_clock_ghz = 1.0;
 
     /* Allocate per-channel state */
     if (!allocate_runtime_state(dram)) {
@@ -148,6 +153,7 @@ tu_dram_model_t *tu_dram_create_custom(const tu_dram_params_t *params,
     dram->address_mapping = TU_DRAM_ADDR_BURST_INTERLEAVED;
     dram->row_miss_penalty_cycles = 10;
     dram->row_conflict_penalty_cycles = 10;
+    dram->core_clock_ghz = 1.0;
 
     if (!allocate_runtime_state(dram)) {
         free(dram);
@@ -167,6 +173,11 @@ tu_dram_model_t *tu_dram_create_from_config(const struct tu_config_t *cfg) {
     dram->params.read_latency_cycles = (uint32_t)cfg->dram_latency_read;
     dram->params.write_latency_cycles = (uint32_t)cfg->dram_latency_write;
     dram->params.model_row_conflicts = cfg->dram_model_row_conflicts;
+    if (!tu_dram_configure_core_clock(dram,
+            cfg->dram_core_clock_ghz > 0.0 ? cfg->dram_core_clock_ghz : 1.0)) {
+        tu_dram_destroy(dram);
+        return NULL;
+    }
     if (cfg->dram_channels > 0 && cfg->dram_channels != dram->num_channels) {
         free(dram->channel_available_cycle);
         free(dram->open_rows);
@@ -240,7 +251,7 @@ static void ensure_bandwidth(tu_dram_model_t *dram) {
 
     if (dram->current_cycle - dram->bw_window_start >= dram->bw_window_size_cycles) {
         /* Replenish: bytes per window = BW_gbps * 1e9 / (core_cycles_per_sec) * window_cycles */
-        double core_cycles_per_sec = 1.0e9;  /* 1 GHz assumed core clock */
+        double core_cycles_per_sec = effective_core_clock(dram) * 1.0e9;
         double bytes_per_cycle = (dram->params.bandwidth_gbps * 1e9) / core_cycles_per_sec;
         dram->bandwidth_available = (uint64_t)(bytes_per_cycle * dram->bw_window_size_cycles);
         dram->bw_window_start = dram->current_cycle;
@@ -330,10 +341,11 @@ static uint64_t explicit_row_penalty(tu_dram_model_t *dram, uint64_t addr) {
 
 /* ---- Internal: refresh model (JEDEC tREFI/tRFC) ---- */
 
-/* ns → sim cycles: the module's cycle domain assumes a 1 GHz core clock
- * (1 sim cycle = 1 ns), consistent with the existing bandwidth/latency
- * accounting. DRAM-clock-accurate conversion is uncalibrated. */
-static uint64_t refresh_ns_to_cycles(uint64_t ns) { return ns; }
+/* Convert physical ns into the configured TU/core cycle domain. DRAM command
+ * timings remain user-supplied abstractions rather than a DRAM-clock model. */
+static uint64_t refresh_ns_to_cycles(const tu_dram_model_t *dram, uint64_t ns) {
+    return (uint64_t)ceil((double)ns * effective_core_clock(dram));
+}
 
 static uint64_t refresh_effective_interval(const tu_dram_model_t *dram) {
     uint64_t rate = (dram->refresh_rate == 0) ? 1 : dram->refresh_rate;
@@ -579,7 +591,8 @@ uint64_t tu_dram_estimate_transfer(tu_dram_model_t *dram,
     if (!dram || dram->type == TU_DRAM_TYPE_IDEAL) return 0;
 
     /* Simple estimate: bytes / bandwidth * cycles + latency */
-    double bw_bytes_per_cycle = (dram->params.bandwidth_gbps * 1e9) / 1.0e9;
+    double bw_bytes_per_cycle = dram->params.bandwidth_gbps /
+                                effective_core_clock(dram);
     if (bw_bytes_per_cycle <= 0) return num_bytes;
 
     uint64_t bw_cycles = (uint64_t)ceil(num_bytes / bw_bytes_per_cycle);
@@ -600,7 +613,7 @@ void tu_dram_get_stats(const tu_dram_model_t *dram, tu_dram_stats_t *stats) {
 
     /* Compute derived metrics */
     uint64_t total_cycles = dram->current_cycle > 0 ? dram->current_cycle : 1;
-    double core_cycles_per_sec = 1.0e9;
+    double core_cycles_per_sec = effective_core_clock(dram) * 1.0e9;
 
     stats->effective_read_bandwidth =
         (double)stats->total_read_bytes / total_cycles * core_cycles_per_sec / 1e9;
@@ -674,9 +687,27 @@ uint64_t tu_dram_peak_bw_per_cycle(const tu_dram_model_t *dram,
 /* ---- Configuration ---- */
 
 void tu_dram_set_core_clock(tu_dram_model_t *dram, double clock_ghz) {
-    (void)dram;
-    (void)clock_ghz;
-    /* Per-instance core clock tracking deferred to future heartbeat. */
+    (void)tu_dram_configure_core_clock(dram, clock_ghz);
+}
+
+bool tu_dram_configure_core_clock(tu_dram_model_t *dram, double clock_ghz) {
+    if (!dram || !isfinite(clock_ghz) || clock_ghz <= 0.0 || clock_ghz > 10.0)
+        return false;
+    dram->core_clock_ghz = clock_ghz;
+    dram->bw_window_size_cycles = 0;
+    dram->bw_window_start = dram->current_cycle;
+    dram->bandwidth_available = 0;
+    dram->pending_read_bytes = 0;
+    dram->pending_write_bytes = 0;
+    if (dram->refresh_trefi_ns != 0) {
+        dram->refresh_trefi_cycles = refresh_ns_to_cycles(dram, dram->refresh_trefi_ns);
+        dram->refresh_trfc_cycles = refresh_ns_to_cycles(dram, dram->refresh_trfc_ns);
+        dram->refresh_trfc_pb_cycles = refresh_ns_to_cycles(dram, dram->refresh_trfc_pb_ns);
+        dram->refresh_max_deferral_cycles =
+            refresh_ns_to_cycles(dram, dram->refresh_max_deferral_ns);
+        refresh_init_state(dram);
+    }
+    return true;
 }
 
 void tu_dram_set_row_modeling(tu_dram_model_t *dram, bool enabled) {
@@ -744,10 +775,14 @@ bool tu_dram_set_refresh(tu_dram_model_t *dram,
     dram->refresh_mode = mode;
     dram->refresh_scheduling = scheduling;
     dram->refresh_rate = (rate == 0) ? 1 : rate;
-    dram->refresh_trefi_cycles = refresh_ns_to_cycles(trefi);
-    dram->refresh_trfc_cycles = refresh_ns_to_cycles(trfc);
-    dram->refresh_trfc_pb_cycles = refresh_ns_to_cycles(trfc_pb);
-    dram->refresh_max_deferral_cycles = refresh_ns_to_cycles(max_def);
+    dram->refresh_trefi_ns = trefi;
+    dram->refresh_trfc_ns = trfc;
+    dram->refresh_trfc_pb_ns = trfc_pb;
+    dram->refresh_max_deferral_ns = max_def;
+    dram->refresh_trefi_cycles = refresh_ns_to_cycles(dram, trefi);
+    dram->refresh_trfc_cycles = refresh_ns_to_cycles(dram, trfc);
+    dram->refresh_trfc_pb_cycles = refresh_ns_to_cycles(dram, trfc_pb);
+    dram->refresh_max_deferral_cycles = refresh_ns_to_cycles(dram, max_def);
 
     refresh_init_state(dram);
     return true;

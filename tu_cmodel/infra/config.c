@@ -232,6 +232,7 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->dram_row_conflict_penalty_cycles = 0; /* inherit miss cost: compatibility */
     cfg->dram_latency_read   = 50;
     cfg->dram_latency_write  = 50;
+    cfg->dram_core_clock_ghz = 1.0;
     cfg->dram_refresh_mode       = TU_DRAM_CONFIG_REFRESH_NONE;
     cfg->dram_refresh_scheduling = TU_DRAM_CONFIG_REFRESH_SCHED_FIXED;
     cfg->dram_refresh_rate       = 1;
@@ -402,6 +403,11 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
             if (dt && dt->type == TU_JSON_STRING)
                 cfg->dram_type = parse_dram_type_str(tu_json_as_string(dt, NULL));
             parse_opt_double(dram, "bandwidth_gbps", &cfg->dram_bandwidth_gbps);
+            double core_clock_ghz;
+            if (parse_opt_double(dram, "core_clock_ghz", &core_clock_ghz))
+                cfg->dram_core_clock_ghz =
+                    (core_clock_ghz > 0.0 && core_clock_ghz <= 10.0)
+                        ? core_clock_ghz : -1.0;
             int64_t dram_channels;
             if (parse_opt_int64(dram, "channels", &dram_channels))
                 cfg->dram_channels = (dram_channels > 0 && dram_channels <= 1024)
@@ -721,6 +727,13 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
             snprintf(error_buf, error_size, "DRAM row timing penalty is out of range");
         return -1;
     }
+    if (cfg->dram_core_clock_ghz != 0.0 &&
+        !(cfg->dram_core_clock_ghz > 0.0 && cfg->dram_core_clock_ghz <= 10.0)) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DRAM core_clock_ghz must be 0 (compatibility 1 GHz) or in (0,10]");
+        return -1;
+    }
     if (cfg->dram_refresh_mode < TU_DRAM_CONFIG_REFRESH_NONE ||
         cfg->dram_refresh_mode > TU_DRAM_CONFIG_REFRESH_PER_BANK) {
         if (error_buf && error_size > 0)
@@ -1002,6 +1015,8 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             cfg->dram_row_miss_penalty_cycles);
     fprintf(out, "| `dram_row_conflict_penalty_cycles` | %u | uint32 | Open-row replacement penalty; 0 inherits row_miss_penalty_cycles |\n",
             cfg->dram_row_conflict_penalty_cycles);
+    fprintf(out, "| `dram_core_clock_ghz` | %.3f | double | TU/core clock used for GB/s-to-bytes/cycle and ns-to-cycle conversion |\n",
+            cfg->dram_core_clock_ghz);
     fprintf(out, "| `dram_refresh_mode` | %d | int | 0=None (compat), 1=All-bank, 2=Per-bank (JEDEC tREFI/tRFC) |\n",
             cfg->dram_refresh_mode);
     fprintf(out, "| `dram_refresh_scheduling` | %d | int | 0=Fixed periodic, 1=Deferred (bounded postponement) |\n",

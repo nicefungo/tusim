@@ -208,6 +208,7 @@ def generate_header(config, output_path):
     L(f'#define TU_DRAM_ADDR_MAPPING     {address_mapping_map[dram["address_mapping"]]}')
     L(f'#define TU_DRAM_ROW_MISS_PENALTY_CYCLES {dram["row_miss_penalty_cycles"]}')
     L(f'#define TU_DRAM_ROW_CONFLICT_PENALTY_CYCLES {dram["row_conflict_penalty_cycles"]}')
+    L(f'#define TU_DRAM_CORE_CLOCK_GHZ    {dram["core_clock_ghz"]}')
     refresh_map = {'none': 0, 'all_bank': 1, 'per_bank': 2}
     refresh_sched_map = {'fixed': 0, 'deferred': 1}
     refresh = dram['refresh']

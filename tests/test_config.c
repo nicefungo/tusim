@@ -160,6 +160,7 @@ int main(void) {
         CHECK(cfg.dataflow_mode == 0, "dataflow");
         CHECK(cfg.dram_address_mapping == TU_DRAM_CONFIG_ADDR_BURST_INTERLEAVED,
               "DRAM burst mapping default");
+        CHECK(cfg.dram_core_clock_ghz == 1.0, "DRAM core clock default");
         CHECK(cfg.power_tech_node == 0, "power tech auto default");
         CHECK(cfg.power_clock_freq_mhz == 0.0, "power clock auto default");
         PASS();
@@ -232,6 +233,21 @@ int main(void) {
         CHECK(cfg.dram_trfc_ns == 350, "trfc default");
         CHECK(cfg.dram_trfc_pb_ns == 90, "trfc_pb default");
         CHECK(cfg.dram_refresh_max_deferral_ns == 7800, "deferral default");
+        PASS();
+    }
+
+    TEST("Config: DRAM core clock parse + validation");
+    {
+        tu_config_t cfg;
+        char err[128];
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"memory\":{\"dram\":{\"core_clock_ghz\":2.5}}}}",
+            &cfg, err, sizeof(err)) == 0, "clock parse");
+        CHECK(cfg.dram_core_clock_ghz == 2.5, "clock value");
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"memory\":{\"dram\":{\"core_clock_ghz\":0}}}}",
+            &cfg, err, sizeof(err)) != 0, "zero clock accepted");
+        CHECK(strstr(err, "core_clock_ghz") != NULL, "wrong clock error");
         PASS();
     }
 

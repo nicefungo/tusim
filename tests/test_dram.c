@@ -768,6 +768,7 @@ static void test_refresh_config_path(void) {
     zc.dram_type = TU_DRAM_TYPE_DDR5;
     dram = tu_dram_create_from_config(&zc);
     CHECK(dram != NULL, "zero-init create");
+    CHECK(dram->core_clock_ghz == 1.0, "zero-init clock compatibility");
     CHECK(dram->refresh_mode == TU_DRAM_REFRESH_NONE, "zero-init legacy mode");
     CHECK(dram->refresh_rate == 1, "zero rate defaults to 1x");
     CHECK(dram->refresh_trefi_cycles == 7800, "zero trefi defaults to 7800");
@@ -815,6 +816,53 @@ done:;
     tu_dram_destroy(dram);
 }
 
+static void test_core_clock_cycle_domain(void) {
+    TEST("Core clock drives bandwidth and refresh cycle conversion");
+    tu_dram_params_t p = {
+        .clock_ghz = 1.0, .bandwidth_gbps = 64.0,
+        .read_latency_cycles = 50, .write_latency_cycles = 40,
+        .bus_width_bytes = 8, .burst_length = 64,
+        .channels = 1, .banks_per_channel = 4,
+        .row_buffer_size = 256, .model_row_conflicts = false
+    };
+    tu_dram_model_t *dram = tu_dram_create_custom(&p, "clock-test");
+    CHECK(dram != NULL, "create failed");
+    CHECK(tu_dram_configure_core_clock(dram, 0.5), "0.5 GHz rejected");
+    CHECK(tu_dram_estimate_transfer(dram, 4096, true) == 82,
+          "0.5 GHz bandwidth cycles");
+    CHECK(tu_dram_set_refresh(dram, TU_DRAM_REFRESH_ALL_BANK,
+                              TU_DRAM_REFRESH_SCHEDULING_FIXED,
+                              1, 1000, 100, 40, 500), "refresh set");
+    CHECK(dram->refresh_trefi_cycles == 500 && dram->refresh_trfc_cycles == 50,
+          "0.5 GHz refresh conversion");
+
+    CHECK(tu_dram_configure_core_clock(dram, 2.0), "2 GHz rejected");
+    CHECK(tu_dram_estimate_transfer(dram, 4096, true) == 178,
+          "2 GHz bandwidth cycles");
+    CHECK(dram->refresh_trefi_cycles == 2000 && dram->refresh_trfc_cycles == 200,
+          "clock change did not rebuild refresh cycles");
+    CHECK(dram->refresh_next[0] == 2000, "clock change did not rebuild schedule");
+    CHECK(!tu_dram_configure_core_clock(dram, 0.0), "zero clock accepted");
+    CHECK(!tu_dram_configure_core_clock(dram, 11.0), "out-of-range clock accepted");
+    CHECK(dram->core_clock_ghz == 2.0, "failed setter mutated clock");
+
+    tu_config_t cfg;
+    CHECK(tu_config_load_string(
+        "{\"tu\":{\"memory\":{\"dram\":{\"type\":\"ddr5\","
+        "\"core_clock_ghz\":1.5,\"refresh\":{\"mode\":\"all_bank\","
+        "\"trefi_ns\":1000,\"trfc_ns\":100,\"max_deferral_ns\":1000}}}}}",
+        &cfg, NULL, 0) == 0, "clock config parse");
+    tu_dram_destroy(dram);
+    dram = tu_dram_create_from_config(&cfg);
+    CHECK(dram != NULL && dram->core_clock_ghz == 1.5,
+          "clock config propagation");
+    CHECK(dram->refresh_trefi_cycles == 1500 && dram->refresh_trfc_cycles == 150,
+          "config refresh cycle conversion");
+    PASS();
+done:;
+    tu_dram_destroy(dram);
+}
+
 /* ---- Main ---- */
 int main(void) {
     printf("\n=== TU DRAM Model Tests ===\n\n");
@@ -847,6 +895,7 @@ int main(void) {
     test_refresh_rejects();
     test_refresh_config_path();
     test_refresh_closes_rows();
+    test_core_clock_cycle_domain();
 
     printf("\n=== Results: %d/%d passed ===\n", tests_passed, tests_run);
     return (tests_passed == tests_run) ? 0 : 1;

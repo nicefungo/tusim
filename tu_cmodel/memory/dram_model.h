@@ -127,6 +127,7 @@ typedef struct {
     uint64_t  bandwidth_available;     /* Bytes of BW remaining in current window */
     uint64_t  bw_window_size_cycles;   /* Size of BW metering window */
     uint64_t  bw_window_start;         /* Start cycle of current BW window */
+    double    core_clock_ghz;           /* TU/core clock defining one sim cycle */
 
     /* Access queues for contention modeling */
     uint64_t  pending_read_bytes;
@@ -141,7 +142,7 @@ typedef struct {
     uint32_t row_conflict_penalty_cycles; /* Precharge + activate replacement */
     uint64_t *open_rows;              /* channel×bank rows; UINT64_MAX=none */
 
-    /* Refresh state (JEDEC tREFI/tRFC; ns at 1 sim cycle = 1 ns) */
+    /* Refresh state (JEDEC tREFI/tRFC; ns converted at core_clock_ghz) */
     tu_dram_refresh_mode_t      refresh_mode;
     tu_dram_refresh_scheduling_t refresh_scheduling;
     uint32_t refresh_rate;                /* 1x, 2x, 4x; high-temp retention */
@@ -149,6 +150,10 @@ typedef struct {
     uint64_t refresh_trfc_cycles;         /* all-bank lockout duration */
     uint64_t refresh_trfc_pb_cycles;      /* per-bank lockout duration */
     uint64_t refresh_max_deferral_cycles; /* deferred hard deadline (≤ trefi) */
+    uint64_t refresh_trefi_ns;            /* source timings retained for clock changes */
+    uint64_t refresh_trfc_ns;
+    uint64_t refresh_trfc_pb_ns;
+    uint64_t refresh_max_deferral_ns;
     uint64_t *refresh_next;               /* per-bank next scheduled refresh cycle */
     uint64_t *refresh_until;              /* per-bank busy-until; 0 = idle */
 
@@ -227,6 +232,10 @@ uint64_t tu_dram_peak_bw_per_cycle(const tu_dram_model_t *dram,
 /* Set the core clock frequency (GHz) for bandwidth calculations. */
 void tu_dram_set_core_clock(tu_dram_model_t *dram, double core_clock_ghz);
 
+/* Validated core-clock setter. Recomputes bandwidth and refresh cycle-domain
+ * state; returns false without mutation for non-finite/out-of-range clocks. */
+bool tu_dram_configure_core_clock(tu_dram_model_t *dram, double core_clock_ghz);
+
 /* Enable/disable row buffer conflict modeling. */
 void tu_dram_set_row_modeling(tu_dram_model_t *dram, bool enabled);
 
@@ -244,8 +253,8 @@ bool tu_dram_set_row_policy_timing(tu_dram_model_t *dram,
 bool tu_dram_set_address_mapping(tu_dram_model_t *dram,
                                  tu_dram_address_mapping_mode_t mapping);
 
-/* Configure the refresh model. ns timings are converted at 1 sim cycle = 1 ns
- * (the module's documented 1 GHz core-clock cycle domain). `rate` 0 is treated
+/* Configure the refresh model. ns timings are converted into the configured
+ * TU/core-clock cycle domain. `rate` 0 is treated
  * as 1x; `max_deferral_ns` 0 defaults to tREFI and is clamped to the effective
  * interval internally. Returns false for unsupported mode/scheduling/rate or
  * for max_deferral > tREFI. */
