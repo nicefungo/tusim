@@ -863,6 +863,68 @@ done:;
     tu_dram_destroy(dram);
 }
 
+static void test_latency_domain(void) {
+    TEST("DRAM base latency supports core-cycle and physical-ns domains");
+    tu_dram_params_t p = {
+        .clock_ghz = 1.0, .bandwidth_gbps = 64.0,
+        .read_latency_cycles = 50, .write_latency_cycles = 40,
+        .bus_width_bytes = 8, .burst_length = 64,
+        .channels = 1, .banks_per_channel = 4,
+        .row_buffer_size = 256, .model_row_conflicts = false
+    };
+    uint64_t cycles = 0, stall = 0;
+    tu_dram_model_t *dram = tu_dram_create_custom(&p, "latency-domain-test");
+    CHECK(dram != NULL, "create failed");
+    CHECK(dram->latency_domain == TU_DRAM_LATENCY_CORE_CYCLES,
+          "custom default changed");
+    CHECK(tu_dram_configure_core_clock(dram, 0.5), "0.5 GHz rejected");
+    CHECK(dram->params.read_latency_cycles == 50, "core-cycle latency rescaled");
+    CHECK(tu_dram_set_latency_domain(dram, TU_DRAM_LATENCY_PHYSICAL_NS,
+                                     50.0, 40.0), "physical-ns mode rejected");
+    CHECK(dram->params.read_latency_cycles == 25 &&
+          dram->params.write_latency_cycles == 20, "0.5 GHz ns conversion");
+    tu_dram_read(dram, 0, 64, &cycles, &stall);
+    CHECK(cycles == 25, "physical-ns read service did not use converted latency");
+    tu_dram_write(dram, 64, 64, &cycles, &stall);
+    CHECK(cycles == 20, "physical-ns write service did not use converted latency");
+    CHECK(tu_dram_estimate_transfer(dram, 4096, true) == 57,
+          "0.5 GHz physical estimate");
+    CHECK(tu_dram_configure_core_clock(dram, 2.0), "2 GHz rejected");
+    CHECK(dram->params.read_latency_cycles == 100 &&
+          dram->params.write_latency_cycles == 80, "clock did not rescale latency");
+    CHECK(tu_dram_estimate_transfer(dram, 4096, true) == 228,
+          "2 GHz physical estimate");
+    CHECK(!tu_dram_set_latency_domain(dram, (tu_dram_latency_domain_t)9,
+                                      50.0, 40.0), "unknown domain accepted");
+    CHECK(!tu_dram_set_latency_domain(dram, TU_DRAM_LATENCY_PHYSICAL_NS,
+                                      -1.0, 40.0), "negative latency accepted");
+    CHECK(dram->latency_domain == TU_DRAM_LATENCY_PHYSICAL_NS &&
+          dram->params.read_latency_cycles == 100, "failed setter mutated state");
+
+    tu_config_t cfg;
+    CHECK(tu_config_load_string(
+        "{\"tu\":{\"memory\":{\"latency\":{\"dram_read\":65,\"dram_write\":45},"
+        "\"dram\":{\"type\":\"ddr5\",\"latency_domain\":\"physical_ns\","
+        "\"core_clock_ghz\":1.5}}}}", &cfg, NULL, 0) == 0,
+        "physical-ns config parse");
+    tu_dram_destroy(dram);
+    dram = tu_dram_create_from_config(&cfg);
+    CHECK(dram != NULL && dram->latency_domain == TU_DRAM_LATENCY_PHYSICAL_NS,
+          "config domain propagation");
+    CHECK(dram->params.read_latency_cycles == 98 &&
+          dram->params.write_latency_cycles == 68, "config ns conversion");
+
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.dram_type = TU_DRAM_TYPE_DDR5;
+    dram = (tu_dram_destroy(dram), tu_dram_create_from_config(&cfg));
+    CHECK(dram != NULL && dram->latency_domain == TU_DRAM_LATENCY_CORE_CYCLES,
+          "zero-init compatibility domain");
+    CHECK(dram->params.read_latency_cycles == 0, "zero-init latency changed");
+    PASS();
+done:;
+    tu_dram_destroy(dram);
+}
+
 /* ---- Main ---- */
 int main(void) {
     printf("\n=== TU DRAM Model Tests ===\n\n");
@@ -896,6 +958,7 @@ int main(void) {
     test_refresh_config_path();
     test_refresh_closes_rows();
     test_core_clock_cycle_domain();
+    test_latency_domain();
 
     printf("\n=== Results: %d/%d passed ===\n", tests_passed, tests_run);
     return (tests_passed == tests_run) ? 0 : 1;

@@ -102,6 +102,21 @@ static double effective_core_clock(const tu_dram_model_t *dram) {
     return (dram && dram->core_clock_ghz > 0.0) ? dram->core_clock_ghz : 1.0;
 }
 
+static bool latency_cycles_for(tu_dram_latency_domain_t domain, double source,
+                               double core_clock_ghz, uint32_t *cycles_out) {
+    if (!cycles_out || !isfinite(source) || source < 0.0 ||
+        source > 100000000.0 || !isfinite(core_clock_ghz) ||
+        core_clock_ghz <= 0.0) return false;
+    double converted = (domain == TU_DRAM_LATENCY_PHYSICAL_NS)
+                           ? ceil(source * core_clock_ghz) : source;
+    if (domain < TU_DRAM_LATENCY_CORE_CYCLES ||
+        domain > TU_DRAM_LATENCY_PHYSICAL_NS || converted > UINT32_MAX)
+        return false;
+    /* CORE_CYCLES intentionally preserves the historical truncating cast. */
+    *cycles_out = (uint32_t)converted;
+    return true;
+}
+
 const char *tu_dram_type_name(tu_dram_type_t type) {
     if (type >= TU_DRAM_TYPE_COUNT) return "unknown";
     return dram_names[type];
@@ -127,6 +142,9 @@ tu_dram_model_t *tu_dram_create(tu_dram_type_t type) {
     dram->row_miss_penalty_cycles = 10;
     dram->row_conflict_penalty_cycles = 10;
     dram->core_clock_ghz = 1.0;
+    dram->latency_domain = TU_DRAM_LATENCY_CORE_CYCLES;
+    dram->read_latency_source = dram->params.read_latency_cycles;
+    dram->write_latency_source = dram->params.write_latency_cycles;
 
     /* Allocate per-channel state */
     if (!allocate_runtime_state(dram)) {
@@ -154,6 +172,9 @@ tu_dram_model_t *tu_dram_create_custom(const tu_dram_params_t *params,
     dram->row_miss_penalty_cycles = 10;
     dram->row_conflict_penalty_cycles = 10;
     dram->core_clock_ghz = 1.0;
+    dram->latency_domain = TU_DRAM_LATENCY_CORE_CYCLES;
+    dram->read_latency_source = params->read_latency_cycles;
+    dram->write_latency_source = params->write_latency_cycles;
 
     if (!allocate_runtime_state(dram)) {
         free(dram);
@@ -170,11 +191,15 @@ tu_dram_model_t *tu_dram_create_from_config(const struct tu_config_t *cfg) {
     if (!dram) return NULL;
 
     dram->params.bandwidth_gbps = cfg->dram_bandwidth_gbps;
-    dram->params.read_latency_cycles = (uint32_t)cfg->dram_latency_read;
-    dram->params.write_latency_cycles = (uint32_t)cfg->dram_latency_write;
     dram->params.model_row_conflicts = cfg->dram_model_row_conflicts;
     if (!tu_dram_configure_core_clock(dram,
             cfg->dram_core_clock_ghz > 0.0 ? cfg->dram_core_clock_ghz : 1.0)) {
+        tu_dram_destroy(dram);
+        return NULL;
+    }
+    if (!tu_dram_set_latency_domain(dram,
+            (tu_dram_latency_domain_t)cfg->dram_latency_domain,
+            cfg->dram_latency_read, cfg->dram_latency_write)) {
         tu_dram_destroy(dram);
         return NULL;
     }
@@ -693,7 +718,14 @@ void tu_dram_set_core_clock(tu_dram_model_t *dram, double clock_ghz) {
 bool tu_dram_configure_core_clock(tu_dram_model_t *dram, double clock_ghz) {
     if (!dram || !isfinite(clock_ghz) || clock_ghz <= 0.0 || clock_ghz > 10.0)
         return false;
+    uint32_t read_cycles, write_cycles;
+    if (!latency_cycles_for(dram->latency_domain, dram->read_latency_source,
+                            clock_ghz, &read_cycles) ||
+        !latency_cycles_for(dram->latency_domain, dram->write_latency_source,
+                            clock_ghz, &write_cycles)) return false;
     dram->core_clock_ghz = clock_ghz;
+    dram->params.read_latency_cycles = read_cycles;
+    dram->params.write_latency_cycles = write_cycles;
     dram->bw_window_size_cycles = 0;
     dram->bw_window_start = dram->current_cycle;
     dram->bandwidth_available = 0;
@@ -707,6 +739,23 @@ bool tu_dram_configure_core_clock(tu_dram_model_t *dram, double clock_ghz) {
             refresh_ns_to_cycles(dram, dram->refresh_max_deferral_ns);
         refresh_init_state(dram);
     }
+    return true;
+}
+
+bool tu_dram_set_latency_domain(tu_dram_model_t *dram,
+                                tu_dram_latency_domain_t domain,
+                                double read_latency, double write_latency) {
+    if (!dram) return false;
+    uint32_t read_cycles, write_cycles;
+    double clock = effective_core_clock(dram);
+    if (!latency_cycles_for(domain, read_latency, clock, &read_cycles) ||
+        !latency_cycles_for(domain, write_latency, clock, &write_cycles))
+        return false;
+    dram->latency_domain = domain;
+    dram->read_latency_source = read_latency;
+    dram->write_latency_source = write_latency;
+    dram->params.read_latency_cycles = read_cycles;
+    dram->params.write_latency_cycles = write_cycles;
     return true;
 }
 

@@ -59,6 +59,11 @@ typedef enum {
     TU_DRAM_ADDR_XOR_INTERLEAVED = 2
 } tu_dram_address_mapping_mode_t;
 
+typedef enum {
+    TU_DRAM_LATENCY_CORE_CYCLES = 0,
+    TU_DRAM_LATENCY_PHYSICAL_NS = 1
+} tu_dram_latency_domain_t;
+
 /* Refresh model (JEDEC tREFI/tRFC). Subsystem enum family is disjoint from
  * the generated TU_DRAM_REFRESH_MODE_* / TU_DRAM_REFRESH_SCHED_* macros and
  * the canonical TU_DRAM_CONFIG_REFRESH_* enums (preprocessor namespace). */
@@ -128,6 +133,9 @@ typedef struct {
     uint64_t  bw_window_size_cycles;   /* Size of BW metering window */
     uint64_t  bw_window_start;         /* Start cycle of current BW window */
     double    core_clock_ghz;           /* TU/core clock defining one sim cycle */
+    tu_dram_latency_domain_t latency_domain;
+    double    read_latency_source;      /* cycles or ns according to domain */
+    double    write_latency_source;     /* cycles or ns according to domain */
 
     /* Access queues for contention modeling */
     uint64_t  pending_read_bytes;
@@ -235,6 +243,12 @@ void tu_dram_set_core_clock(tu_dram_model_t *dram, double core_clock_ghz);
 /* Validated core-clock setter. Recomputes bandwidth and refresh cycle-domain
  * state; returns false without mutation for non-finite/out-of-range clocks. */
 bool tu_dram_configure_core_clock(tu_dram_model_t *dram, double core_clock_ghz);
+
+/* Select whether read/write base latency values are fixed TU/core cycles or
+ * physical nanoseconds converted with ceil(ns * core_clock_ghz). */
+bool tu_dram_set_latency_domain(tu_dram_model_t *dram,
+                                tu_dram_latency_domain_t domain,
+                                double read_latency, double write_latency);
 
 /* Enable/disable row buffer conflict modeling. */
 void tu_dram_set_row_modeling(tu_dram_model_t *dram, bool enabled);

@@ -171,6 +171,14 @@ static int parse_dram_address_mapping_str(const char *s) {
     return -1;
 }
 
+static int parse_dram_latency_domain_str(const char *s) {
+    if (!s || strcmp(s, "core_cycles") == 0)
+        return TU_DRAM_CONFIG_LATENCY_CORE_CYCLES;
+    if (strcmp(s, "physical_ns") == 0)
+        return TU_DRAM_CONFIG_LATENCY_PHYSICAL_NS;
+    return -1;
+}
+
 static int parse_dram_refresh_mode_str(const char *s) {
     if (!s || strcmp(s, "none") == 0) return TU_DRAM_CONFIG_REFRESH_NONE;
     if (strcmp(s, "all_bank") == 0) return TU_DRAM_CONFIG_REFRESH_ALL_BANK;
@@ -232,6 +240,7 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->dram_row_conflict_penalty_cycles = 0; /* inherit miss cost: compatibility */
     cfg->dram_latency_read   = 50;
     cfg->dram_latency_write  = 50;
+    cfg->dram_latency_domain = TU_DRAM_CONFIG_LATENCY_CORE_CYCLES;
     cfg->dram_core_clock_ghz = 1.0;
     cfg->dram_refresh_mode       = TU_DRAM_CONFIG_REFRESH_NONE;
     cfg->dram_refresh_scheduling = TU_DRAM_CONFIG_REFRESH_SCHED_FIXED;
@@ -427,6 +436,10 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
             if (parse_opt_int64(dram, "row_conflict_penalty_cycles", &row_penalty))
                 cfg->dram_row_conflict_penalty_cycles =
                     (row_penalty >= 0 && row_penalty <= 1000000) ? (uint32_t)row_penalty : UINT32_MAX;
+            const tu_json_value_t *ld = tu_json_get(dram, "latency_domain");
+            if (ld && ld->type == TU_JSON_STRING)
+                cfg->dram_latency_domain =
+                    parse_dram_latency_domain_str(tu_json_as_string(ld, NULL));
             const tu_json_value_t *rf = tu_json_get(dram, "refresh");
             if (rf && rf->type == TU_JSON_OBJECT) {
                 const tu_json_value_t *rm = tu_json_get(rf, "mode");
@@ -727,6 +740,19 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
             snprintf(error_buf, error_size, "DRAM row timing penalty is out of range");
         return -1;
     }
+    if (cfg->dram_latency_domain < TU_DRAM_CONFIG_LATENCY_CORE_CYCLES ||
+        cfg->dram_latency_domain > TU_DRAM_CONFIG_LATENCY_PHYSICAL_NS) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DRAM latency_domain must be core_cycles or physical_ns");
+        return -1;
+    }
+    if (!(cfg->dram_latency_read >= 0.0 && cfg->dram_latency_read <= 100000000.0) ||
+        !(cfg->dram_latency_write >= 0.0 && cfg->dram_latency_write <= 100000000.0)) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size, "DRAM latency value is out of range");
+        return -1;
+    }
     if (cfg->dram_core_clock_ghz != 0.0 &&
         !(cfg->dram_core_clock_ghz > 0.0 && cfg->dram_core_clock_ghz <= 10.0)) {
         if (error_buf && error_size > 0)
@@ -1015,6 +1041,10 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             cfg->dram_row_miss_penalty_cycles);
     fprintf(out, "| `dram_row_conflict_penalty_cycles` | %u | uint32 | Open-row replacement penalty; 0 inherits row_miss_penalty_cycles |\n",
             cfg->dram_row_conflict_penalty_cycles);
+    fprintf(out, "| `dram_latency_domain` | %d | int | 0=Fixed TU/core cycles (compat), 1=Physical ns converted at core clock |\n",
+            cfg->dram_latency_domain);
+    fprintf(out, "| `dram_latency_read/write` | %.3f / %.3f | double | Base read/write latency in selected domain |\n",
+            cfg->dram_latency_read, cfg->dram_latency_write);
     fprintf(out, "| `dram_core_clock_ghz` | %.3f | double | TU/core clock used for GB/s-to-bytes/cycle and ns-to-cycle conversion |\n",
             cfg->dram_core_clock_ghz);
     fprintf(out, "| `dram_refresh_mode` | %d | int | 0=None (compat), 1=All-bank, 2=Per-bank (JEDEC tREFI/tRFC) |\n",

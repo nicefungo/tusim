@@ -160,6 +160,8 @@ int main(void) {
         CHECK(cfg.dataflow_mode == 0, "dataflow");
         CHECK(cfg.dram_address_mapping == TU_DRAM_CONFIG_ADDR_BURST_INTERLEAVED,
               "DRAM burst mapping default");
+        CHECK(cfg.dram_latency_domain == TU_DRAM_CONFIG_LATENCY_CORE_CYCLES,
+              "DRAM core-cycle latency default");
         CHECK(cfg.dram_core_clock_ghz == 1.0, "DRAM core clock default");
         CHECK(cfg.power_tech_node == 0, "power tech auto default");
         CHECK(cfg.power_clock_freq_mhz == 0.0, "power clock auto default");
@@ -248,6 +250,29 @@ int main(void) {
             "{\"tu\":{\"memory\":{\"dram\":{\"core_clock_ghz\":0}}}}",
             &cfg, err, sizeof(err)) != 0, "zero clock accepted");
         CHECK(strstr(err, "core_clock_ghz") != NULL, "wrong clock error");
+        PASS();
+    }
+
+    TEST("Config: DRAM latency domain parse + validation");
+    {
+        tu_config_t cfg;
+        char err[128];
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"memory\":{\"latency\":{\"dram_read\":65.5,\"dram_write\":45},"
+            "\"dram\":{\"latency_domain\":\"physical_ns\"}}}}",
+            &cfg, err, sizeof(err)) == 0, "latency-domain parse");
+        CHECK(cfg.dram_latency_domain == TU_DRAM_CONFIG_LATENCY_PHYSICAL_NS,
+              "latency domain value");
+        CHECK(cfg.dram_latency_read == 65.5 && cfg.dram_latency_write == 45.0,
+              "latency source values");
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"memory\":{\"dram\":{\"latency_domain\":\"dram_cycles\"}}}}",
+            &cfg, err, sizeof(err)) != 0, "unknown latency domain accepted");
+        CHECK(strstr(err, "latency_domain") != NULL, "wrong latency-domain error");
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"memory\":{\"latency\":{\"dram_read\":-1}}}}",
+            &cfg, err, sizeof(err)) != 0, "negative latency accepted");
+        CHECK(strstr(err, "latency value") != NULL, "wrong latency-value error");
         PASS();
     }
 

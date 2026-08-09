@@ -43,8 +43,8 @@ tu:
     latency:
       sram_read: 1        # SRAM read latency
       sram_write: 1       # SRAM write latency
-      dram_read: 50       # DRAM read latency (for DMA)
-      dram_write: 50      # DRAM write latency
+      dram_read: 50       # cycles or ns, selected by dram.latency_domain
+      dram_write: 50      # cycles or ns, selected by dram.latency_domain
 
     # DRAM subsystem (off-chip memory)
     dram:
@@ -56,6 +56,7 @@ tu:
       address_mapping: "burst_interleaved"  # burst_interleaved | row_interleaved | xor_interleaved
       row_miss_penalty_cycles: 10
       row_conflict_penalty_cycles: 0  # 0 inherits miss cost; set > miss for precharge + activate
+      latency_domain: "core_cycles"  # core_cycles (compat) | physical_ns
       core_clock_ghz: 1.0
       refresh:
         mode: "none"        # none | all_bank | per_bank

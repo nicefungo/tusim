@@ -35,7 +35,7 @@ The full configuration path now honors `tu.memory.dram.core_clock_ghz`:
 
 Command: `make test-dram-core-clock-sweep`
 
-Configuration: custom non-ideal DRAM, fixed 64 GB/s external bandwidth, 50-cycle read-latency term, 4 KiB read estimate, tREFI=1000 ns, tRFC=100 ns, all-bank fixed refresh.
+Configuration: custom non-ideal DRAM, fixed 64 GB/s external bandwidth, compatibility `core_cycles` latency domain with a 50-cycle read term, 4 KiB read estimate, tREFI=1000 ns, tRFC=100 ns, all-bank fixed refresh. The follow-up `dram-latency-domain.md` adds and measures the physically timed alternative.
 
 | Clock (GHz) | BW (B/core cycle) | 4 KiB estimate (cycles) | Estimate (ns) | tREFI (cycles) | tRFC (cycles) |
 |---:|---:|---:|---:|---:|---:|
@@ -50,7 +50,7 @@ All three rows pass exact fail-closed gates against `ceil(bytes × GHz / GB/s)` 
 1. **The prior non-1-GHz path was a documented no-op.** The same 64 GB/s was incorrectly treated as 64 B/cycle at every clock, and refresh ns were incorrectly copied directly to cycles.
 2. **Fixed physical bandwidth now has the expected inverse cycle relation.** From 0.5 to 2.0 GHz, bandwidth changes from 128 to 32 B/core-cycle; the 4 KiB bandwidth component therefore changes from 32 to 128 cycles.
 3. **Refresh physical time remains invariant.** tREFI=1000 ns maps to 500/1000/2000 cycles and tRFC=100 ns maps to 50/100/200 cycles at 0.5/1/2 GHz.
-4. **The transfer-estimate ns column is not a silicon latency prediction.** Its fixed 50-cycle base-latency term shrinks in physical time as clock rises, causing the printed 164→89 ns trend. The current API specifies that term in cycles and has no calibrated DRAM-command-clock conversion. Only the bandwidth and refresh conversions are validated here.
+4. **The transfer-estimate ns column is not a silicon latency prediction.** Its compatibility-mode 50-cycle base-latency term shrinks in physical time as clock rises, causing the printed 164→89 ns trend. `dram-latency-domain.md` now preserves both this fixed-cycle contract and a fixed-physical-ns alternative; neither is calibrated DRAM-command timing.
 
 ## Gain versus sacrifice
 
@@ -66,7 +66,7 @@ All three rows pass exact fail-closed gates against `ceil(bytes × GHz / GB/s)` 
 
 ## Fidelity limits
 
-This remains a deterministic service model, not a DRAM controller or DVFS simulator. Read/write latency fields remain uncalibrated cycle terms; DRAM command-clock ratios, PLL/voltage transitions, CDC FIFOs, timing closure, thermal limits, queue overlap, arbitration, bank groups, and refresh energy are not modeled. The coarse bandwidth window is capacity accounting, not a request schedule. Do not combine this sweep with the separate power-model clock knob as if the two were automatically synchronized.
+This remains a deterministic service model, not a DRAM controller or DVFS simulator. Read/write latency now has explicit fixed-core-cycle and physical-ns domains, but both remain uncalibrated aggregate terms; DRAM command-clock ratios, PLL/voltage transitions, CDC FIFOs, timing closure, thermal limits, queue overlap, arbitration, bank groups, and refresh energy are not modeled. The coarse bandwidth window is capacity accounting, not a request schedule. Do not combine this sweep with the separate power-model clock knob as if the two were automatically synchronized.
 
 ## Verification
 
@@ -82,4 +82,4 @@ make test-quick
 
 ## Actionable conclusion
 
-Keep core clock runtime-configurable and retain 1 GHz as the compatibility default. Use the setting to maintain consistent physical-bandwidth and refresh conversions across architecture studies. Do not interpret higher clock as universally better: it reduces bytes/core-cycle and brings unmodeled area, power, timing, CDC, and thermal costs. Before making physical latency or DVFS conclusions, add an explicit calibrated contract for read/write latency units and clock-domain relationships.
+Keep core clock runtime-configurable and retain 1 GHz as the compatibility default. Use the setting to maintain consistent physical-bandwidth and refresh conversions across architecture studies. Use `latency_domain=physical_ns` only when read/write inputs are physical-time assumptions; retain `core_cycles` for compatibility and fixed-stage abstractions. Do not interpret higher clock as universally better: it reduces bytes/core-cycle and brings unmodeled area, power, timing, CDC, and thermal costs. Calibration and a decomposed controller/CDC/DRAM timing contract remain required for physical-latency or DVFS conclusions.

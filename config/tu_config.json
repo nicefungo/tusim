@@ -44,6 +44,7 @@
         "address_mapping": "burst_interleaved",
         "row_miss_penalty_cycles": 10,
         "row_conflict_penalty_cycles": 0,
+        "latency_domain": "core_cycles",
         "core_clock_ghz": 1.0,
         "refresh": {
           "mode": "none",

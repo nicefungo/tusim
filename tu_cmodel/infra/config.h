@@ -52,6 +52,12 @@ typedef enum {
     TU_DRAM_CONFIG_ADDR_XOR_INTERLEAVED = 2
 } tu_dram_address_mapping_t;
 
+/* Zero preserves historical latency values as TU/core-cycle terms. */
+typedef enum {
+    TU_DRAM_CONFIG_LATENCY_CORE_CYCLES = 0,
+    TU_DRAM_CONFIG_LATENCY_PHYSICAL_NS = 1
+} tu_dram_config_latency_domain_t;
+
 /* Zero preserves the historical no-refresh model for legacy callers.
  * Real DRAM always refreshes; `none` is the compatibility path only. */
 typedef enum {
@@ -122,8 +128,9 @@ typedef struct tu_config_t {
     int      dram_address_mapping;  /* burst=0, row=1, XOR-interleaved=2 */
     uint32_t dram_row_miss_penalty_cycles;
     uint32_t dram_row_conflict_penalty_cycles; /* 0 = inherit miss penalty */
-    double   dram_latency_read;
-    double   dram_latency_write;
+    double   dram_latency_read;  /* cycles or ns, selected by latency domain */
+    double   dram_latency_write; /* cycles or ns, selected by latency domain */
+    int      dram_latency_domain; /* core_cycles=0 (compat), physical_ns=1 */
     double   dram_core_clock_ghz; /* TU/core cycle domain; 0 = compatibility 1 GHz */
     /* DRAM refresh (JEDEC tREFI/tRFC); zero fields mean "use defaults". */
     int      dram_refresh_mode;       /* none=0, all_bank=1, per_bank=2 */
