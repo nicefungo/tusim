@@ -42,7 +42,8 @@ typedef enum {
 typedef enum {
     TU_DRAM_CONFIG_ROW_LEGACY = 0,
     TU_DRAM_CONFIG_ROW_OPEN_PAGE = 1,
-    TU_DRAM_CONFIG_ROW_CLOSED_PAGE = 2
+    TU_DRAM_CONFIG_ROW_CLOSED_PAGE = 2,
+    TU_DRAM_CONFIG_ROW_ADAPTIVE_TIMEOUT = 3
 } tu_dram_row_policy_t;
 
 /* Zero preserves the historical burst-granularity channel striping. */
@@ -124,10 +125,11 @@ typedef struct tu_config_t {
     double   dram_bandwidth_gbps;
     uint32_t dram_channels;
     bool     dram_model_row_conflicts;
-    int      dram_row_policy;       /* legacy=0, open-page=1, closed-page=2 */
+    int      dram_row_policy;       /* legacy=0, open=1, closed=2, timeout=3 */
     int      dram_address_mapping;  /* burst=0, row=1, XOR-interleaved=2 */
     uint32_t dram_row_miss_penalty_cycles;
     uint32_t dram_row_conflict_penalty_cycles; /* 0 = inherit miss penalty */
+    uint32_t dram_row_open_timeout_cycles; /* adaptive timeout; >0 when selected */
     double   dram_latency_read;  /* cycles or ns, selected by latency domain */
     double   dram_latency_write; /* cycles or ns, selected by latency domain */
     int      dram_latency_domain; /* core_cycles=0 (compat), physical_ns=1 */

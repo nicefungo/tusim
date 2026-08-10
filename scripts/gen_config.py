@@ -195,10 +195,12 @@ def generate_header(config, output_path):
     L(f'#define TU_LATENCY_DRAM_READ    {lat["dram_read"]}')
     L(f'#define TU_LATENCY_DRAM_WRITE   {lat["dram_write"]}')
     dram = mem['dram']
-    row_policy_map = {'legacy': 0, 'open_page': 1, 'closed_page': 2}
+    row_policy_map = {'legacy': 0, 'open_page': 1, 'closed_page': 2,
+                      'adaptive_timeout': 3}
     L('#define TU_DRAM_ROW_POLICY_LEGACY       0')
     L('#define TU_DRAM_ROW_POLICY_OPEN_PAGE    1')
     L('#define TU_DRAM_ROW_POLICY_CLOSED_PAGE  2')
+    L('#define TU_DRAM_ROW_POLICY_ADAPTIVE_TIMEOUT 3')
     L(f'#define TU_DRAM_ROW_POLICY       {row_policy_map[dram["row_policy"]]}')
     address_mapping_map = {'burst_interleaved': 0, 'row_interleaved': 1,
                            'xor_interleaved': 2}
@@ -208,6 +210,7 @@ def generate_header(config, output_path):
     L(f'#define TU_DRAM_ADDR_MAPPING     {address_mapping_map[dram["address_mapping"]]}')
     L(f'#define TU_DRAM_ROW_MISS_PENALTY_CYCLES {dram["row_miss_penalty_cycles"]}')
     L(f'#define TU_DRAM_ROW_CONFLICT_PENALTY_CYCLES {dram["row_conflict_penalty_cycles"]}')
+    L(f'#define TU_DRAM_ROW_OPEN_TIMEOUT_CYCLES {dram["row_open_timeout_cycles"]}')
     latency_domain_map = {'core_cycles': 0, 'physical_ns': 1}
     L('#define TU_DRAM_LATENCY_DOMAIN_CORE_CYCLES 0')
     L('#define TU_DRAM_LATENCY_DOMAIN_PHYSICAL_NS 1')

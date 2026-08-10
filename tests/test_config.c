@@ -160,6 +160,8 @@ int main(void) {
         CHECK(cfg.dataflow_mode == 0, "dataflow");
         CHECK(cfg.dram_address_mapping == TU_DRAM_CONFIG_ADDR_BURST_INTERLEAVED,
               "DRAM burst mapping default");
+        CHECK(cfg.dram_row_open_timeout_cycles == 100,
+              "DRAM row timeout default");
         CHECK(cfg.dram_latency_domain == TU_DRAM_CONFIG_LATENCY_CORE_CYCLES,
               "DRAM core-cycle latency default");
         CHECK(cfg.dram_core_clock_ghz == 1.0, "DRAM core clock default");

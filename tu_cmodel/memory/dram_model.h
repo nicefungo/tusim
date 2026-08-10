@@ -50,7 +50,8 @@ typedef enum {
 typedef enum {
     TU_DRAM_ROW_LEGACY = 0,
     TU_DRAM_ROW_OPEN_PAGE = 1,
-    TU_DRAM_ROW_CLOSED_PAGE = 2
+    TU_DRAM_ROW_CLOSED_PAGE = 2,
+    TU_DRAM_ROW_ADAPTIVE_TIMEOUT = 3
 } tu_dram_row_policy_mode_t;
 
 typedef enum {
@@ -108,6 +109,7 @@ typedef struct {
     uint64_t  total_row_hits;         /* Reuse of an already-open bank row */
     uint64_t  total_row_empty_misses; /* Activate from precharged/closed state */
     uint64_t  total_row_replacements; /* Precharge an open row, then activate */
+    uint64_t  total_row_timeout_precharges; /* Lazy adaptive idle closures */
 
     /* Refresh accounting (JEDEC tREFI/tRFC) */
     uint64_t  total_refresh_events;       /* Refresh commands issued */
@@ -148,7 +150,9 @@ typedef struct {
     tu_dram_address_mapping_mode_t address_mapping;
     uint32_t row_miss_penalty_cycles;     /* Activate from closed state */
     uint32_t row_conflict_penalty_cycles; /* Precharge + activate replacement */
+    uint32_t row_open_timeout_cycles;     /* Adaptive idle threshold */
     uint64_t *open_rows;              /* channel×bank rows; UINT64_MAX=none */
+    uint64_t *row_last_access_cycle;   /* channel×bank; UINT64_MAX=never */
 
     /* Refresh state (JEDEC tREFI/tRFC; ns converted at core_clock_ghz) */
     tu_dram_refresh_mode_t      refresh_mode;
@@ -263,6 +267,12 @@ bool tu_dram_set_row_policy_timing(tu_dram_model_t *dram,
                                    tu_dram_row_policy_mode_t policy,
                                    uint32_t activate_penalty_cycles,
                                    uint32_t conflict_penalty_cycles);
+
+bool tu_dram_set_row_policy_timeout(tu_dram_model_t *dram,
+                                    tu_dram_row_policy_mode_t policy,
+                                    uint32_t activate_penalty_cycles,
+                                    uint32_t conflict_penalty_cycles,
+                                    uint32_t timeout_cycles);
 
 bool tu_dram_set_address_mapping(tu_dram_model_t *dram,
                                  tu_dram_address_mapping_mode_t mapping);

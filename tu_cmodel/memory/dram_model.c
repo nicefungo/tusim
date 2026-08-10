@@ -76,21 +76,28 @@ static bool allocate_runtime_state(tu_dram_model_t *dram) {
     size_t row_count = (size_t)dram->num_channels * dram->params.banks_per_channel;
     dram->channel_available_cycle = calloc(dram->num_channels, sizeof(uint64_t));
     dram->open_rows = malloc(row_count * sizeof(uint64_t));
+    dram->row_last_access_cycle = malloc(row_count * sizeof(uint64_t));
     dram->refresh_next = malloc(dram->params.banks_per_channel * sizeof(uint64_t));
     dram->refresh_until = malloc(dram->params.banks_per_channel * sizeof(uint64_t));
     if (!dram->channel_available_cycle || !dram->open_rows ||
-        !dram->refresh_next || !dram->refresh_until) {
+        !dram->row_last_access_cycle || !dram->refresh_next ||
+        !dram->refresh_until) {
         free(dram->channel_available_cycle);
         free(dram->open_rows);
+        free(dram->row_last_access_cycle);
         free(dram->refresh_next);
         free(dram->refresh_until);
         dram->channel_available_cycle = NULL;
         dram->open_rows = NULL;
+        dram->row_last_access_cycle = NULL;
         dram->refresh_next = NULL;
         dram->refresh_until = NULL;
         return false;
     }
-    for (size_t i = 0; i < row_count; ++i) dram->open_rows[i] = UINT64_MAX;
+    for (size_t i = 0; i < row_count; ++i) {
+        dram->open_rows[i] = UINT64_MAX;
+        dram->row_last_access_cycle[i] = UINT64_MAX;
+    }
     for (uint32_t i = 0; i < dram->params.banks_per_channel; ++i) {
         dram->refresh_next[i] = UINT64_MAX;  /* NONE mode: never fires */
         dram->refresh_until[i] = 0;
@@ -206,8 +213,14 @@ tu_dram_model_t *tu_dram_create_from_config(const struct tu_config_t *cfg) {
     if (cfg->dram_channels > 0 && cfg->dram_channels != dram->num_channels) {
         free(dram->channel_available_cycle);
         free(dram->open_rows);
+        free(dram->row_last_access_cycle);
+        free(dram->refresh_next);
+        free(dram->refresh_until);
         dram->channel_available_cycle = NULL;
         dram->open_rows = NULL;
+        dram->row_last_access_cycle = NULL;
+        dram->refresh_next = NULL;
+        dram->refresh_until = NULL;
         dram->num_channels = cfg->dram_channels;
         dram->params.channels = cfg->dram_channels;
         if (!allocate_runtime_state(dram)) {
@@ -215,12 +228,13 @@ tu_dram_model_t *tu_dram_create_from_config(const struct tu_config_t *cfg) {
             return NULL;
         }
     }
-    if (!tu_dram_set_row_policy_timing(dram,
+    if (!tu_dram_set_row_policy_timeout(dram,
             (tu_dram_row_policy_mode_t)cfg->dram_row_policy,
             cfg->dram_row_miss_penalty_cycles,
             cfg->dram_row_conflict_penalty_cycles
                 ? cfg->dram_row_conflict_penalty_cycles
-                : cfg->dram_row_miss_penalty_cycles)) {
+                : cfg->dram_row_miss_penalty_cycles,
+            cfg->dram_row_open_timeout_cycles)) {
         tu_dram_destroy(dram);
         return NULL;
     }
@@ -245,6 +259,7 @@ void tu_dram_destroy(tu_dram_model_t *dram) {
     if (!dram) return;
     free(dram->channel_available_cycle);
     free(dram->open_rows);
+    free(dram->row_last_access_cycle);
     free(dram->refresh_next);
     free(dram->refresh_until);
     free(dram);
@@ -260,7 +275,10 @@ void tu_dram_reset(tu_dram_model_t *dram) {
     memset(dram->channel_available_cycle, 0,
            dram->num_channels * sizeof(uint64_t));
     size_t row_count = (size_t)dram->num_channels * dram->params.banks_per_channel;
-    for (size_t i = 0; i < row_count; ++i) dram->open_rows[i] = UINT64_MAX;
+    for (size_t i = 0; i < row_count; ++i) {
+        dram->open_rows[i] = UINT64_MAX;
+        dram->row_last_access_cycle[i] = UINT64_MAX;
+    }
     refresh_init_state(dram);
 }
 
@@ -345,8 +363,17 @@ static uint64_t explicit_row_penalty(tu_dram_model_t *dram, uint64_t addr) {
     }
 
     size_t idx = (size_t)channel * dram->params.banks_per_channel + bank;
+    if (dram->row_policy == TU_DRAM_ROW_ADAPTIVE_TIMEOUT &&
+        dram->open_rows[idx] != UINT64_MAX &&
+        dram->row_last_access_cycle[idx] != UINT64_MAX &&
+        dram->current_cycle - dram->row_last_access_cycle[idx] >
+            dram->row_open_timeout_cycles) {
+        dram->open_rows[idx] = UINT64_MAX;
+        dram->stats.total_row_timeout_precharges++;
+    }
     if (dram->open_rows[idx] == row) {
         dram->stats.total_row_hits++;
+        dram->row_last_access_cycle[idx] = dram->current_cycle;
         return 0;
     }
     dram->stats.total_row_conflicts++;
@@ -359,6 +386,7 @@ static uint64_t explicit_row_penalty(tu_dram_model_t *dram, uint64_t addr) {
         penalty = dram->row_conflict_penalty_cycles;
     }
     dram->open_rows[idx] = row;
+    dram->row_last_access_cycle[idx] = dram->current_cycle;
     return penalty;
 }
 
@@ -675,6 +703,7 @@ void tu_dram_print_stats(const tu_dram_model_t *dram, FILE *out) {
         "  Row hits:              %lu\n"
         "  Empty-row activates:   %lu\n"
         "  Open-row replacements: %lu\n"
+        "  Timeout precharges:     %lu\n"
         "  Refresh events:        %lu\n"
         "  Refresh stall cycles:  %lu\n"
         "  ─────────────────────────────────\n"
@@ -696,6 +725,7 @@ void tu_dram_print_stats(const tu_dram_model_t *dram, FILE *out) {
         (unsigned long)s.total_row_hits,
         (unsigned long)s.total_row_empty_misses,
         (unsigned long)s.total_row_replacements,
+        (unsigned long)s.total_row_timeout_precharges,
         (unsigned long)s.total_refresh_events,
         (unsigned long)s.total_refresh_stall_cycles,
         s.effective_read_bandwidth, s.effective_write_bandwidth,
@@ -775,13 +805,28 @@ bool tu_dram_set_row_policy_timing(tu_dram_model_t *dram,
                                    tu_dram_row_policy_mode_t policy,
                                    uint32_t activate_penalty_cycles,
                                    uint32_t conflict_penalty_cycles) {
+    return tu_dram_set_row_policy_timeout(dram, policy, activate_penalty_cycles,
+                                          conflict_penalty_cycles, 0);
+}
+
+bool tu_dram_set_row_policy_timeout(tu_dram_model_t *dram,
+                                    tu_dram_row_policy_mode_t policy,
+                                    uint32_t activate_penalty_cycles,
+                                    uint32_t conflict_penalty_cycles,
+                                    uint32_t timeout_cycles) {
     if (!dram || policy < TU_DRAM_ROW_LEGACY ||
-        policy > TU_DRAM_ROW_CLOSED_PAGE) return false;
+        policy > TU_DRAM_ROW_ADAPTIVE_TIMEOUT ||
+        (policy == TU_DRAM_ROW_ADAPTIVE_TIMEOUT && timeout_cycles == 0))
+        return false;
     dram->row_policy = policy;
     dram->row_miss_penalty_cycles = activate_penalty_cycles;
     dram->row_conflict_penalty_cycles = conflict_penalty_cycles;
+    dram->row_open_timeout_cycles = timeout_cycles;
     size_t row_count = (size_t)dram->num_channels * dram->params.banks_per_channel;
-    for (size_t i = 0; i < row_count; ++i) dram->open_rows[i] = UINT64_MAX;
+    for (size_t i = 0; i < row_count; ++i) {
+        dram->open_rows[i] = UINT64_MAX;
+        dram->row_last_access_cycle[i] = UINT64_MAX;
+    }
     return true;
 }
 
@@ -794,7 +839,10 @@ bool tu_dram_set_address_mapping(tu_dram_model_t *dram,
          (dram->num_channels & (dram->num_channels - 1)) != 0)) return false;
     dram->address_mapping = mapping;
     size_t row_count = (size_t)dram->num_channels * dram->params.banks_per_channel;
-    for (size_t i = 0; i < row_count; ++i) dram->open_rows[i] = UINT64_MAX;
+    for (size_t i = 0; i < row_count; ++i) {
+        dram->open_rows[i] = UINT64_MAX;
+        dram->row_last_access_cycle[i] = UINT64_MAX;
+    }
     return true;
 }
 

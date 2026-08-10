@@ -359,6 +359,34 @@ done:;
     tu_dram_destroy(dram);
 }
 
+static void test_adaptive_row_timeout(void) {
+    TEST("Adaptive row timeout preserves short reuse and closes after idle");
+    tu_dram_model_t *dram = make_row_test_dram(TU_DRAM_ROW_OPEN_PAGE);
+    CHECK(dram != NULL, "create failed");
+    CHECK(tu_dram_set_row_policy_timeout(dram, TU_DRAM_ROW_ADAPTIVE_TIMEOUT,
+                                         20, 45, 4), "timeout set failed");
+    uint64_t cycles = 0, stall = 0;
+    tu_dram_read(dram, 0, 64, &cycles, &stall);
+    CHECK(cycles == 70, "first access must activate");
+    for (int i = 0; i < 4; ++i) tu_dram_tick(dram);
+    tu_dram_read(dram, 64, 64, &cycles, &stall);
+    CHECK(cycles == 50, "reuse at timeout boundary must hit");
+    for (int i = 0; i < 5; ++i) tu_dram_tick(dram);
+    tu_dram_read(dram, 0, 64, &cycles, &stall);
+    CHECK(cycles == 70, "reuse after timeout must reactivate");
+    CHECK(dram->stats.total_row_hits == 1, "wrong adaptive hit count");
+    CHECK(dram->stats.total_row_empty_misses == 2, "wrong adaptive activation count");
+    CHECK(dram->stats.total_row_replacements == 0, "timeout became replacement");
+    CHECK(dram->stats.total_row_timeout_precharges == 1, "timeout not counted");
+    CHECK(!tu_dram_set_row_policy_timeout(dram, TU_DRAM_ROW_ADAPTIVE_TIMEOUT,
+                                          20, 45, 0), "zero timeout accepted");
+    CHECK(dram->row_policy == TU_DRAM_ROW_ADAPTIVE_TIMEOUT &&
+          dram->row_open_timeout_cycles == 4, "failed setter mutated state");
+    PASS();
+done:;
+    tu_dram_destroy(dram);
+}
+
 static void test_closed_page_and_reset(void) {
     TEST("Closed-page policy and reset");
     tu_dram_model_t *dram = make_row_test_dram(TU_DRAM_ROW_CLOSED_PAGE);
@@ -440,6 +468,22 @@ static void test_row_policy_config_path(void) {
         "{\"tu\":{\"memory\":{\"dram\":{\"row_conflict_penalty_cycles\":-1}}}}",
         &cfg, err, sizeof(err)) != 0, "invalid conflict penalty accepted");
     CHECK(strstr(err, "row timing") != NULL, "wrong row timing validation error");
+
+    CHECK(tu_config_load_string(
+        "{\"tu\":{\"memory\":{\"dram\":{\"type\":\"ddr5\","
+        "\"row_policy\":\"adaptive_timeout\",\"row_open_timeout_cycles\":77}}}}",
+        &cfg, err, sizeof(err)) == 0, "adaptive policy parse");
+    CHECK(cfg.dram_row_policy == TU_DRAM_CONFIG_ROW_ADAPTIVE_TIMEOUT &&
+          cfg.dram_row_open_timeout_cycles == 77, "adaptive config value");
+    dram = tu_dram_create_from_config(&cfg);
+    CHECK(dram != NULL && dram->row_policy == TU_DRAM_ROW_ADAPTIVE_TIMEOUT &&
+          dram->row_open_timeout_cycles == 77, "adaptive propagation");
+    tu_dram_destroy(dram);
+    CHECK(tu_config_load_string(
+        "{\"tu\":{\"memory\":{\"dram\":{\"row_policy\":\"adaptive_timeout\","
+        "\"row_open_timeout_cycles\":0}}}}",
+        &cfg, err, sizeof(err)) != 0, "zero adaptive timeout accepted");
+    CHECK(strstr(err, "timeout") != NULL, "wrong adaptive timeout error");
     PASS();
 done:;
 }
@@ -943,6 +987,7 @@ int main(void) {
     test_all_types_valid();
     test_open_page_row_tracking();
     test_split_row_timing();
+    test_adaptive_row_timeout();
     test_closed_page_and_reset();
     test_legacy_row_compatibility();
     test_row_policy_config_path();

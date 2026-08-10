@@ -158,6 +158,7 @@ static int parse_dram_row_policy_str(const char *s) {
     if (!s || strcmp(s, "legacy") == 0) return TU_DRAM_CONFIG_ROW_LEGACY;
     if (strcmp(s, "open_page") == 0) return TU_DRAM_CONFIG_ROW_OPEN_PAGE;
     if (strcmp(s, "closed_page") == 0) return TU_DRAM_CONFIG_ROW_CLOSED_PAGE;
+    if (strcmp(s, "adaptive_timeout") == 0) return TU_DRAM_CONFIG_ROW_ADAPTIVE_TIMEOUT;
     return -1;
 }
 
@@ -238,6 +239,7 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->dram_address_mapping = TU_DRAM_CONFIG_ADDR_BURST_INTERLEAVED;
     cfg->dram_row_miss_penalty_cycles = 10;
     cfg->dram_row_conflict_penalty_cycles = 0; /* inherit miss cost: compatibility */
+    cfg->dram_row_open_timeout_cycles = 100;
     cfg->dram_latency_read   = 50;
     cfg->dram_latency_write  = 50;
     cfg->dram_latency_domain = TU_DRAM_CONFIG_LATENCY_CORE_CYCLES;
@@ -435,6 +437,9 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
                     (row_penalty >= 0 && row_penalty <= 1000000) ? (uint32_t)row_penalty : UINT32_MAX;
             if (parse_opt_int64(dram, "row_conflict_penalty_cycles", &row_penalty))
                 cfg->dram_row_conflict_penalty_cycles =
+                    (row_penalty >= 0 && row_penalty <= 1000000) ? (uint32_t)row_penalty : UINT32_MAX;
+            if (parse_opt_int64(dram, "row_open_timeout_cycles", &row_penalty))
+                cfg->dram_row_open_timeout_cycles =
                     (row_penalty >= 0 && row_penalty <= 1000000) ? (uint32_t)row_penalty : UINT32_MAX;
             const tu_json_value_t *ld = tu_json_get(dram, "latency_domain");
             if (ld && ld->type == TU_JSON_STRING)
@@ -708,10 +713,10 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
         return -1;
     }
     if (cfg->dram_row_policy < TU_DRAM_CONFIG_ROW_LEGACY ||
-        cfg->dram_row_policy > TU_DRAM_CONFIG_ROW_CLOSED_PAGE) {
+        cfg->dram_row_policy > TU_DRAM_CONFIG_ROW_ADAPTIVE_TIMEOUT) {
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
-                     "DRAM row_policy must be legacy, open_page, or closed_page");
+                     "DRAM row_policy must be legacy, open_page, closed_page, or adaptive_timeout");
         return -1;
     }
     if (cfg->dram_channels == 0 || cfg->dram_channels > 1024) {
@@ -735,9 +740,12 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
         return -1;
     }
     if (cfg->dram_row_miss_penalty_cycles == UINT32_MAX ||
-        cfg->dram_row_conflict_penalty_cycles == UINT32_MAX) {
+        cfg->dram_row_conflict_penalty_cycles == UINT32_MAX ||
+        cfg->dram_row_open_timeout_cycles == UINT32_MAX ||
+        (cfg->dram_row_policy == TU_DRAM_CONFIG_ROW_ADAPTIVE_TIMEOUT &&
+         cfg->dram_row_open_timeout_cycles == 0)) {
         if (error_buf && error_size > 0)
-            snprintf(error_buf, error_size, "DRAM row timing penalty is out of range");
+            snprintf(error_buf, error_size, "DRAM row timing/timeout value is out of range");
         return -1;
     }
     if (cfg->dram_latency_domain < TU_DRAM_CONFIG_LATENCY_CORE_CYCLES ||
@@ -1033,7 +1041,7 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             cfg->dram_channels);
     fprintf(out, "| `dram_model_row_conflicts` | %s | bool | Model row buffer hit/miss |\n\n",
             fmt_bool(cfg->dram_model_row_conflicts));
-    fprintf(out, "| `dram_row_policy` | %d | int | 0=Legacy, 1=Open-page, 2=Closed-page |\n",
+    fprintf(out, "| `dram_row_policy` | %d | int | 0=Legacy, 1=Open-page, 2=Closed-page, 3=Adaptive-timeout |\n",
             cfg->dram_row_policy);
     fprintf(out, "| `dram_address_mapping` | %d | int | 0=Burst-interleaved, 1=Row-interleaved, 2=XOR-interleaved |\n",
             cfg->dram_address_mapping);
@@ -1041,6 +1049,8 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             cfg->dram_row_miss_penalty_cycles);
     fprintf(out, "| `dram_row_conflict_penalty_cycles` | %u | uint32 | Open-row replacement penalty; 0 inherits row_miss_penalty_cycles |\n",
             cfg->dram_row_conflict_penalty_cycles);
+    fprintf(out, "| `dram_row_open_timeout_cycles` | %u | uint32 | Idle cycles before adaptive-timeout lazily precharges a row |\n",
+            cfg->dram_row_open_timeout_cycles);
     fprintf(out, "| `dram_latency_domain` | %d | int | 0=Fixed TU/core cycles (compat), 1=Physical ns converted at core clock |\n",
             cfg->dram_latency_domain);
     fprintf(out, "| `dram_latency_read/write` | %.3f / %.3f | double | Base read/write latency in selected domain |\n",

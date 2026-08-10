@@ -10,6 +10,7 @@ test-cmdq-dbg
 test-dma
 test-dram
 test-dram-row-policy-sweep
+test-dram-row-timeout-sweep
 test-dram-address-mapping-sweep
 test-dram-refresh-sweep
 test-dram-refresh-phase-sweep
