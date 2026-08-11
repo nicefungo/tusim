@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 /* ---- Helper: read entire file ---- */
 
@@ -180,6 +181,14 @@ static int parse_dram_latency_domain_str(const char *s) {
     return -1;
 }
 
+static int parse_dram_row_timeout_domain_str(const char *s) {
+    if (!s || strcmp(s, "core_cycles") == 0)
+        return TU_DRAM_CONFIG_ROW_TIMEOUT_CORE_CYCLES;
+    if (strcmp(s, "physical_ns") == 0)
+        return TU_DRAM_CONFIG_ROW_TIMEOUT_PHYSICAL_NS;
+    return -1;
+}
+
 static int parse_dram_refresh_mode_str(const char *s) {
     if (!s || strcmp(s, "none") == 0) return TU_DRAM_CONFIG_REFRESH_NONE;
     if (strcmp(s, "all_bank") == 0) return TU_DRAM_CONFIG_REFRESH_ALL_BANK;
@@ -240,6 +249,8 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->dram_row_miss_penalty_cycles = 10;
     cfg->dram_row_conflict_penalty_cycles = 0; /* inherit miss cost: compatibility */
     cfg->dram_row_open_timeout_cycles = 100;
+    cfg->dram_row_open_timeout_ns = 100.0;
+    cfg->dram_row_timeout_domain = TU_DRAM_CONFIG_ROW_TIMEOUT_CORE_CYCLES;
     cfg->dram_latency_read   = 50;
     cfg->dram_latency_write  = 50;
     cfg->dram_latency_domain = TU_DRAM_CONFIG_LATENCY_CORE_CYCLES;
@@ -441,6 +452,11 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
             if (parse_opt_int64(dram, "row_open_timeout_cycles", &row_penalty))
                 cfg->dram_row_open_timeout_cycles =
                     (row_penalty >= 0 && row_penalty <= 1000000) ? (uint32_t)row_penalty : UINT32_MAX;
+            parse_opt_double(dram, "row_open_timeout_ns", &cfg->dram_row_open_timeout_ns);
+            const tu_json_value_t *td = tu_json_get(dram, "row_timeout_domain");
+            if (td && td->type == TU_JSON_STRING)
+                cfg->dram_row_timeout_domain =
+                    parse_dram_row_timeout_domain_str(tu_json_as_string(td, NULL));
             const tu_json_value_t *ld = tu_json_get(dram, "latency_domain");
             if (ld && ld->type == TU_JSON_STRING)
                 cfg->dram_latency_domain =
@@ -743,9 +759,26 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
         cfg->dram_row_conflict_penalty_cycles == UINT32_MAX ||
         cfg->dram_row_open_timeout_cycles == UINT32_MAX ||
         (cfg->dram_row_policy == TU_DRAM_CONFIG_ROW_ADAPTIVE_TIMEOUT &&
-         cfg->dram_row_open_timeout_cycles == 0)) {
+         ((cfg->dram_row_timeout_domain == TU_DRAM_CONFIG_ROW_TIMEOUT_CORE_CYCLES &&
+           cfg->dram_row_open_timeout_cycles == 0) ||
+          (cfg->dram_row_timeout_domain == TU_DRAM_CONFIG_ROW_TIMEOUT_PHYSICAL_NS &&
+           !(cfg->dram_row_open_timeout_ns > 0.0))))) {
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size, "DRAM row timing/timeout value is out of range");
+        return -1;
+    }
+    if (cfg->dram_row_timeout_domain < TU_DRAM_CONFIG_ROW_TIMEOUT_CORE_CYCLES ||
+        cfg->dram_row_timeout_domain > TU_DRAM_CONFIG_ROW_TIMEOUT_PHYSICAL_NS) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DRAM row_timeout_domain must be core_cycles or physical_ns");
+        return -1;
+    }
+    if (!isfinite(cfg->dram_row_open_timeout_ns) ||
+        cfg->dram_row_open_timeout_ns < 0.0 ||
+        cfg->dram_row_open_timeout_ns > 100000000.0) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size, "DRAM row timeout ns value is out of range");
         return -1;
     }
     if (cfg->dram_latency_domain < TU_DRAM_CONFIG_LATENCY_CORE_CYCLES ||
@@ -1051,6 +1084,10 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             cfg->dram_row_conflict_penalty_cycles);
     fprintf(out, "| `dram_row_open_timeout_cycles` | %u | uint32 | Idle cycles before adaptive-timeout lazily precharges a row |\n",
             cfg->dram_row_open_timeout_cycles);
+    fprintf(out, "| `dram_row_open_timeout_ns` | %.3f | double | Physical-ns adaptive timeout source |\n",
+            cfg->dram_row_open_timeout_ns);
+    fprintf(out, "| `dram_row_timeout_domain` | %d | int | 0=Fixed TU/core cycles (compat), 1=Physical ns converted at core clock |\n",
+            cfg->dram_row_timeout_domain);
     fprintf(out, "| `dram_latency_domain` | %d | int | 0=Fixed TU/core cycles (compat), 1=Physical ns converted at core clock |\n",
             cfg->dram_latency_domain);
     fprintf(out, "| `dram_latency_read/write` | %.3f / %.3f | double | Base read/write latency in selected domain |\n",

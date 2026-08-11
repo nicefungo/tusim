@@ -379,9 +379,26 @@ static void test_adaptive_row_timeout(void) {
     CHECK(dram->stats.total_row_replacements == 0, "timeout became replacement");
     CHECK(dram->stats.total_row_timeout_precharges == 1, "timeout not counted");
     CHECK(!tu_dram_set_row_policy_timeout(dram, TU_DRAM_ROW_ADAPTIVE_TIMEOUT,
-                                          20, 45, 0), "zero timeout accepted");
+                                           20, 45, 0), "zero timeout accepted");
     CHECK(dram->row_policy == TU_DRAM_ROW_ADAPTIVE_TIMEOUT &&
-          dram->row_open_timeout_cycles == 4, "failed setter mutated state");
+           dram->row_open_timeout_cycles == 4, "failed setter mutated state");
+    CHECK(tu_dram_set_row_policy_timeout_domain(
+              dram, TU_DRAM_ROW_ADAPTIVE_TIMEOUT, 20, 45,
+              TU_DRAM_ROW_TIMEOUT_PHYSICAL_NS, 8.0),
+          "physical timeout set failed");
+    CHECK(dram->row_timeout_domain == TU_DRAM_ROW_TIMEOUT_PHYSICAL_NS &&
+          dram->row_open_timeout_source == 8.0 &&
+          dram->row_open_timeout_cycles == 8, "physical timeout at 1 GHz");
+    CHECK(tu_dram_configure_core_clock(dram, 2.0) &&
+          dram->row_open_timeout_cycles == 16,
+          "physical timeout not recomputed at 2 GHz");
+    CHECK(!tu_dram_set_row_policy_timeout_domain(
+              dram, TU_DRAM_ROW_ADAPTIVE_TIMEOUT, 20, 45,
+              (tu_dram_row_timeout_domain_t)9, 8.0),
+          "invalid timeout domain accepted");
+    CHECK(dram->row_timeout_domain == TU_DRAM_ROW_TIMEOUT_PHYSICAL_NS &&
+          dram->row_open_timeout_cycles == 16,
+          "failed domain setter mutated state");
     PASS();
 done:;
     tu_dram_destroy(dram);
@@ -484,6 +501,23 @@ static void test_row_policy_config_path(void) {
         "\"row_open_timeout_cycles\":0}}}}",
         &cfg, err, sizeof(err)) != 0, "zero adaptive timeout accepted");
     CHECK(strstr(err, "timeout") != NULL, "wrong adaptive timeout error");
+    CHECK(tu_config_load_string(
+        "{\"tu\":{\"memory\":{\"dram\":{\"type\":\"ddr5\","
+        "\"core_clock_ghz\":2.0,\"row_policy\":\"adaptive_timeout\","
+        "\"row_timeout_domain\":\"physical_ns\",\"row_open_timeout_ns\":8.5}}}}",
+        &cfg, err, sizeof(err)) == 0, "physical timeout config parse");
+    dram = tu_dram_create_from_config(&cfg);
+    CHECK(dram != NULL &&
+          dram->row_timeout_domain == TU_DRAM_ROW_TIMEOUT_PHYSICAL_NS &&
+          dram->row_open_timeout_source == 8.5 &&
+          dram->row_open_timeout_cycles == 17,
+          "physical timeout config propagation");
+    tu_dram_destroy(dram);
+    CHECK(tu_config_load_string(
+        "{\"tu\":{\"memory\":{\"dram\":{\"row_timeout_domain\":\"dram_cycles\"}}}}",
+        &cfg, err, sizeof(err)) != 0, "invalid timeout domain accepted");
+    CHECK(strstr(err, "row_timeout_domain") != NULL,
+          "wrong timeout-domain error");
     PASS();
 done:;
 }

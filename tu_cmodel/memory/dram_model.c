@@ -124,6 +124,21 @@ static bool latency_cycles_for(tu_dram_latency_domain_t domain, double source,
     return true;
 }
 
+static bool row_timeout_cycles_for(tu_dram_row_timeout_domain_t domain,
+                                   double source, double core_clock_ghz,
+                                   uint32_t *cycles_out) {
+    if (!cycles_out || !isfinite(source) || source < 0.0 ||
+        source > 100000000.0 || !isfinite(core_clock_ghz) ||
+        core_clock_ghz <= 0.0) return false;
+    double converted = (domain == TU_DRAM_ROW_TIMEOUT_PHYSICAL_NS)
+                           ? ceil(source * core_clock_ghz) : source;
+    if (domain < TU_DRAM_ROW_TIMEOUT_CORE_CYCLES ||
+        domain > TU_DRAM_ROW_TIMEOUT_PHYSICAL_NS || converted > UINT32_MAX)
+        return false;
+    *cycles_out = (uint32_t)converted;
+    return true;
+}
+
 const char *tu_dram_type_name(tu_dram_type_t type) {
     if (type >= TU_DRAM_TYPE_COUNT) return "unknown";
     return dram_names[type];
@@ -148,6 +163,8 @@ tu_dram_model_t *tu_dram_create(tu_dram_type_t type) {
     dram->address_mapping = TU_DRAM_ADDR_BURST_INTERLEAVED;
     dram->row_miss_penalty_cycles = 10;
     dram->row_conflict_penalty_cycles = 10;
+    dram->row_timeout_domain = TU_DRAM_ROW_TIMEOUT_CORE_CYCLES;
+    dram->row_open_timeout_source = 0.0;
     dram->core_clock_ghz = 1.0;
     dram->latency_domain = TU_DRAM_LATENCY_CORE_CYCLES;
     dram->read_latency_source = dram->params.read_latency_cycles;
@@ -178,6 +195,8 @@ tu_dram_model_t *tu_dram_create_custom(const tu_dram_params_t *params,
     dram->address_mapping = TU_DRAM_ADDR_BURST_INTERLEAVED;
     dram->row_miss_penalty_cycles = 10;
     dram->row_conflict_penalty_cycles = 10;
+    dram->row_timeout_domain = TU_DRAM_ROW_TIMEOUT_CORE_CYCLES;
+    dram->row_open_timeout_source = 0.0;
     dram->core_clock_ghz = 1.0;
     dram->latency_domain = TU_DRAM_LATENCY_CORE_CYCLES;
     dram->read_latency_source = params->read_latency_cycles;
@@ -228,13 +247,18 @@ tu_dram_model_t *tu_dram_create_from_config(const struct tu_config_t *cfg) {
             return NULL;
         }
     }
-    if (!tu_dram_set_row_policy_timeout(dram,
+    double row_timeout = cfg->dram_row_timeout_domain ==
+                             TU_DRAM_CONFIG_ROW_TIMEOUT_PHYSICAL_NS
+                             ? cfg->dram_row_open_timeout_ns
+                             : (double)cfg->dram_row_open_timeout_cycles;
+    if (!tu_dram_set_row_policy_timeout_domain(dram,
             (tu_dram_row_policy_mode_t)cfg->dram_row_policy,
             cfg->dram_row_miss_penalty_cycles,
             cfg->dram_row_conflict_penalty_cycles
                 ? cfg->dram_row_conflict_penalty_cycles
                 : cfg->dram_row_miss_penalty_cycles,
-            cfg->dram_row_open_timeout_cycles)) {
+            (tu_dram_row_timeout_domain_t)cfg->dram_row_timeout_domain,
+            row_timeout)) {
         tu_dram_destroy(dram);
         return NULL;
     }
@@ -748,14 +772,20 @@ void tu_dram_set_core_clock(tu_dram_model_t *dram, double clock_ghz) {
 bool tu_dram_configure_core_clock(tu_dram_model_t *dram, double clock_ghz) {
     if (!dram || !isfinite(clock_ghz) || clock_ghz <= 0.0 || clock_ghz > 10.0)
         return false;
-    uint32_t read_cycles, write_cycles;
+    uint32_t read_cycles, write_cycles, timeout_cycles;
     if (!latency_cycles_for(dram->latency_domain, dram->read_latency_source,
                             clock_ghz, &read_cycles) ||
         !latency_cycles_for(dram->latency_domain, dram->write_latency_source,
-                            clock_ghz, &write_cycles)) return false;
+                            clock_ghz, &write_cycles) ||
+        !row_timeout_cycles_for(dram->row_timeout_domain,
+                                dram->row_open_timeout_source,
+                                clock_ghz, &timeout_cycles) ||
+        (dram->row_policy == TU_DRAM_ROW_ADAPTIVE_TIMEOUT &&
+         timeout_cycles == 0)) return false;
     dram->core_clock_ghz = clock_ghz;
     dram->params.read_latency_cycles = read_cycles;
     dram->params.write_latency_cycles = write_cycles;
+    dram->row_open_timeout_cycles = timeout_cycles;
     dram->bw_window_size_cycles = 0;
     dram->bw_window_start = dram->current_cycle;
     dram->bandwidth_available = 0;
@@ -814,13 +844,27 @@ bool tu_dram_set_row_policy_timeout(tu_dram_model_t *dram,
                                     uint32_t activate_penalty_cycles,
                                     uint32_t conflict_penalty_cycles,
                                     uint32_t timeout_cycles) {
+    return tu_dram_set_row_policy_timeout_domain(
+        dram, policy, activate_penalty_cycles, conflict_penalty_cycles,
+        TU_DRAM_ROW_TIMEOUT_CORE_CYCLES, (double)timeout_cycles);
+}
+
+bool tu_dram_set_row_policy_timeout_domain(
+    tu_dram_model_t *dram, tu_dram_row_policy_mode_t policy,
+    uint32_t activate_penalty_cycles, uint32_t conflict_penalty_cycles,
+    tu_dram_row_timeout_domain_t domain, double timeout_value) {
+    uint32_t timeout_cycles;
     if (!dram || policy < TU_DRAM_ROW_LEGACY ||
         policy > TU_DRAM_ROW_ADAPTIVE_TIMEOUT ||
+        !row_timeout_cycles_for(domain, timeout_value,
+                                effective_core_clock(dram), &timeout_cycles) ||
         (policy == TU_DRAM_ROW_ADAPTIVE_TIMEOUT && timeout_cycles == 0))
         return false;
     dram->row_policy = policy;
     dram->row_miss_penalty_cycles = activate_penalty_cycles;
     dram->row_conflict_penalty_cycles = conflict_penalty_cycles;
+    dram->row_timeout_domain = domain;
+    dram->row_open_timeout_source = timeout_value;
     dram->row_open_timeout_cycles = timeout_cycles;
     size_t row_count = (size_t)dram->num_channels * dram->params.banks_per_channel;
     for (size_t i = 0; i < row_count; ++i) {

@@ -24,6 +24,7 @@ Canonical JSON/YAML under `tu.memory.dram` accepts:
 ```json
 "row_policy": "adaptive_timeout",
 "row_open_timeout_cycles": 100,
+"row_timeout_domain": "core_cycles",
 "row_miss_penalty_cycles": 20,
 "row_conflict_penalty_cycles": 40
 ```
@@ -77,7 +78,7 @@ All 12 rows are exact fail-closed gates over service, hits, activations, replace
 
 ## Fidelity limits
 
-This is a deterministic row-state service model, not a DRAM controller. Timeout precharge is lazy and has no command-bus occupancy, tRAS/tRP legality, bank-group timing, energy, request queue, arbitration, reordering, or backpressure. `current_cycle` advances only through explicit `tu_dram_tick()` calls; callers that issue accesses without advancing time cannot trigger idle timeout. Timeout is in TU/core cycles and is not automatically rescaled as a physical-ns interval when core clock changes. The sweep does not establish a calibrated timeout or end-to-end makespan.
+This is a deterministic row-state service model, not a DRAM controller. Timeout precharge is lazy and has no command-bus occupancy, tRAS/tRP legality, bank-group timing, energy, request queue, arbitration, reordering, or backpressure. `current_cycle` advances only through explicit `tu_dram_tick()` calls; callers that issue accesses without advancing time cannot trigger idle timeout. This original sweep uses the compatibility core-cycle timeout domain; `dram-row-timeout-domain.md` adds the runtime physical-ns alternative and clock conversion. Neither sweep establishes a calibrated timeout or end-to-end makespan.
 
 ## Verification
 

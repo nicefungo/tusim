@@ -58,6 +58,8 @@
 | `dram_row_miss_penalty_cycles` | 10 | uint32 | Added activate/precharge penalty per modeled miss |
 | `dram_row_conflict_penalty_cycles` | 0 | uint32 | Open-row replacement penalty; 0 inherits row_miss_penalty_cycles |
 | `dram_row_open_timeout_cycles` | 100 | uint32 | Idle cycles before adaptive-timeout lazily precharges a row |
+| `dram_row_open_timeout_ns` | 100.000 | double | Physical-ns adaptive timeout source |
+| `dram_row_timeout_domain` | 0 | int | 0=Fixed TU/core cycles (compat), 1=Physical ns converted at core clock |
 | `dram_latency_domain` | 0 | int | 0=Fixed TU/core cycles (compat), 1=Physical ns converted at core clock |
 | `dram_latency_read/write` | 50.000 / 50.000 | double | Base read/write latency in selected domain |
 | `dram_core_clock_ghz` | 1.000 | double | TU/core clock used for GB/s-to-bytes/cycle and ns-to-cycle conversion |

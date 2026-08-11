@@ -57,6 +57,8 @@ tu:
       row_miss_penalty_cycles: 10
       row_conflict_penalty_cycles: 0  # 0 inherits miss cost; set > miss for precharge + activate
       row_open_timeout_cycles: 100  # adaptive_timeout idle threshold; ignored otherwise
+      row_open_timeout_ns: 100.0  # physical-ns threshold source; ignored in core_cycles mode
+      row_timeout_domain: "core_cycles"  # core_cycles (compat) | physical_ns
       latency_domain: "core_cycles"  # core_cycles (compat) | physical_ns
       core_clock_ghz: 1.0
       refresh:

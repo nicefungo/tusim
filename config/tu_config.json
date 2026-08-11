@@ -45,6 +45,8 @@
         "row_miss_penalty_cycles": 10,
         "row_conflict_penalty_cycles": 0,
         "row_open_timeout_cycles": 100,
+        "row_open_timeout_ns": 100.0,
+        "row_timeout_domain": "core_cycles",
         "latency_domain": "core_cycles",
         "core_clock_ghz": 1.0,
         "refresh": {

@@ -162,6 +162,9 @@ int main(void) {
               "DRAM burst mapping default");
         CHECK(cfg.dram_row_open_timeout_cycles == 100,
               "DRAM row timeout default");
+        CHECK(cfg.dram_row_open_timeout_ns == 100.0 &&
+              cfg.dram_row_timeout_domain == TU_DRAM_CONFIG_ROW_TIMEOUT_CORE_CYCLES,
+              "DRAM row timeout-domain defaults");
         CHECK(cfg.dram_latency_domain == TU_DRAM_CONFIG_LATENCY_CORE_CYCLES,
               "DRAM core-cycle latency default");
         CHECK(cfg.dram_core_clock_ghz == 1.0, "DRAM core clock default");
@@ -275,6 +278,29 @@ int main(void) {
             "{\"tu\":{\"memory\":{\"latency\":{\"dram_read\":-1}}}}",
             &cfg, err, sizeof(err)) != 0, "negative latency accepted");
         CHECK(strstr(err, "latency value") != NULL, "wrong latency-value error");
+        PASS();
+    }
+
+    TEST("Config: DRAM row-timeout domain parse + validation");
+    {
+        tu_config_t cfg;
+        char err[160];
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"memory\":{\"dram\":{\"row_policy\":\"adaptive_timeout\","
+            "\"row_timeout_domain\":\"physical_ns\",\"row_open_timeout_ns\":12.5}}}}",
+            &cfg, err, sizeof(err)) == 0, "timeout-domain parse");
+        CHECK(cfg.dram_row_timeout_domain == TU_DRAM_CONFIG_ROW_TIMEOUT_PHYSICAL_NS &&
+              cfg.dram_row_open_timeout_ns == 12.5, "timeout-domain values");
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"memory\":{\"dram\":{\"row_timeout_domain\":\"memory_cycles\"}}}}",
+            &cfg, err, sizeof(err)) != 0, "unknown timeout domain accepted");
+        CHECK(strstr(err, "row_timeout_domain") != NULL,
+              "wrong timeout-domain error");
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"memory\":{\"dram\":{\"row_policy\":\"adaptive_timeout\","
+            "\"row_timeout_domain\":\"physical_ns\",\"row_open_timeout_ns\":0}}}}",
+            &cfg, err, sizeof(err)) != 0, "zero physical timeout accepted");
+        CHECK(strstr(err, "timeout") != NULL, "wrong physical-timeout error");
         PASS();
     }
 

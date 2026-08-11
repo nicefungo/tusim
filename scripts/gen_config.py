@@ -211,6 +211,11 @@ def generate_header(config, output_path):
     L(f'#define TU_DRAM_ROW_MISS_PENALTY_CYCLES {dram["row_miss_penalty_cycles"]}')
     L(f'#define TU_DRAM_ROW_CONFLICT_PENALTY_CYCLES {dram["row_conflict_penalty_cycles"]}')
     L(f'#define TU_DRAM_ROW_OPEN_TIMEOUT_CYCLES {dram["row_open_timeout_cycles"]}')
+    L(f'#define TU_DRAM_ROW_OPEN_TIMEOUT_NS {dram["row_open_timeout_ns"]}')
+    row_timeout_domain_map = {'core_cycles': 0, 'physical_ns': 1}
+    L('#define TU_DRAM_ROW_TIMEOUT_DOMAIN_CORE_CYCLES 0')
+    L('#define TU_DRAM_ROW_TIMEOUT_DOMAIN_PHYSICAL_NS 1')
+    L(f'#define TU_DRAM_ROW_TIMEOUT_DOMAIN {row_timeout_domain_map[dram["row_timeout_domain"]]}')
     latency_domain_map = {'core_cycles': 0, 'physical_ns': 1}
     L('#define TU_DRAM_LATENCY_DOMAIN_CORE_CYCLES 0')
     L('#define TU_DRAM_LATENCY_DOMAIN_PHYSICAL_NS 1')

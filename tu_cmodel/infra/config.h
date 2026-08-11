@@ -59,6 +59,12 @@ typedef enum {
     TU_DRAM_CONFIG_LATENCY_PHYSICAL_NS = 1
 } tu_dram_config_latency_domain_t;
 
+/* Zero preserves the historical adaptive timeout in TU/core cycles. */
+typedef enum {
+    TU_DRAM_CONFIG_ROW_TIMEOUT_CORE_CYCLES = 0,
+    TU_DRAM_CONFIG_ROW_TIMEOUT_PHYSICAL_NS = 1
+} tu_dram_config_row_timeout_domain_t;
+
 /* Zero preserves the historical no-refresh model for legacy callers.
  * Real DRAM always refreshes; `none` is the compatibility path only. */
 typedef enum {
@@ -130,6 +136,8 @@ typedef struct tu_config_t {
     uint32_t dram_row_miss_penalty_cycles;
     uint32_t dram_row_conflict_penalty_cycles; /* 0 = inherit miss penalty */
     uint32_t dram_row_open_timeout_cycles; /* adaptive timeout; >0 when selected */
+    double   dram_row_open_timeout_ns; /* physical timeout source; >0 when selected */
+    int      dram_row_timeout_domain; /* core_cycles=0 (compat), physical_ns=1 */
     double   dram_latency_read;  /* cycles or ns, selected by latency domain */
     double   dram_latency_write; /* cycles or ns, selected by latency domain */
     int      dram_latency_domain; /* core_cycles=0 (compat), physical_ns=1 */

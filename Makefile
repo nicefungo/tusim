@@ -241,6 +241,11 @@ test-dram-row-timeout-sweep: tests/test_dram_row_timeout_sweep.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
 	./test-dram-row-timeout-sweep
 
+.PHONY: test-dram-row-timeout-domain-sweep
+test-dram-row-timeout-domain-sweep: tests/test_dram_row_timeout_domain_sweep.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
+	./test-dram-row-timeout-domain-sweep
+
 .PHONY: test-dram-address-mapping-sweep
 test-dram-address-mapping-sweep: tests/test_dram_address_mapping_sweep.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
@@ -620,7 +625,7 @@ config-docs: libtucmodel.a
 # ---- Clean ----
 clean:
 	rm -f $(TU_DIR)/*.o $(TU_DIR)/memory/*.o $(TU_DIR)/sparsity/*.o $(TU_DIR)/isa/*.o $(TU_DIR)/compute/*.o $(TU_DIR)/compute/dataflow/*.o $(TU_DIR)/infra/*.o $(TU_DIR)/perf/*.o $(TU_DIR)/bindings/*.o libtucmodel.a libtucmodel.so
-	rm -f test-cmodel test-cmdq test-dma test-dram test-dram-row-policy-sweep test-dram-row-timeout-sweep test-dram-address-mapping-sweep test-dram-refresh-sweep test-dram-refresh-phase-sweep test-dram-refresh-debt-sweep test-dram-core-clock-sweep test-isa test-golden test-golden-full
+	rm -f test-cmodel test-cmdq test-dma test-dram test-dram-row-policy-sweep test-dram-row-timeout-sweep test-dram-row-timeout-domain-sweep test-dram-address-mapping-sweep test-dram-refresh-sweep test-dram-refresh-phase-sweep test-dram-refresh-debt-sweep test-dram-core-clock-sweep test-isa test-golden test-golden-full
 	rm -f test-dataflow test-elementwise test-bf16 test-memhier test-norm test-logging
 	rm -f test-int-quant test-conv test-random
 	rm -f test-rounding test-fp8 test-attention test-perf test-pool test-pipeline

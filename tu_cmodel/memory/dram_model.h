@@ -65,6 +65,11 @@ typedef enum {
     TU_DRAM_LATENCY_PHYSICAL_NS = 1
 } tu_dram_latency_domain_t;
 
+typedef enum {
+    TU_DRAM_ROW_TIMEOUT_CORE_CYCLES = 0,
+    TU_DRAM_ROW_TIMEOUT_PHYSICAL_NS = 1
+} tu_dram_row_timeout_domain_t;
+
 /* Refresh model (JEDEC tREFI/tRFC). Subsystem enum family is disjoint from
  * the generated TU_DRAM_REFRESH_MODE_* / TU_DRAM_REFRESH_SCHED_* macros and
  * the canonical TU_DRAM_CONFIG_REFRESH_* enums (preprocessor namespace). */
@@ -151,6 +156,8 @@ typedef struct {
     uint32_t row_miss_penalty_cycles;     /* Activate from closed state */
     uint32_t row_conflict_penalty_cycles; /* Precharge + activate replacement */
     uint32_t row_open_timeout_cycles;     /* Adaptive idle threshold */
+    tu_dram_row_timeout_domain_t row_timeout_domain;
+    double row_open_timeout_source;       /* cycles or ns according to domain */
     uint64_t *open_rows;              /* channel×bank rows; UINT64_MAX=none */
     uint64_t *row_last_access_cycle;   /* channel×bank; UINT64_MAX=never */
 
@@ -273,6 +280,13 @@ bool tu_dram_set_row_policy_timeout(tu_dram_model_t *dram,
                                     uint32_t activate_penalty_cycles,
                                     uint32_t conflict_penalty_cycles,
                                     uint32_t timeout_cycles);
+
+/* Configure the adaptive timeout in fixed core cycles or physical ns. The
+ * legacy timeout setter above remains a CORE_CYCLES compatibility wrapper. */
+bool tu_dram_set_row_policy_timeout_domain(
+    tu_dram_model_t *dram, tu_dram_row_policy_mode_t policy,
+    uint32_t activate_penalty_cycles, uint32_t conflict_penalty_cycles,
+    tu_dram_row_timeout_domain_t domain, double timeout_value);
 
 bool tu_dram_set_address_mapping(tu_dram_model_t *dram,
                                  tu_dram_address_mapping_mode_t mapping);
