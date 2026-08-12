@@ -168,6 +168,11 @@ int main(void) {
         CHECK(cfg.dram_latency_domain == TU_DRAM_CONFIG_LATENCY_CORE_CYCLES,
               "DRAM core-cycle latency default");
         CHECK(cfg.dram_core_clock_ghz == 1.0, "DRAM core clock default");
+        CHECK(cfg.dram_turnaround_mode == TU_DRAM_CONFIG_TURNAROUND_NONE &&
+              cfg.dram_turnaround_domain == TU_DRAM_CONFIG_TURNAROUND_CORE_CYCLES &&
+              cfg.dram_read_to_write_turnaround == 0.0 &&
+              cfg.dram_write_to_read_turnaround == 0.0,
+              "DRAM turnaround defaults");
         CHECK(cfg.power_tech_node == 0, "power tech auto default");
         CHECK(cfg.power_clock_freq_mhz == 0.0, "power clock auto default");
         PASS();
@@ -301,6 +306,42 @@ int main(void) {
             "\"row_timeout_domain\":\"physical_ns\",\"row_open_timeout_ns\":0}}}}",
             &cfg, err, sizeof(err)) != 0, "zero physical timeout accepted");
         CHECK(strstr(err, "timeout") != NULL, "wrong physical-timeout error");
+        PASS();
+    }
+
+    TEST("Config: DRAM turnaround parse + validation");
+    {
+        tu_config_t cfg;
+        char err[192];
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"memory\":{\"dram\":{\"turnaround_mode\":\"fixed\","
+            "\"turnaround_domain\":\"physical_ns\","
+            "\"read_to_write_turnaround\":3.5,\"write_to_read_turnaround\":8}}}}",
+            &cfg, err, sizeof(err)) == 0, "turnaround parse");
+        CHECK(cfg.dram_turnaround_mode == TU_DRAM_CONFIG_TURNAROUND_FIXED &&
+              cfg.dram_turnaround_domain == TU_DRAM_CONFIG_TURNAROUND_PHYSICAL_NS &&
+              cfg.dram_read_to_write_turnaround == 3.5 &&
+              cfg.dram_write_to_read_turnaround == 8.0,
+              "turnaround values");
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"memory\":{\"dram\":{\"turnaround_mode\":\"adaptive\"}}}}",
+            &cfg, err, sizeof(err)) != 0, "unknown turnaround mode accepted");
+        CHECK(strstr(err, "turnaround_mode") != NULL, "wrong mode error");
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"memory\":{\"dram\":{\"turnaround_domain\":\"dram_cycles\"}}}}",
+            &cfg, err, sizeof(err)) != 0, "unknown turnaround domain accepted");
+        CHECK(strstr(err, "turnaround_domain") != NULL, "wrong domain error");
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"memory\":{\"dram\":{\"turnaround_mode\":\"fixed\","
+            "\"read_to_write_turnaround\":0,\"write_to_read_turnaround\":0}}}}",
+            &cfg, err, sizeof(err)) != 0, "zero fixed turnaround accepted");
+        CHECK(strstr(err, "turnaround values") != NULL, "wrong zero-cost error");
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"memory\":{\"dram\":{\"turnaround_mode\":\"fixed\","
+            "\"turnaround_domain\":\"core_cycles\","
+            "\"read_to_write_turnaround\":0.5,\"write_to_read_turnaround\":0.25}}}}",
+            &cfg, err, sizeof(err)) != 0, "sub-cycle core turnaround accepted");
+        CHECK(strstr(err, ">= 1") != NULL, "wrong sub-cycle error");
         PASS();
     }
 

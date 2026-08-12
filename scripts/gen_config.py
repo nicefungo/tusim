@@ -221,6 +221,16 @@ def generate_header(config, output_path):
     L('#define TU_DRAM_LATENCY_DOMAIN_PHYSICAL_NS 1')
     L(f'#define TU_DRAM_LATENCY_DOMAIN {latency_domain_map[dram["latency_domain"]]}')
     L(f'#define TU_DRAM_CORE_CLOCK_GHZ    {dram["core_clock_ghz"]}')
+    turnaround_mode_map = {'none': 0, 'fixed': 1}
+    turnaround_domain_map = {'core_cycles': 0, 'physical_ns': 1}
+    L('#define TU_DRAM_TURNAROUND_MODE_NONE  0')
+    L('#define TU_DRAM_TURNAROUND_MODE_FIXED 1')
+    L(f'#define TU_DRAM_TURNAROUND_MODE {turnaround_mode_map[dram["turnaround_mode"]]}')
+    L('#define TU_DRAM_TURNAROUND_DOMAIN_CORE_CYCLES 0')
+    L('#define TU_DRAM_TURNAROUND_DOMAIN_PHYSICAL_NS 1')
+    L(f'#define TU_DRAM_TURNAROUND_DOMAIN {turnaround_domain_map[dram["turnaround_domain"]]}')
+    L(f'#define TU_DRAM_READ_TO_WRITE_TURNAROUND {dram["read_to_write_turnaround"]}')
+    L(f'#define TU_DRAM_WRITE_TO_READ_TURNAROUND {dram["write_to_read_turnaround"]}')
     refresh_map = {'none': 0, 'all_bank': 1, 'per_bank': 2}
     refresh_sched_map = {'fixed': 0, 'deferred': 1}
     refresh = dram['refresh']

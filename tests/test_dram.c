@@ -404,6 +404,90 @@ done:;
     tu_dram_destroy(dram);
 }
 
+static void test_dram_turnaround(void) {
+    TEST("Per-channel read/write bus turnaround and config path");
+    const tu_dram_params_t two_channel_params = {
+        .clock_ghz = 1.0, .bandwidth_gbps = 64.0,
+        .read_latency_cycles = 50, .write_latency_cycles = 40,
+        .bus_width_bytes = 8, .burst_length = 64,
+        .channels = 2, .banks_per_channel = 1,
+        .row_buffer_size = 256, .model_row_conflicts = false,
+    };
+    tu_dram_model_t *dram = make_row_test_dram(TU_DRAM_ROW_LEGACY);
+    CHECK(dram != NULL, "create failed");
+    CHECK(dram->turnaround_mode == TU_DRAM_TURNAROUND_NONE,
+          "compatibility turnaround default changed");
+    CHECK(tu_dram_set_turnaround(dram, TU_DRAM_TURNAROUND_FIXED,
+                                 TU_DRAM_TURNAROUND_CORE_CYCLES, 4, 7),
+          "fixed turnaround set failed");
+    uint64_t cycles = 0, stall = 0;
+    tu_dram_read(dram, 0, 64, &cycles, &stall);
+    CHECK(cycles == 50, "first read paid turnaround");
+    tu_dram_write(dram, 0, 64, &cycles, &stall);
+    CHECK(cycles == 44, "read-to-write cost missing");
+    tu_dram_read(dram, 0, 64, &cycles, &stall);
+    CHECK(cycles == 57, "write-to-read cost missing");
+    CHECK(dram->stats.total_turnaround_events == 2 &&
+          dram->stats.total_turnaround_cycles == 11,
+          "turnaround counters wrong");
+    tu_dram_reset(dram);
+    tu_dram_write(dram, 0, 64, &cycles, &stall);
+    CHECK(cycles == 40 && dram->stats.total_turnaround_events == 0,
+          "reset did not clear direction history");
+    CHECK(tu_dram_set_turnaround(dram, TU_DRAM_TURNAROUND_FIXED,
+                                 TU_DRAM_TURNAROUND_PHYSICAL_NS, 3, 8),
+          "physical turnaround set failed");
+    CHECK(tu_dram_configure_core_clock(dram, 2.0) &&
+          dram->read_to_write_turnaround_cycles == 6 &&
+          dram->write_to_read_turnaround_cycles == 16,
+          "physical turnaround not recomputed");
+    CHECK(!tu_dram_set_turnaround(dram, (tu_dram_turnaround_mode_t)9,
+                                  TU_DRAM_TURNAROUND_CORE_CYCLES, 1, 1),
+          "invalid mode accepted");
+    CHECK(dram->turnaround_domain == TU_DRAM_TURNAROUND_PHYSICAL_NS &&
+          dram->write_to_read_turnaround_cycles == 16,
+          "failed setter mutated turnaround state");
+    tu_dram_destroy(dram);
+    dram = tu_dram_create_custom(&two_channel_params, "turnaround-channels");
+    CHECK(dram != NULL &&
+          tu_dram_set_turnaround(dram, TU_DRAM_TURNAROUND_FIXED,
+                                 TU_DRAM_TURNAROUND_CORE_CYCLES, 4, 7),
+          "two-channel turnaround setup failed");
+    tu_dram_read(dram, 0, 64, &cycles, &stall);   /* channel 0: first read */
+    tu_dram_write(dram, 64, 64, &cycles, &stall); /* channel 1: first write */
+    CHECK(cycles == 40 && dram->stats.total_turnaround_events == 0,
+          "direction history leaked across channels");
+    tu_dram_write(dram, 0, 64, &cycles, &stall);  /* channel 0: R -> W */
+    CHECK(cycles == 44 && dram->stats.total_turnaround_events == 1 &&
+          dram->stats.total_turnaround_cycles == 4,
+          "channel-local direction change not charged");
+    tu_dram_destroy(dram);
+    dram = NULL;
+
+    tu_config_t cfg;
+    char err[192];
+    CHECK(tu_config_load_string(
+        "{\"tu\":{\"memory\":{\"dram\":{\"type\":\"ddr5\","
+        "\"core_clock_ghz\":2,\"turnaround_mode\":\"fixed\","
+        "\"turnaround_domain\":\"physical_ns\","
+        "\"read_to_write_turnaround\":3,\"write_to_read_turnaround\":8}}}}",
+        &cfg, err, sizeof(err)) == 0, "turnaround config parse");
+    dram = tu_dram_create_from_config(&cfg);
+    CHECK(dram != NULL && dram->turnaround_mode == TU_DRAM_TURNAROUND_FIXED &&
+          dram->read_to_write_turnaround_cycles == 6 &&
+          dram->write_to_read_turnaround_cycles == 16,
+          "turnaround config propagation");
+    tu_dram_destroy(dram);
+    dram = NULL;
+    CHECK(tu_config_load_string(
+        "{\"tu\":{\"memory\":{\"dram\":{\"turnaround_mode\":\"fixed\"}}}}",
+        &cfg, err, sizeof(err)) != 0, "zero fixed turnaround accepted");
+    CHECK(strstr(err, "turnaround") != NULL, "wrong turnaround error");
+    PASS();
+done:;
+    tu_dram_destroy(dram);
+}
+
 static void test_closed_page_and_reset(void) {
     TEST("Closed-page policy and reset");
     tu_dram_model_t *dram = make_row_test_dram(TU_DRAM_ROW_CLOSED_PAGE);
@@ -1022,6 +1106,7 @@ int main(void) {
     test_open_page_row_tracking();
     test_split_row_timing();
     test_adaptive_row_timeout();
+    test_dram_turnaround();
     test_closed_page_and_reset();
     test_legacy_row_compatibility();
     test_row_policy_config_path();

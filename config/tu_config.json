@@ -49,6 +49,10 @@
         "row_timeout_domain": "core_cycles",
         "latency_domain": "core_cycles",
         "core_clock_ghz": 1.0,
+        "turnaround_mode": "none",
+        "turnaround_domain": "core_cycles",
+        "read_to_write_turnaround": 0.0,
+        "write_to_read_turnaround": 0.0,
         "refresh": {
           "mode": "none",
           "scheduling": "fixed",

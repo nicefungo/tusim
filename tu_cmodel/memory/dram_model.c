@@ -75,19 +75,22 @@ static const char *dram_names[] = {
 static bool allocate_runtime_state(tu_dram_model_t *dram) {
     size_t row_count = (size_t)dram->num_channels * dram->params.banks_per_channel;
     dram->channel_available_cycle = calloc(dram->num_channels, sizeof(uint64_t));
+    dram->channel_last_direction = calloc(dram->num_channels, sizeof(uint8_t));
     dram->open_rows = malloc(row_count * sizeof(uint64_t));
     dram->row_last_access_cycle = malloc(row_count * sizeof(uint64_t));
     dram->refresh_next = malloc(dram->params.banks_per_channel * sizeof(uint64_t));
     dram->refresh_until = malloc(dram->params.banks_per_channel * sizeof(uint64_t));
-    if (!dram->channel_available_cycle || !dram->open_rows ||
-        !dram->row_last_access_cycle || !dram->refresh_next ||
+    if (!dram->channel_available_cycle || !dram->channel_last_direction ||
+        !dram->open_rows || !dram->row_last_access_cycle || !dram->refresh_next ||
         !dram->refresh_until) {
         free(dram->channel_available_cycle);
+        free(dram->channel_last_direction);
         free(dram->open_rows);
         free(dram->row_last_access_cycle);
         free(dram->refresh_next);
         free(dram->refresh_until);
         dram->channel_available_cycle = NULL;
+        dram->channel_last_direction = NULL;
         dram->open_rows = NULL;
         dram->row_last_access_cycle = NULL;
         dram->refresh_next = NULL;
@@ -139,6 +142,21 @@ static bool row_timeout_cycles_for(tu_dram_row_timeout_domain_t domain,
     return true;
 }
 
+static bool turnaround_cycles_for(tu_dram_turnaround_domain_t domain,
+                                  double source, double core_clock_ghz,
+                                  uint32_t *cycles_out) {
+    if (!cycles_out || !isfinite(source) || source < 0.0 ||
+        source > 100000000.0 || !isfinite(core_clock_ghz) ||
+        core_clock_ghz <= 0.0) return false;
+    double converted = (domain == TU_DRAM_TURNAROUND_PHYSICAL_NS)
+                           ? ceil(source * core_clock_ghz) : source;
+    if (domain < TU_DRAM_TURNAROUND_CORE_CYCLES ||
+        domain > TU_DRAM_TURNAROUND_PHYSICAL_NS || converted > UINT32_MAX)
+        return false;
+    *cycles_out = (uint32_t)converted;
+    return true;
+}
+
 const char *tu_dram_type_name(tu_dram_type_t type) {
     if (type >= TU_DRAM_TYPE_COUNT) return "unknown";
     return dram_names[type];
@@ -169,6 +187,8 @@ tu_dram_model_t *tu_dram_create(tu_dram_type_t type) {
     dram->latency_domain = TU_DRAM_LATENCY_CORE_CYCLES;
     dram->read_latency_source = dram->params.read_latency_cycles;
     dram->write_latency_source = dram->params.write_latency_cycles;
+    dram->turnaround_mode = TU_DRAM_TURNAROUND_NONE;
+    dram->turnaround_domain = TU_DRAM_TURNAROUND_CORE_CYCLES;
 
     /* Allocate per-channel state */
     if (!allocate_runtime_state(dram)) {
@@ -201,6 +221,8 @@ tu_dram_model_t *tu_dram_create_custom(const tu_dram_params_t *params,
     dram->latency_domain = TU_DRAM_LATENCY_CORE_CYCLES;
     dram->read_latency_source = params->read_latency_cycles;
     dram->write_latency_source = params->write_latency_cycles;
+    dram->turnaround_mode = TU_DRAM_TURNAROUND_NONE;
+    dram->turnaround_domain = TU_DRAM_TURNAROUND_CORE_CYCLES;
 
     if (!allocate_runtime_state(dram)) {
         free(dram);
@@ -231,11 +253,13 @@ tu_dram_model_t *tu_dram_create_from_config(const struct tu_config_t *cfg) {
     }
     if (cfg->dram_channels > 0 && cfg->dram_channels != dram->num_channels) {
         free(dram->channel_available_cycle);
+        free(dram->channel_last_direction);
         free(dram->open_rows);
         free(dram->row_last_access_cycle);
         free(dram->refresh_next);
         free(dram->refresh_until);
         dram->channel_available_cycle = NULL;
+        dram->channel_last_direction = NULL;
         dram->open_rows = NULL;
         dram->row_last_access_cycle = NULL;
         dram->refresh_next = NULL;
@@ -267,6 +291,14 @@ tu_dram_model_t *tu_dram_create_from_config(const struct tu_config_t *cfg) {
         tu_dram_destroy(dram);
         return NULL;
     }
+    if (!tu_dram_set_turnaround(dram,
+            (tu_dram_turnaround_mode_t)cfg->dram_turnaround_mode,
+            (tu_dram_turnaround_domain_t)cfg->dram_turnaround_domain,
+            cfg->dram_read_to_write_turnaround,
+            cfg->dram_write_to_read_turnaround)) {
+        tu_dram_destroy(dram);
+        return NULL;
+    }
     if (!tu_dram_set_refresh(dram,
             (tu_dram_refresh_mode_t)cfg->dram_refresh_mode,
             (tu_dram_refresh_scheduling_t)cfg->dram_refresh_scheduling,
@@ -282,6 +314,7 @@ tu_dram_model_t *tu_dram_create_from_config(const struct tu_config_t *cfg) {
 void tu_dram_destroy(tu_dram_model_t *dram) {
     if (!dram) return;
     free(dram->channel_available_cycle);
+    free(dram->channel_last_direction);
     free(dram->open_rows);
     free(dram->row_last_access_cycle);
     free(dram->refresh_next);
@@ -298,6 +331,8 @@ void tu_dram_reset(tu_dram_model_t *dram) {
     dram->pending_write_bytes = 0;
     memset(dram->channel_available_cycle, 0,
            dram->num_channels * sizeof(uint64_t));
+    memset(dram->channel_last_direction, 0,
+           dram->num_channels * sizeof(uint8_t));
     size_t row_count = (size_t)dram->num_channels * dram->params.banks_per_channel;
     for (size_t i = 0; i < row_count; ++i) {
         dram->open_rows[i] = UINT64_MAX;
@@ -525,6 +560,24 @@ static uint64_t refresh_stall_for(const tu_dram_model_t *dram, uint32_t bank,
     return 0;
 }
 
+static uint64_t turnaround_for(tu_dram_model_t *dram, uint32_t channel,
+                               uint8_t new_direction) {
+    if (!dram || channel >= dram->num_channels ||
+        dram->turnaround_mode == TU_DRAM_TURNAROUND_NONE) return 0;
+    uint8_t old_direction = dram->channel_last_direction[channel];
+    uint64_t cycles = 0;
+    if (old_direction == 1 && new_direction == 2)
+        cycles = dram->read_to_write_turnaround_cycles;
+    else if (old_direction == 2 && new_direction == 1)
+        cycles = dram->write_to_read_turnaround_cycles;
+    dram->channel_last_direction[channel] = new_direction;
+    if (old_direction != 0 && old_direction != new_direction) {
+        dram->stats.total_turnaround_events++;
+        dram->stats.total_turnaround_cycles += cycles;
+    }
+    return cycles;
+}
+
 void tu_dram_tick(tu_dram_model_t *dram) {
     if (!dram) return;
     dram->current_cycle++;
@@ -562,8 +615,10 @@ void tu_dram_read(tu_dram_model_t *dram, uint64_t addr,
     refresh_catchup(dram, dram->current_cycle, true);
     uint64_t refresh_stall = refresh_stall_for(dram, bank, dram->current_cycle);
 
-    /* ---- Latency ---- */
-    uint64_t base_latency = dram->params.read_latency_cycles + refresh_stall;
+    /* ---- Latency + bidirectional channel-bus turnaround ---- */
+    uint64_t turnaround = turnaround_for(dram, channel, 1);
+    uint64_t base_latency = dram->params.read_latency_cycles + refresh_stall +
+                            turnaround;
 
     /* ---- Row buffer conflict modeling ---- */
     if (dram->row_policy != TU_DRAM_ROW_LEGACY) {
@@ -632,7 +687,9 @@ void tu_dram_write(tu_dram_model_t *dram, uint64_t addr,
     refresh_catchup(dram, dram->current_cycle, true);
     uint64_t refresh_stall = refresh_stall_for(dram, bank, dram->current_cycle);
 
-    uint64_t base_latency = dram->params.write_latency_cycles + refresh_stall;
+    uint64_t turnaround = turnaround_for(dram, channel, 2);
+    uint64_t base_latency = dram->params.write_latency_cycles + refresh_stall +
+                            turnaround;
 
     if (dram->row_policy != TU_DRAM_ROW_LEGACY)
         base_latency += explicit_row_penalty(dram, addr);
@@ -728,6 +785,8 @@ void tu_dram_print_stats(const tu_dram_model_t *dram, FILE *out) {
         "  Empty-row activates:   %lu\n"
         "  Open-row replacements: %lu\n"
         "  Timeout precharges:     %lu\n"
+        "  Turnaround events:      %lu\n"
+        "  Turnaround cycles:      %lu\n"
         "  Refresh events:        %lu\n"
         "  Refresh stall cycles:  %lu\n"
         "  ─────────────────────────────────\n"
@@ -750,6 +809,8 @@ void tu_dram_print_stats(const tu_dram_model_t *dram, FILE *out) {
         (unsigned long)s.total_row_empty_misses,
         (unsigned long)s.total_row_replacements,
         (unsigned long)s.total_row_timeout_precharges,
+        (unsigned long)s.total_turnaround_events,
+        (unsigned long)s.total_turnaround_cycles,
         (unsigned long)s.total_refresh_events,
         (unsigned long)s.total_refresh_stall_cycles,
         s.effective_read_bandwidth, s.effective_write_bandwidth,
@@ -773,6 +834,7 @@ bool tu_dram_configure_core_clock(tu_dram_model_t *dram, double clock_ghz) {
     if (!dram || !isfinite(clock_ghz) || clock_ghz <= 0.0 || clock_ghz > 10.0)
         return false;
     uint32_t read_cycles, write_cycles, timeout_cycles;
+    uint32_t read_to_write_cycles, write_to_read_cycles;
     if (!latency_cycles_for(dram->latency_domain, dram->read_latency_source,
                             clock_ghz, &read_cycles) ||
         !latency_cycles_for(dram->latency_domain, dram->write_latency_source,
@@ -780,12 +842,20 @@ bool tu_dram_configure_core_clock(tu_dram_model_t *dram, double clock_ghz) {
         !row_timeout_cycles_for(dram->row_timeout_domain,
                                 dram->row_open_timeout_source,
                                 clock_ghz, &timeout_cycles) ||
+        !turnaround_cycles_for(dram->turnaround_domain,
+                               dram->read_to_write_turnaround_source,
+                               clock_ghz, &read_to_write_cycles) ||
+        !turnaround_cycles_for(dram->turnaround_domain,
+                               dram->write_to_read_turnaround_source,
+                               clock_ghz, &write_to_read_cycles) ||
         (dram->row_policy == TU_DRAM_ROW_ADAPTIVE_TIMEOUT &&
          timeout_cycles == 0)) return false;
     dram->core_clock_ghz = clock_ghz;
     dram->params.read_latency_cycles = read_cycles;
     dram->params.write_latency_cycles = write_cycles;
     dram->row_open_timeout_cycles = timeout_cycles;
+    dram->read_to_write_turnaround_cycles = read_to_write_cycles;
+    dram->write_to_read_turnaround_cycles = write_to_read_cycles;
     dram->bw_window_size_cycles = 0;
     dram->bw_window_start = dram->current_cycle;
     dram->bandwidth_available = 0;
@@ -887,6 +957,30 @@ bool tu_dram_set_address_mapping(tu_dram_model_t *dram,
         dram->open_rows[i] = UINT64_MAX;
         dram->row_last_access_cycle[i] = UINT64_MAX;
     }
+    return true;
+}
+
+bool tu_dram_set_turnaround(tu_dram_model_t *dram,
+                            tu_dram_turnaround_mode_t mode,
+                            tu_dram_turnaround_domain_t domain,
+                            double read_to_write, double write_to_read) {
+    uint32_t rtw_cycles, wtr_cycles;
+    if (!dram || mode < TU_DRAM_TURNAROUND_NONE ||
+        mode > TU_DRAM_TURNAROUND_FIXED ||
+        !turnaround_cycles_for(domain, read_to_write,
+                               effective_core_clock(dram), &rtw_cycles) ||
+        !turnaround_cycles_for(domain, write_to_read,
+                               effective_core_clock(dram), &wtr_cycles) ||
+        (mode == TU_DRAM_TURNAROUND_FIXED &&
+         rtw_cycles == 0 && wtr_cycles == 0)) return false;
+    dram->turnaround_mode = mode;
+    dram->turnaround_domain = domain;
+    dram->read_to_write_turnaround_source = read_to_write;
+    dram->write_to_read_turnaround_source = write_to_read;
+    dram->read_to_write_turnaround_cycles = rtw_cycles;
+    dram->write_to_read_turnaround_cycles = wtr_cycles;
+    memset(dram->channel_last_direction, 0,
+           dram->num_channels * sizeof(uint8_t));
     return true;
 }
 

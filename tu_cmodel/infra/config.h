@@ -65,6 +65,17 @@ typedef enum {
     TU_DRAM_CONFIG_ROW_TIMEOUT_PHYSICAL_NS = 1
 } tu_dram_config_row_timeout_domain_t;
 
+/* Zero preserves the historical model with no read/write bus turnaround. */
+typedef enum {
+    TU_DRAM_CONFIG_TURNAROUND_NONE = 0,
+    TU_DRAM_CONFIG_TURNAROUND_FIXED = 1
+} tu_dram_config_turnaround_mode_t;
+
+typedef enum {
+    TU_DRAM_CONFIG_TURNAROUND_CORE_CYCLES = 0,
+    TU_DRAM_CONFIG_TURNAROUND_PHYSICAL_NS = 1
+} tu_dram_config_turnaround_domain_t;
+
 /* Zero preserves the historical no-refresh model for legacy callers.
  * Real DRAM always refreshes; `none` is the compatibility path only. */
 typedef enum {
@@ -142,6 +153,10 @@ typedef struct tu_config_t {
     double   dram_latency_write; /* cycles or ns, selected by latency domain */
     int      dram_latency_domain; /* core_cycles=0 (compat), physical_ns=1 */
     double   dram_core_clock_ghz; /* TU/core cycle domain; 0 = compatibility 1 GHz */
+    int      dram_turnaround_mode; /* none=0 (compat), fixed=1 */
+    int      dram_turnaround_domain; /* core_cycles=0, physical_ns=1 */
+    double   dram_read_to_write_turnaround; /* cycles or ns by selected domain */
+    double   dram_write_to_read_turnaround; /* cycles or ns by selected domain */
     /* DRAM refresh (JEDEC tREFI/tRFC); zero fields mean "use defaults". */
     int      dram_refresh_mode;       /* none=0, all_bank=1, per_bank=2 */
     int      dram_refresh_scheduling; /* fixed=0, deferred=1 */

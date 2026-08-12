@@ -70,6 +70,16 @@ typedef enum {
     TU_DRAM_ROW_TIMEOUT_PHYSICAL_NS = 1
 } tu_dram_row_timeout_domain_t;
 
+typedef enum {
+    TU_DRAM_TURNAROUND_NONE = 0,
+    TU_DRAM_TURNAROUND_FIXED = 1
+} tu_dram_turnaround_mode_t;
+
+typedef enum {
+    TU_DRAM_TURNAROUND_CORE_CYCLES = 0,
+    TU_DRAM_TURNAROUND_PHYSICAL_NS = 1
+} tu_dram_turnaround_domain_t;
+
 /* Refresh model (JEDEC tREFI/tRFC). Subsystem enum family is disjoint from
  * the generated TU_DRAM_REFRESH_MODE_* / TU_DRAM_REFRESH_SCHED_* macros and
  * the canonical TU_DRAM_CONFIG_REFRESH_* enums (preprocessor namespace). */
@@ -115,6 +125,8 @@ typedef struct {
     uint64_t  total_row_empty_misses; /* Activate from precharged/closed state */
     uint64_t  total_row_replacements; /* Precharge an open row, then activate */
     uint64_t  total_row_timeout_precharges; /* Lazy adaptive idle closures */
+    uint64_t  total_turnaround_events;  /* Read/write direction changes */
+    uint64_t  total_turnaround_cycles;  /* Returned-service turnaround cost */
 
     /* Refresh accounting (JEDEC tREFI/tRFC) */
     uint64_t  total_refresh_events;       /* Refresh commands issued */
@@ -150,6 +162,7 @@ typedef struct {
 
     /* Per-channel access tracking (for channel parallelism) */
     uint64_t *channel_available_cycle; /* Per-channel next-available cycle */
+    uint8_t  *channel_last_direction; /* 0=none, 1=read, 2=write */
     uint32_t  num_channels;
     tu_dram_row_policy_mode_t row_policy;
     tu_dram_address_mapping_mode_t address_mapping;
@@ -160,6 +173,14 @@ typedef struct {
     double row_open_timeout_source;       /* cycles or ns according to domain */
     uint64_t *open_rows;              /* channel×bank rows; UINT64_MAX=none */
     uint64_t *row_last_access_cycle;   /* channel×bank; UINT64_MAX=never */
+
+    /* Per-channel bidirectional data-bus turnaround. */
+    tu_dram_turnaround_mode_t turnaround_mode;
+    tu_dram_turnaround_domain_t turnaround_domain;
+    double read_to_write_turnaround_source; /* cycles or ns by domain */
+    double write_to_read_turnaround_source; /* cycles or ns by domain */
+    uint32_t read_to_write_turnaround_cycles;
+    uint32_t write_to_read_turnaround_cycles;
 
     /* Refresh state (JEDEC tREFI/tRFC; ns converted at core_clock_ghz) */
     tu_dram_refresh_mode_t      refresh_mode;
@@ -290,6 +311,14 @@ bool tu_dram_set_row_policy_timeout_domain(
 
 bool tu_dram_set_address_mapping(tu_dram_model_t *dram,
                                  tu_dram_address_mapping_mode_t mapping);
+
+/* Model a shared bidirectional channel bus. NONE is the compatibility mode.
+ * FIXED charges the selected directional cost whenever consecutive accesses
+ * on one channel change direction. Values are core cycles or physical ns. */
+bool tu_dram_set_turnaround(tu_dram_model_t *dram,
+                            tu_dram_turnaround_mode_t mode,
+                            tu_dram_turnaround_domain_t domain,
+                            double read_to_write, double write_to_read);
 
 /* Configure the refresh model. ns timings are converted into the configured
  * TU/core-clock cycle domain. `rate` 0 is treated

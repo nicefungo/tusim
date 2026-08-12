@@ -189,6 +189,20 @@ static int parse_dram_row_timeout_domain_str(const char *s) {
     return -1;
 }
 
+static int parse_dram_turnaround_mode_str(const char *s) {
+    if (!s || strcmp(s, "none") == 0) return TU_DRAM_CONFIG_TURNAROUND_NONE;
+    if (strcmp(s, "fixed") == 0) return TU_DRAM_CONFIG_TURNAROUND_FIXED;
+    return -1;
+}
+
+static int parse_dram_turnaround_domain_str(const char *s) {
+    if (!s || strcmp(s, "core_cycles") == 0)
+        return TU_DRAM_CONFIG_TURNAROUND_CORE_CYCLES;
+    if (strcmp(s, "physical_ns") == 0)
+        return TU_DRAM_CONFIG_TURNAROUND_PHYSICAL_NS;
+    return -1;
+}
+
 static int parse_dram_refresh_mode_str(const char *s) {
     if (!s || strcmp(s, "none") == 0) return TU_DRAM_CONFIG_REFRESH_NONE;
     if (strcmp(s, "all_bank") == 0) return TU_DRAM_CONFIG_REFRESH_ALL_BANK;
@@ -255,6 +269,10 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->dram_latency_write  = 50;
     cfg->dram_latency_domain = TU_DRAM_CONFIG_LATENCY_CORE_CYCLES;
     cfg->dram_core_clock_ghz = 1.0;
+    cfg->dram_turnaround_mode = TU_DRAM_CONFIG_TURNAROUND_NONE;
+    cfg->dram_turnaround_domain = TU_DRAM_CONFIG_TURNAROUND_CORE_CYCLES;
+    cfg->dram_read_to_write_turnaround = 0.0;
+    cfg->dram_write_to_read_turnaround = 0.0;
     cfg->dram_refresh_mode       = TU_DRAM_CONFIG_REFRESH_NONE;
     cfg->dram_refresh_scheduling = TU_DRAM_CONFIG_REFRESH_SCHED_FIXED;
     cfg->dram_refresh_rate       = 1;
@@ -461,6 +479,18 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
             if (ld && ld->type == TU_JSON_STRING)
                 cfg->dram_latency_domain =
                     parse_dram_latency_domain_str(tu_json_as_string(ld, NULL));
+            const tu_json_value_t *tm = tu_json_get(dram, "turnaround_mode");
+            if (tm && tm->type == TU_JSON_STRING)
+                cfg->dram_turnaround_mode =
+                    parse_dram_turnaround_mode_str(tu_json_as_string(tm, NULL));
+            const tu_json_value_t *tad = tu_json_get(dram, "turnaround_domain");
+            if (tad && tad->type == TU_JSON_STRING)
+                cfg->dram_turnaround_domain =
+                    parse_dram_turnaround_domain_str(tu_json_as_string(tad, NULL));
+            parse_opt_double(dram, "read_to_write_turnaround",
+                             &cfg->dram_read_to_write_turnaround);
+            parse_opt_double(dram, "write_to_read_turnaround",
+                             &cfg->dram_write_to_read_turnaround);
             const tu_json_value_t *rf = tu_json_get(dram, "refresh");
             if (rf && rf->type == TU_JSON_OBJECT) {
                 const tu_json_value_t *rm = tu_json_get(rf, "mode");
@@ -801,6 +831,43 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
                      "DRAM core_clock_ghz must be 0 (compatibility 1 GHz) or in (0,10]");
         return -1;
     }
+    if (cfg->dram_turnaround_mode < TU_DRAM_CONFIG_TURNAROUND_NONE ||
+        cfg->dram_turnaround_mode > TU_DRAM_CONFIG_TURNAROUND_FIXED) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DRAM turnaround_mode must be none or fixed");
+        return -1;
+    }
+    if (cfg->dram_turnaround_domain < TU_DRAM_CONFIG_TURNAROUND_CORE_CYCLES ||
+        cfg->dram_turnaround_domain > TU_DRAM_CONFIG_TURNAROUND_PHYSICAL_NS) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DRAM turnaround_domain must be core_cycles or physical_ns");
+        return -1;
+    }
+    if (!isfinite(cfg->dram_read_to_write_turnaround) ||
+        !isfinite(cfg->dram_write_to_read_turnaround) ||
+        cfg->dram_read_to_write_turnaround < 0.0 ||
+        cfg->dram_write_to_read_turnaround < 0.0 ||
+        cfg->dram_read_to_write_turnaround > 100000000.0 ||
+        cfg->dram_write_to_read_turnaround > 100000000.0 ||
+        (cfg->dram_turnaround_mode == TU_DRAM_CONFIG_TURNAROUND_FIXED &&
+         cfg->dram_read_to_write_turnaround == 0.0 &&
+         cfg->dram_write_to_read_turnaround == 0.0)) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DRAM turnaround values must be finite, in range, and nonzero for fixed mode");
+        return -1;
+    }
+    if (cfg->dram_turnaround_mode == TU_DRAM_CONFIG_TURNAROUND_FIXED &&
+        cfg->dram_turnaround_domain == TU_DRAM_CONFIG_TURNAROUND_CORE_CYCLES &&
+        cfg->dram_read_to_write_turnaround < 1.0 &&
+        cfg->dram_write_to_read_turnaround < 1.0) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "fixed core-cycle DRAM turnaround requires at least one value >= 1");
+        return -1;
+    }
     if (cfg->dram_refresh_mode < TU_DRAM_CONFIG_REFRESH_NONE ||
         cfg->dram_refresh_mode > TU_DRAM_CONFIG_REFRESH_PER_BANK) {
         if (error_buf && error_size > 0)
@@ -1094,6 +1161,14 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             cfg->dram_latency_read, cfg->dram_latency_write);
     fprintf(out, "| `dram_core_clock_ghz` | %.3f | double | TU/core clock used for GB/s-to-bytes/cycle and ns-to-cycle conversion |\n",
             cfg->dram_core_clock_ghz);
+    fprintf(out, "| `dram_turnaround_mode` | %d | int | 0=None (compat), 1=Fixed per-channel direction-change cost |\n",
+            cfg->dram_turnaround_mode);
+    fprintf(out, "| `dram_turnaround_domain` | %d | int | 0=Fixed TU/core cycles, 1=Physical ns converted at core clock |\n",
+            cfg->dram_turnaround_domain);
+    fprintf(out, "| `dram_read_to_write_turnaround` | %.3f | double | Read-to-write bus turnaround in selected domain |\n",
+            cfg->dram_read_to_write_turnaround);
+    fprintf(out, "| `dram_write_to_read_turnaround` | %.3f | double | Write-to-read bus turnaround in selected domain |\n",
+            cfg->dram_write_to_read_turnaround);
     fprintf(out, "| `dram_refresh_mode` | %d | int | 0=None (compat), 1=All-bank, 2=Per-bank (JEDEC tREFI/tRFC) |\n",
             cfg->dram_refresh_mode);
     fprintf(out, "| `dram_refresh_scheduling` | %d | int | 0=Fixed periodic, 1=Deferred (bounded postponement) |\n",
