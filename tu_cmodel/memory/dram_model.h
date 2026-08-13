@@ -72,7 +72,8 @@ typedef enum {
 
 typedef enum {
     TU_DRAM_TURNAROUND_NONE = 0,
-    TU_DRAM_TURNAROUND_FIXED = 1
+    TU_DRAM_TURNAROUND_FIXED = 1,
+    TU_DRAM_TURNAROUND_IDLE_CREDIT = 2
 } tu_dram_turnaround_mode_t;
 
 typedef enum {
@@ -313,8 +314,9 @@ bool tu_dram_set_address_mapping(tu_dram_model_t *dram,
                                  tu_dram_address_mapping_mode_t mapping);
 
 /* Model a shared bidirectional channel bus. NONE is the compatibility mode.
- * FIXED charges the selected directional cost whenever consecutive accesses
- * on one channel change direction. Values are core cycles or physical ns. */
+ * FIXED charges the full directional cost on every direction change.
+ * IDLE_CREDIT subtracts channel-idle cycles since prior service completed.
+ * Values are core cycles or physical ns. */
 bool tu_dram_set_turnaround(tu_dram_model_t *dram,
                             tu_dram_turnaround_mode_t mode,
                             tu_dram_turnaround_domain_t domain,

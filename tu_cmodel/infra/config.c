@@ -192,6 +192,7 @@ static int parse_dram_row_timeout_domain_str(const char *s) {
 static int parse_dram_turnaround_mode_str(const char *s) {
     if (!s || strcmp(s, "none") == 0) return TU_DRAM_CONFIG_TURNAROUND_NONE;
     if (strcmp(s, "fixed") == 0) return TU_DRAM_CONFIG_TURNAROUND_FIXED;
+    if (strcmp(s, "idle_credit") == 0) return TU_DRAM_CONFIG_TURNAROUND_IDLE_CREDIT;
     return -1;
 }
 
@@ -832,10 +833,10 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
         return -1;
     }
     if (cfg->dram_turnaround_mode < TU_DRAM_CONFIG_TURNAROUND_NONE ||
-        cfg->dram_turnaround_mode > TU_DRAM_CONFIG_TURNAROUND_FIXED) {
+        cfg->dram_turnaround_mode > TU_DRAM_CONFIG_TURNAROUND_IDLE_CREDIT) {
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
-                     "DRAM turnaround_mode must be none or fixed");
+                     "DRAM turnaround_mode must be none, fixed, or idle_credit");
         return -1;
     }
     if (cfg->dram_turnaround_domain < TU_DRAM_CONFIG_TURNAROUND_CORE_CYCLES ||
@@ -851,15 +852,15 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
         cfg->dram_write_to_read_turnaround < 0.0 ||
         cfg->dram_read_to_write_turnaround > 100000000.0 ||
         cfg->dram_write_to_read_turnaround > 100000000.0 ||
-        (cfg->dram_turnaround_mode == TU_DRAM_CONFIG_TURNAROUND_FIXED &&
+        (cfg->dram_turnaround_mode != TU_DRAM_CONFIG_TURNAROUND_NONE &&
          cfg->dram_read_to_write_turnaround == 0.0 &&
          cfg->dram_write_to_read_turnaround == 0.0)) {
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
-                     "DRAM turnaround values must be finite, in range, and nonzero for fixed mode");
+                     "DRAM turnaround values must be finite, in range, and nonzero when enabled");
         return -1;
     }
-    if (cfg->dram_turnaround_mode == TU_DRAM_CONFIG_TURNAROUND_FIXED &&
+    if (cfg->dram_turnaround_mode != TU_DRAM_CONFIG_TURNAROUND_NONE &&
         cfg->dram_turnaround_domain == TU_DRAM_CONFIG_TURNAROUND_CORE_CYCLES &&
         cfg->dram_read_to_write_turnaround < 1.0 &&
         cfg->dram_write_to_read_turnaround < 1.0) {
@@ -1161,7 +1162,7 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             cfg->dram_latency_read, cfg->dram_latency_write);
     fprintf(out, "| `dram_core_clock_ghz` | %.3f | double | TU/core clock used for GB/s-to-bytes/cycle and ns-to-cycle conversion |\n",
             cfg->dram_core_clock_ghz);
-    fprintf(out, "| `dram_turnaround_mode` | %d | int | 0=None (compat), 1=Fixed per-channel direction-change cost |\n",
+    fprintf(out, "| `dram_turnaround_mode` | %d | int | 0=None, 1=Fixed full cost, 2=Idle-credit residual cost |\n",
             cfg->dram_turnaround_mode);
     fprintf(out, "| `dram_turnaround_domain` | %d | int | 0=Fixed TU/core cycles, 1=Physical ns converted at core clock |\n",
             cfg->dram_turnaround_domain);

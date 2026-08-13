@@ -570,6 +570,11 @@ static uint64_t turnaround_for(tu_dram_model_t *dram, uint32_t channel,
         cycles = dram->read_to_write_turnaround_cycles;
     else if (old_direction == 2 && new_direction == 1)
         cycles = dram->write_to_read_turnaround_cycles;
+    if (cycles != 0 && dram->turnaround_mode == TU_DRAM_TURNAROUND_IDLE_CREDIT &&
+        dram->current_cycle > dram->channel_available_cycle[channel]) {
+        uint64_t idle = dram->current_cycle - dram->channel_available_cycle[channel];
+        cycles = idle < cycles ? cycles - idle : 0;
+    }
     dram->channel_last_direction[channel] = new_direction;
     if (old_direction != 0 && old_direction != new_direction) {
         dram->stats.total_turnaround_events++;
@@ -966,7 +971,7 @@ bool tu_dram_set_turnaround(tu_dram_model_t *dram,
                             double read_to_write, double write_to_read) {
     uint32_t rtw_cycles, wtr_cycles;
     if (!dram || mode < TU_DRAM_TURNAROUND_NONE ||
-        mode > TU_DRAM_TURNAROUND_FIXED ||
+        mode > TU_DRAM_TURNAROUND_IDLE_CREDIT ||
         !turnaround_cycles_for(domain, read_to_write,
                                effective_core_clock(dram), &rtw_cycles) ||
         !turnaround_cycles_for(domain, write_to_read,

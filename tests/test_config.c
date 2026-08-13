@@ -314,11 +314,11 @@ int main(void) {
         tu_config_t cfg;
         char err[192];
         CHECK(tu_config_load_string(
-            "{\"tu\":{\"memory\":{\"dram\":{\"turnaround_mode\":\"fixed\","
+            "{\"tu\":{\"memory\":{\"dram\":{\"turnaround_mode\":\"idle_credit\","
             "\"turnaround_domain\":\"physical_ns\","
             "\"read_to_write_turnaround\":3.5,\"write_to_read_turnaround\":8}}}}",
             &cfg, err, sizeof(err)) == 0, "turnaround parse");
-        CHECK(cfg.dram_turnaround_mode == TU_DRAM_CONFIG_TURNAROUND_FIXED &&
+        CHECK(cfg.dram_turnaround_mode == TU_DRAM_CONFIG_TURNAROUND_IDLE_CREDIT &&
               cfg.dram_turnaround_domain == TU_DRAM_CONFIG_TURNAROUND_PHYSICAL_NS &&
               cfg.dram_read_to_write_turnaround == 3.5 &&
               cfg.dram_write_to_read_turnaround == 8.0,
