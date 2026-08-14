@@ -324,6 +324,12 @@ int main(void) {
               cfg.dram_write_to_read_turnaround == 8.0,
               "turnaround values");
         CHECK(tu_config_load_string(
+            "{\"tu\":{\"memory\":{\"dram\":{\"turnaround_mode\":\"burst_credit\","
+            "\"read_to_write_turnaround\":3,\"write_to_read_turnaround\":8}}}}",
+            &cfg, err, sizeof(err)) == 0 &&
+            cfg.dram_turnaround_mode == TU_DRAM_CONFIG_TURNAROUND_BURST_CREDIT,
+            "burst-credit turnaround parse");
+        CHECK(tu_config_load_string(
             "{\"tu\":{\"memory\":{\"dram\":{\"turnaround_mode\":\"adaptive\"}}}}",
             &cfg, err, sizeof(err)) != 0, "unknown turnaround mode accepted");
         CHECK(strstr(err, "turnaround_mode") != NULL, "wrong mode error");

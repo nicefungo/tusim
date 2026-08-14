@@ -73,7 +73,8 @@ typedef enum {
 typedef enum {
     TU_DRAM_TURNAROUND_NONE = 0,
     TU_DRAM_TURNAROUND_FIXED = 1,
-    TU_DRAM_TURNAROUND_IDLE_CREDIT = 2
+    TU_DRAM_TURNAROUND_IDLE_CREDIT = 2,
+    TU_DRAM_TURNAROUND_BURST_CREDIT = 3
 } tu_dram_turnaround_mode_t;
 
 typedef enum {
@@ -315,7 +316,9 @@ bool tu_dram_set_address_mapping(tu_dram_model_t *dram,
 
 /* Model a shared bidirectional channel bus. NONE is the compatibility mode.
  * FIXED charges the full directional cost on every direction change.
- * IDLE_CREDIT subtracts channel-idle cycles since prior service completed.
+ * IDLE_CREDIT subtracts channel-idle cycles since prior base service completed.
+ * BURST_CREDIT delays that boundary by ceil(bytes / channel bus width), a
+ * conservative serialized-data-burst alternative.
  * Values are core cycles or physical ns. */
 bool tu_dram_set_turnaround(tu_dram_model_t *dram,
                             tu_dram_turnaround_mode_t mode,

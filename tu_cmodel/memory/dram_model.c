@@ -570,7 +570,9 @@ static uint64_t turnaround_for(tu_dram_model_t *dram, uint32_t channel,
         cycles = dram->read_to_write_turnaround_cycles;
     else if (old_direction == 2 && new_direction == 1)
         cycles = dram->write_to_read_turnaround_cycles;
-    if (cycles != 0 && dram->turnaround_mode == TU_DRAM_TURNAROUND_IDLE_CREDIT &&
+    if (cycles != 0 &&
+        (dram->turnaround_mode == TU_DRAM_TURNAROUND_IDLE_CREDIT ||
+         dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_CREDIT) &&
         dram->current_cycle > dram->channel_available_cycle[channel]) {
         uint64_t idle = dram->current_cycle - dram->channel_available_cycle[channel];
         cycles = idle < cycles ? cycles - idle : 0;
@@ -648,9 +650,15 @@ void tu_dram_read(tu_dram_model_t *dram, uint64_t addr,
                  (dram->current_cycle - dram->bw_window_start);
     }
 
-    /* Update channel availability */
+    /* BURST_CREDIT conservatively serializes the payload after base service;
+     * the other modes retain the historical base-service boundary. */
     uint64_t total_cycles = base_latency;
-    dram->channel_available_cycle[channel] = dram->current_cycle + total_cycles;
+    uint64_t burst_cycles = 0;
+    if (dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_CREDIT) {
+        uint32_t width = dram->params.bus_width_bytes ? dram->params.bus_width_bytes : 1;
+        burst_cycles = ((uint64_t)num_bytes + width - 1) / width;
+    }
+    dram->channel_available_cycle[channel] = dram->current_cycle + total_cycles + burst_cycles;
     dram->pending_read_bytes += num_bytes;
     dram->bandwidth_available = (dram->bandwidth_available > num_bytes)
                                 ? (dram->bandwidth_available - num_bytes) : 0;
@@ -710,7 +718,12 @@ void tu_dram_write(tu_dram_model_t *dram, uint64_t addr,
     }
 
     uint64_t total_cycles = base_latency;
-    dram->channel_available_cycle[channel] = dram->current_cycle + total_cycles;
+    uint64_t burst_cycles = 0;
+    if (dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_CREDIT) {
+        uint32_t width = dram->params.bus_width_bytes ? dram->params.bus_width_bytes : 1;
+        burst_cycles = ((uint64_t)num_bytes + width - 1) / width;
+    }
+    dram->channel_available_cycle[channel] = dram->current_cycle + total_cycles + burst_cycles;
     dram->pending_write_bytes += num_bytes;
     dram->bandwidth_available = (dram->bandwidth_available > num_bytes)
                                 ? (dram->bandwidth_available - num_bytes) : 0;
@@ -971,7 +984,7 @@ bool tu_dram_set_turnaround(tu_dram_model_t *dram,
                             double read_to_write, double write_to_read) {
     uint32_t rtw_cycles, wtr_cycles;
     if (!dram || mode < TU_DRAM_TURNAROUND_NONE ||
-        mode > TU_DRAM_TURNAROUND_IDLE_CREDIT ||
+        mode > TU_DRAM_TURNAROUND_BURST_CREDIT ||
         !turnaround_cycles_for(domain, read_to_write,
                                effective_core_clock(dram), &rtw_cycles) ||
         !turnaround_cycles_for(domain, write_to_read,

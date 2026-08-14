@@ -7,6 +7,7 @@
 typedef struct {
     char first;
     uint32_t gap;
+    uint32_t bytes;
     tu_dram_turnaround_mode_t mode;
     uint64_t service;
     uint64_t turnaround;
@@ -34,20 +35,21 @@ static int run_case(const case_t *c) {
     if (!dram) return 1;
     uint64_t first_cycles = 0, second_cycles = 0, stall = 0;
     if (c->first == 'R')
-        tu_dram_read(dram, 0, 64, &first_cycles, &stall);
+        tu_dram_read(dram, 0, c->bytes, &first_cycles, &stall);
     else
-        tu_dram_write(dram, 0, 64, &first_cycles, &stall);
+        tu_dram_write(dram, 0, c->bytes, &first_cycles, &stall);
     for (uint32_t i = 0; i < c->gap; ++i) tu_dram_tick(dram);
     if (c->first == 'R')
-        tu_dram_write(dram, 0, 64, &second_cycles, &stall);
+        tu_dram_write(dram, 0, c->bytes, &second_cycles, &stall);
     else
-        tu_dram_read(dram, 0, 64, &second_cycles, &stall);
+        tu_dram_read(dram, 0, c->bytes, &second_cycles, &stall);
     uint64_t service = first_cycles + second_cycles;
-    printf("%c2%c %-11s %3u %7" PRIu64 " %6" PRIu64 "\n",
+    printf("%c2%c %-12s %3u %5u %7" PRIu64 " %6" PRIu64 "\n",
            c->first, c->first == 'R' ? 'W' : 'R',
            c->mode == TU_DRAM_TURNAROUND_NONE ? "none" :
-           (c->mode == TU_DRAM_TURNAROUND_FIXED ? "fixed" : "idle-credit"),
-           c->gap, service, dram->stats.total_turnaround_cycles);
+           (c->mode == TU_DRAM_TURNAROUND_FIXED ? "fixed" :
+            (c->mode == TU_DRAM_TURNAROUND_IDLE_CREDIT ? "idle-credit" : "burst-credit")),
+           c->gap, c->bytes, service, dram->stats.total_turnaround_cycles);
     uint64_t expected_events = c->mode == TU_DRAM_TURNAROUND_NONE ? 0 : 1;
     int fail = service != c->service ||
                dram->stats.total_turnaround_cycles != c->turnaround ||
@@ -58,28 +60,34 @@ static int run_case(const case_t *c) {
 
 int main(void) {
     const case_t cases[] = {
-        {'R', 0,  TU_DRAM_TURNAROUND_NONE,        18, 0},
-        {'R', 0,  TU_DRAM_TURNAROUND_FIXED,       21, 3},
-        {'R', 0,  TU_DRAM_TURNAROUND_IDLE_CREDIT, 21, 3},
-        {'R', 10, TU_DRAM_TURNAROUND_IDLE_CREDIT, 21, 3},
-        {'R', 11, TU_DRAM_TURNAROUND_IDLE_CREDIT, 20, 2},
-        {'R', 13, TU_DRAM_TURNAROUND_IDLE_CREDIT, 18, 0},
-        {'W', 0,  TU_DRAM_TURNAROUND_NONE,        18, 0},
-        {'W', 0,  TU_DRAM_TURNAROUND_FIXED,       26, 8},
-        {'W', 0,  TU_DRAM_TURNAROUND_IDLE_CREDIT, 26, 8},
-        {'W', 8,  TU_DRAM_TURNAROUND_IDLE_CREDIT, 26, 8},
-        {'W', 12, TU_DRAM_TURNAROUND_IDLE_CREDIT, 22, 4},
-        {'W', 16, TU_DRAM_TURNAROUND_IDLE_CREDIT, 18, 0},
+        {'R', 0,  64, TU_DRAM_TURNAROUND_NONE,         18, 0},
+        {'R', 0,  64, TU_DRAM_TURNAROUND_FIXED,        21, 3},
+        {'R', 0,  64, TU_DRAM_TURNAROUND_IDLE_CREDIT,  21, 3},
+        {'R', 10, 64, TU_DRAM_TURNAROUND_IDLE_CREDIT,  21, 3},
+        {'R', 11, 64, TU_DRAM_TURNAROUND_IDLE_CREDIT,  20, 2},
+        {'R', 13, 64, TU_DRAM_TURNAROUND_IDLE_CREDIT,  18, 0},
+        {'W', 0,  64, TU_DRAM_TURNAROUND_NONE,         18, 0},
+        {'W', 0,  64, TU_DRAM_TURNAROUND_FIXED,        26, 8},
+        {'W', 0,  64, TU_DRAM_TURNAROUND_IDLE_CREDIT,  26, 8},
+        {'W', 8,  64, TU_DRAM_TURNAROUND_IDLE_CREDIT,  26, 8},
+        {'W', 12, 64, TU_DRAM_TURNAROUND_IDLE_CREDIT,  22, 4},
+        {'W', 16, 64, TU_DRAM_TURNAROUND_IDLE_CREDIT,  18, 0},
+        {'W', 16, 64, TU_DRAM_TURNAROUND_BURST_CREDIT, 26, 8},
+        {'W', 20, 64, TU_DRAM_TURNAROUND_BURST_CREDIT, 22, 4},
+        {'W', 24, 64, TU_DRAM_TURNAROUND_BURST_CREDIT, 18, 0},
+        {'W', 20, 16, TU_DRAM_TURNAROUND_BURST_CREDIT, 18, 0},
+        {'R', 13, 64, TU_DRAM_TURNAROUND_BURST_CREDIT, 21, 3},
+        {'R', 21, 64, TU_DRAM_TURNAROUND_BURST_CREDIT, 18, 0},
     };
     int failures = 0;
     puts("DRAM turnaround idle-credit sweep: R=10, W=8, R2W=3, W2R=8");
-    printf("%-3s %-11s %3s %7s %6s\n", "dir", "mode", "gap", "service", "ta_cyc");
+    printf("%-3s %-12s %3s %5s %7s %6s\n", "dir", "mode", "gap", "bytes", "service", "ta_cyc");
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i)
         failures += run_case(&cases[i]);
     if (failures) {
         fprintf(stderr, "FAIL: %d idle-credit rows violated exact gates\n", failures);
         return 1;
     }
-    puts("PASS: 12 rows passed exact idle-credit gates");
+    puts("PASS: 18 rows passed exact completion-boundary gates");
     return 0;
 }

@@ -193,6 +193,7 @@ static int parse_dram_turnaround_mode_str(const char *s) {
     if (!s || strcmp(s, "none") == 0) return TU_DRAM_CONFIG_TURNAROUND_NONE;
     if (strcmp(s, "fixed") == 0) return TU_DRAM_CONFIG_TURNAROUND_FIXED;
     if (strcmp(s, "idle_credit") == 0) return TU_DRAM_CONFIG_TURNAROUND_IDLE_CREDIT;
+    if (strcmp(s, "burst_credit") == 0) return TU_DRAM_CONFIG_TURNAROUND_BURST_CREDIT;
     return -1;
 }
 
@@ -833,10 +834,10 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
         return -1;
     }
     if (cfg->dram_turnaround_mode < TU_DRAM_CONFIG_TURNAROUND_NONE ||
-        cfg->dram_turnaround_mode > TU_DRAM_CONFIG_TURNAROUND_IDLE_CREDIT) {
+        cfg->dram_turnaround_mode > TU_DRAM_CONFIG_TURNAROUND_BURST_CREDIT) {
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
-                     "DRAM turnaround_mode must be none, fixed, or idle_credit");
+                     "DRAM turnaround_mode must be none, fixed, idle_credit, or burst_credit");
         return -1;
     }
     if (cfg->dram_turnaround_domain < TU_DRAM_CONFIG_TURNAROUND_CORE_CYCLES ||
@@ -1162,7 +1163,7 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             cfg->dram_latency_read, cfg->dram_latency_write);
     fprintf(out, "| `dram_core_clock_ghz` | %.3f | double | TU/core clock used for GB/s-to-bytes/cycle and ns-to-cycle conversion |\n",
             cfg->dram_core_clock_ghz);
-    fprintf(out, "| `dram_turnaround_mode` | %d | int | 0=None, 1=Fixed full cost, 2=Idle-credit residual cost |\n",
+    fprintf(out, "| `dram_turnaround_mode` | %d | int | 0=None, 1=Fixed, 2=Idle credit after base service, 3=Credit after serialized burst |\n",
             cfg->dram_turnaround_mode);
     fprintf(out, "| `dram_turnaround_domain` | %d | int | 0=Fixed TU/core cycles, 1=Physical ns converted at core clock |\n",
             cfg->dram_turnaround_domain);

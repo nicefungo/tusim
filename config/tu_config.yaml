@@ -61,7 +61,7 @@ tu:
       row_timeout_domain: "core_cycles"  # core_cycles (compat) | physical_ns
       latency_domain: "core_cycles"  # core_cycles (compat) | physical_ns
       core_clock_ghz: 1.0
-      turnaround_mode: "none"  # none (compat) | fixed (full cost) | idle_credit (subtract idle gap)
+      turnaround_mode: "none"  # none | fixed | idle_credit (after base service) | burst_credit (after serialized data burst)
       turnaround_domain: "core_cycles"  # core_cycles | physical_ns
       read_to_write_turnaround: 0.0  # cycles or ns in selected domain
       write_to_read_turnaround: 0.0  # cycles or ns in selected domain

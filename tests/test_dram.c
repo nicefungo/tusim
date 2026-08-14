@@ -447,6 +447,11 @@ static void test_dram_turnaround(void) {
     CHECK(dram->turnaround_domain == TU_DRAM_TURNAROUND_PHYSICAL_NS &&
           dram->write_to_read_turnaround_cycles == 16,
           "failed setter mutated turnaround state");
+    CHECK(tu_dram_set_turnaround(dram, TU_DRAM_TURNAROUND_BURST_CREDIT,
+                                 TU_DRAM_TURNAROUND_CORE_CYCLES, 4, 7),
+          "burst-credit turnaround set failed");
+    CHECK(dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_CREDIT,
+          "burst-credit mode not retained");
     tu_dram_destroy(dram);
     dram = tu_dram_create_custom(&two_channel_params, "turnaround-channels");
     CHECK(dram != NULL &&

@@ -69,7 +69,8 @@ typedef enum {
 typedef enum {
     TU_DRAM_CONFIG_TURNAROUND_NONE = 0,
     TU_DRAM_CONFIG_TURNAROUND_FIXED = 1,
-    TU_DRAM_CONFIG_TURNAROUND_IDLE_CREDIT = 2
+    TU_DRAM_CONFIG_TURNAROUND_IDLE_CREDIT = 2,
+    TU_DRAM_CONFIG_TURNAROUND_BURST_CREDIT = 3
 } tu_dram_config_turnaround_mode_t;
 
 typedef enum {
@@ -154,7 +155,7 @@ typedef struct tu_config_t {
     double   dram_latency_write; /* cycles or ns, selected by latency domain */
     int      dram_latency_domain; /* core_cycles=0 (compat), physical_ns=1 */
     double   dram_core_clock_ghz; /* TU/core cycle domain; 0 = compatibility 1 GHz */
-    int      dram_turnaround_mode; /* none=0, fixed=1, idle_credit=2 */
+    int      dram_turnaround_mode; /* none=0, fixed=1, idle=2, burst=3 */
     int      dram_turnaround_domain; /* core_cycles=0, physical_ns=1 */
     double   dram_read_to_write_turnaround; /* cycles or ns by selected domain */
     double   dram_write_to_read_turnaround; /* cycles or ns by selected domain */
