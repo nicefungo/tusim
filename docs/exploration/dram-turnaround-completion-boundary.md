@@ -12,9 +12,10 @@ The existing `idle_credit` mode uses `current_cycle + base_service` as the prior
 | `none` | Compatibility lower bound or physically separate paths | Omits shared-bus direction cost |
 | `fixed` | Conservative request-order accounting without temporal trust | Overcharges after genuine idle |
 | `idle_credit` | Low-complexity aggregate service boundary; payload overlap modeled elsewhere | Can release the channel too early for serialized bursts |
-| `burst_credit` | Conservative shared-bus boundary: base service plus payload serialization | May overstate occupancy when latency and burst overlap; adds width/size dependence |
+| `burst_credit` | Conservative shared-bus boundary: base service plus exact payload serialization | May overstate occupancy when latency and burst overlap; understates fixed minimum bursts |
+| `burst_round_credit` | Fixed-granularity protocol occupancy for sub-burst and tail requests | Can overstate occupancy when byte masks or coalescing avoid full bursts |
 
-`none` remains the zero/default. All alternatives remain runtime selectable.
+`none` remains the zero/default. All alternatives remain runtime selectable. The rounded follow-up is measured in `dram-burst-granularity.md`.
 
 ## Executable model
 
@@ -59,7 +60,7 @@ The full sweep retains the prior NONE/FIXED/IDLE_CREDIT controls and passes 18 e
 
 ## Fidelity limits
 
-The serialization term is deliberately conservative and uses `ceil(bytes / bus_width)`. It does not model burst length protocol, command/data phase overlap, read/write data timing, ranks, bank groups, request queues, reordering, fairness, backpressure, PHY training/termination, energy, or calibration. `burst_credit` is not a JEDEC command scheduler.
+The exact-byte serialization term is deliberately conservative and uses `ceil(bytes / bus_width)`. The `burst_round_credit` follow-up additionally rounds occupied bytes to `burst_length`; see `dram-burst-granularity.md`. Neither mode models coalescing, byte masks, burst chopping, command/data phase overlap, read/write data timing, ranks, bank groups, request queues, reordering, fairness, backpressure, PHY training/termination, energy, or calibration. These modes are not JEDEC command schedulers.
 
 ## Configuration and verification
 

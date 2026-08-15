@@ -63,7 +63,7 @@
 | `dram_latency_domain` | 0 | int | 0=Fixed TU/core cycles (compat), 1=Physical ns converted at core clock |
 | `dram_latency_read/write` | 50.000 / 50.000 | double | Base read/write latency in selected domain |
 | `dram_core_clock_ghz` | 1.000 | double | TU/core clock used for GB/s-to-bytes/cycle and ns-to-cycle conversion |
-| `dram_turnaround_mode` | 0 | int | 0=None, 1=Fixed, 2=Idle credit after base service, 3=Credit after serialized burst |
+| `dram_turnaround_mode` | 0 | int | 0=None, 1=Fixed, 2=Idle credit after base service, 3=Exact-byte burst credit, 4=Protocol-burst-rounded credit |
 | `dram_turnaround_domain` | 0 | int | 0=Fixed TU/core cycles, 1=Physical ns converted at core clock |
 | `dram_read_to_write_turnaround` | 0.000 | double | Read-to-write bus turnaround in selected domain |
 | `dram_write_to_read_turnaround` | 0.000 | double | Write-to-read bus turnaround in selected domain |

@@ -48,7 +48,8 @@ static int run_case(const case_t *c) {
            c->first, c->first == 'R' ? 'W' : 'R',
            c->mode == TU_DRAM_TURNAROUND_NONE ? "none" :
            (c->mode == TU_DRAM_TURNAROUND_FIXED ? "fixed" :
-            (c->mode == TU_DRAM_TURNAROUND_IDLE_CREDIT ? "idle-credit" : "burst-credit")),
+            (c->mode == TU_DRAM_TURNAROUND_IDLE_CREDIT ? "idle-credit" :
+             (c->mode == TU_DRAM_TURNAROUND_BURST_CREDIT ? "burst-credit" : "burst-round"))),
            c->gap, c->bytes, service, dram->stats.total_turnaround_cycles);
     uint64_t expected_events = c->mode == TU_DRAM_TURNAROUND_NONE ? 0 : 1;
     int fail = service != c->service ||
@@ -76,8 +77,18 @@ int main(void) {
         {'W', 20, 64, TU_DRAM_TURNAROUND_BURST_CREDIT, 22, 4},
         {'W', 24, 64, TU_DRAM_TURNAROUND_BURST_CREDIT, 18, 0},
         {'W', 20, 16, TU_DRAM_TURNAROUND_BURST_CREDIT, 18, 0},
+        {'W', 20, 16, TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT, 22, 4},
+        {'W', 24, 16, TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT, 18, 0},
+        {'W', 20, 80, TU_DRAM_TURNAROUND_BURST_CREDIT, 24, 6},
+        {'W', 26, 80, TU_DRAM_TURNAROUND_BURST_CREDIT, 18, 0},
+        {'W', 20, 80, TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT, 26, 8},
+        {'W', 28, 80, TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT, 22, 4},
+        {'W', 32, 80, TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT, 18, 0},
         {'R', 13, 64, TU_DRAM_TURNAROUND_BURST_CREDIT, 21, 3},
         {'R', 21, 64, TU_DRAM_TURNAROUND_BURST_CREDIT, 18, 0},
+        {'R', 15, 16, TU_DRAM_TURNAROUND_BURST_CREDIT, 18, 0},
+        {'R', 20, 16, TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT, 19, 1},
+        {'R', 21, 16, TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT, 18, 0},
     };
     int failures = 0;
     puts("DRAM turnaround idle-credit sweep: R=10, W=8, R2W=3, W2R=8");
@@ -88,6 +99,6 @@ int main(void) {
         fprintf(stderr, "FAIL: %d idle-credit rows violated exact gates\n", failures);
         return 1;
     }
-    puts("PASS: 18 rows passed exact completion-boundary gates");
+    puts("PASS: 28 rows passed exact completion-boundary gates");
     return 0;
 }

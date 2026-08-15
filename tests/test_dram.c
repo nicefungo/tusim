@@ -452,6 +452,11 @@ static void test_dram_turnaround(void) {
           "burst-credit turnaround set failed");
     CHECK(dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_CREDIT,
           "burst-credit mode not retained");
+    CHECK(tu_dram_set_turnaround(dram, TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT,
+                                 TU_DRAM_TURNAROUND_CORE_CYCLES, 4, 7),
+          "burst-rounded turnaround set failed");
+    CHECK(dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT,
+          "burst-rounded mode not retained");
     tu_dram_destroy(dram);
     dram = tu_dram_create_custom(&two_channel_params, "turnaround-channels");
     CHECK(dram != NULL &&
