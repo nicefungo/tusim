@@ -28,7 +28,7 @@ completion = request_cycle + base_service + burst_cycles
 residual_turnaround = max(0, programmed_turnaround - max(0, next_request - completion))
 ```
 
-`burst_credit` retains `occupied_bytes = payload_bytes`. The completion term affects per-channel availability and future idle credit; it is not added to the current request's returned service cycles, preserving the module's established service-versus-contention domains.
+`burst_credit` retains `occupied_bytes = payload_bytes`. The completion term affects per-channel availability and future idle credit; it is not added to the current request's returned service cycles, preserving the module's established service-versus-contention domains. As of the occupied-byte follow-up, the same rounded byte count also feeds explicit occupied-byte counters, pending traffic, and the coarse bandwidth window; logical request-byte counters remain unchanged.
 
 ## Measured matrix
 
@@ -55,7 +55,7 @@ The complete sweep contains 28 exact fail-closed rows and retains NONE, FIXED, I
 - **Throughput:** Unquantified. Rounded occupancy is directionally more conservative for partial requests, but the cmodel has no queue, arbitration, coalescer, or makespan scheduler. Returned service sums must not be presented as sustained throughput.
 - **Area/resources:** Exact-byte occupancy requires byte-count/width ceiling logic. Burst rounding additionally requires alignment to `burst_length`; power-of-two bursts can use masks/shifts. Gate count, buffering, and timing are unquantified.
 - **Power/energy:** A fixed-burst interface is expected to activate/drive more beats for partial requests, increasing dynamic interface and possibly DRAM energy. The power model is not connected to occupied beats, so no numeric energy claim is made.
-- **SRAM/DRAM traffic:** Requested byte counters remain unchanged. Physical transferred/activated bytes can be larger in rounded mode, but the current model records occupancy rather than a separate physical-byte counter.
+- **SRAM/DRAM traffic:** Requested byte counters remain unchanged. Separate occupied-byte counters now expose 4.0× pair traffic for measured 16 B requests and 1.6× for 80 B tails, and rounded occupancy consumes the coarse bandwidth window. These counters are a deterministic interface contract, not calibrated physical DRAM traffic.
 - **Numerical accuracy:** Unchanged; data values and arithmetic paths are unaffected.
 - **Control complexity:** Exact-byte mode fits byte-enable/coalescing fabrics. Rounded mode is simpler as a fixed protocol contract but shifts optimization pressure to request merging and alignment.
 - **Verification burden:** The rounded alternative requires aligned, sub-burst, multi-burst-tail, zero/partial/full-credit, both-direction, parser, generator, default, and failed-setter gates.
@@ -74,7 +74,7 @@ The burst granule and channel width come from the selected `tu_dram_params_t`. T
 
 ## Fidelity limits
 
-This is deterministic channel-occupancy accounting, not a JEDEC command scheduler. It does not model request coalescing, byte masks, cache-line fill semantics, burst chopping, command/address versus data phasing, read/write data timing, bank groups, ranks, queues, reordering, fairness, backpressure, PHY termination/training, physical-byte energy, or calibration. The coarse channel stall output remains separate from returned service cycles.
+This is deterministic channel-occupancy accounting, not a JEDEC command scheduler. It does not model request coalescing, byte masks, cache-line fill semantics, burst chopping, command/address versus data phasing, read/write data timing, bank groups, ranks, queues, reordering, fairness, backpressure, PHY termination/training, physical-byte energy, or calibration. Occupied bytes now feed the existing coarse bandwidth window, but its stall output remains separate from returned service cycles and is not a queue-aware makespan.
 
 ## Verification
 
@@ -92,4 +92,4 @@ The generated temporary header contains `TU_DRAM_TURNAROUND_MODE_BURST_ROUND_CRE
 
 ## Actionable conclusion
 
-Preserve both serialized alternatives. Use `burst_credit` for byte-stream, byte-enabled, or externally coalesced occupancy studies. Use `burst_round_credit` when the modeled interface pays a fixed transfer granule for partial/tail requests. Do not select either universally: the right contract depends on request formation and interface protocol, and their throughput/energy consequences remain unquantified until queue/coalescing and physical-byte accounting exist.
+Preserve both serialized alternatives. Use `burst_credit` for byte-stream, byte-enabled, or externally coalesced occupancy studies. Use `burst_round_credit` when the modeled interface pays a fixed transfer granule for partial/tail requests. Do not select either universally: the right contract depends on request formation and interface protocol. Occupied traffic and coarse bandwidth pressure are now observable; queue-aware throughput, coalescing, and physical energy remain unquantified. See `dram-occupied-byte-accounting.md`.

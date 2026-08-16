@@ -586,6 +586,17 @@ static uint64_t turnaround_for(tu_dram_model_t *dram, uint32_t channel,
     return cycles;
 }
 
+/* Bytes charged to the serialized channel and coarse bandwidth window. Only
+ * the explicit fixed-protocol-burst mode rounds sub-burst and tail requests;
+ * all compatibility and exact-byte modes preserve requested-byte accounting. */
+static uint64_t occupied_bytes_for(const tu_dram_model_t *dram,
+                                   uint32_t num_bytes) {
+    if (!dram || dram->turnaround_mode != TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT)
+        return num_bytes;
+    uint64_t burst = dram->params.burst_length;
+    return ((uint64_t)num_bytes + burst - 1) / burst * burst;
+}
+
 void tu_dram_tick(tu_dram_model_t *dram) {
     if (!dram) return;
     dram->current_cycle++;
@@ -607,6 +618,7 @@ void tu_dram_read(tu_dram_model_t *dram, uint64_t addr,
     if (dram->type == TU_DRAM_TYPE_IDEAL) {
         dram->stats.total_reads++;
         dram->stats.total_read_bytes += num_bytes;
+        dram->stats.total_read_occupied_bytes += num_bytes;
         if (cycles_out) *cycles_out = 0;
         if (stall_out)  *stall_out = 0;
         return;
@@ -644,7 +656,9 @@ void tu_dram_read(tu_dram_model_t *dram, uint64_t addr,
     }
 
     /* ---- Bandwidth contention ---- */
-    uint64_t consumed_bw = dram->pending_read_bytes + dram->pending_write_bytes + num_bytes;
+    uint64_t occupied_bytes = occupied_bytes_for(dram, num_bytes);
+    uint64_t consumed_bw = dram->pending_read_bytes + dram->pending_write_bytes +
+                           occupied_bytes;
     if (consumed_bw > dram->bandwidth_available) {
         /* Stall until next BW window */
         stall += dram->bw_window_size_cycles -
@@ -659,21 +673,17 @@ void tu_dram_read(tu_dram_model_t *dram, uint64_t addr,
     if (dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_CREDIT ||
         dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT) {
         uint32_t width = dram->params.bus_width_bytes ? dram->params.bus_width_bytes : 1;
-        uint64_t occupied_bytes = num_bytes;
-        if (dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT) {
-            uint32_t burst = dram->params.burst_length;
-            occupied_bytes = ((uint64_t)num_bytes + burst - 1) / burst * burst;
-        }
         burst_cycles = (occupied_bytes + width - 1) / width;
     }
     dram->channel_available_cycle[channel] = dram->current_cycle + total_cycles + burst_cycles;
-    dram->pending_read_bytes += num_bytes;
-    dram->bandwidth_available = (dram->bandwidth_available > num_bytes)
-                                ? (dram->bandwidth_available - num_bytes) : 0;
+    dram->pending_read_bytes += occupied_bytes;
+    dram->bandwidth_available = (dram->bandwidth_available > occupied_bytes)
+                                ? (dram->bandwidth_available - occupied_bytes) : 0;
 
     /* Update statistics */
     dram->stats.total_reads++;
     dram->stats.total_read_bytes += num_bytes;
+    dram->stats.total_read_occupied_bytes += occupied_bytes;
     dram->stats.total_read_cycles += total_cycles;
     dram->stats.total_stall_cycles += stall;
     dram->stats.total_refresh_stall_cycles += refresh_stall;
@@ -693,6 +703,7 @@ void tu_dram_write(tu_dram_model_t *dram, uint64_t addr,
     if (dram->type == TU_DRAM_TYPE_IDEAL) {
         dram->stats.total_writes++;
         dram->stats.total_write_bytes += num_bytes;
+        dram->stats.total_write_occupied_bytes += num_bytes;
         if (cycles_out) *cycles_out = 0;
         if (stall_out)  *stall_out = 0;
         return;
@@ -719,7 +730,9 @@ void tu_dram_write(tu_dram_model_t *dram, uint64_t addr,
         stall = dram->channel_available_cycle[channel] - dram->current_cycle;
     }
 
-    uint64_t consumed_bw = dram->pending_read_bytes + dram->pending_write_bytes + num_bytes;
+    uint64_t occupied_bytes = occupied_bytes_for(dram, num_bytes);
+    uint64_t consumed_bw = dram->pending_read_bytes + dram->pending_write_bytes +
+                           occupied_bytes;
     if (consumed_bw > dram->bandwidth_available) {
         stall += dram->bw_window_size_cycles -
                  (dram->current_cycle - dram->bw_window_start);
@@ -730,20 +743,16 @@ void tu_dram_write(tu_dram_model_t *dram, uint64_t addr,
     if (dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_CREDIT ||
         dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT) {
         uint32_t width = dram->params.bus_width_bytes ? dram->params.bus_width_bytes : 1;
-        uint64_t occupied_bytes = num_bytes;
-        if (dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT) {
-            uint32_t burst = dram->params.burst_length;
-            occupied_bytes = ((uint64_t)num_bytes + burst - 1) / burst * burst;
-        }
         burst_cycles = (occupied_bytes + width - 1) / width;
     }
     dram->channel_available_cycle[channel] = dram->current_cycle + total_cycles + burst_cycles;
-    dram->pending_write_bytes += num_bytes;
-    dram->bandwidth_available = (dram->bandwidth_available > num_bytes)
-                                ? (dram->bandwidth_available - num_bytes) : 0;
+    dram->pending_write_bytes += occupied_bytes;
+    dram->bandwidth_available = (dram->bandwidth_available > occupied_bytes)
+                                ? (dram->bandwidth_available - occupied_bytes) : 0;
 
     dram->stats.total_writes++;
     dram->stats.total_write_bytes += num_bytes;
+    dram->stats.total_write_occupied_bytes += occupied_bytes;
     dram->stats.total_write_cycles += total_cycles;
     dram->stats.total_stall_cycles += stall;
     dram->stats.total_refresh_stall_cycles += refresh_stall;
@@ -809,6 +818,8 @@ void tu_dram_print_stats(const tu_dram_model_t *dram, FILE *out) {
         "  Total writes:          %lu\n"
         "  Read bytes:            %lu\n"
         "  Write bytes:           %lu\n"
+        "  Read occupied bytes:   %lu\n"
+        "  Write occupied bytes:  %lu\n"
         "  Read cycles:           %lu\n"
         "  Write cycles:          %lu\n"
         "  Stall cycles:          %lu\n"
@@ -833,6 +844,8 @@ void tu_dram_print_stats(const tu_dram_model_t *dram, FILE *out) {
         (unsigned long)s.total_writes,
         (unsigned long)s.total_read_bytes,
         (unsigned long)s.total_write_bytes,
+        (unsigned long)s.total_read_occupied_bytes,
+        (unsigned long)s.total_write_occupied_bytes,
         (unsigned long)s.total_read_cycles,
         (unsigned long)s.total_write_cycles,
         (unsigned long)s.total_stall_cycles,

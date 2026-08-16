@@ -118,6 +118,8 @@ typedef struct {
     uint64_t  total_writes;
     uint64_t  total_read_bytes;
     uint64_t  total_write_bytes;
+    uint64_t  total_read_occupied_bytes;  /* Serialized/bandwidth bus occupancy */
+    uint64_t  total_write_occupied_bytes; /* May include fixed-burst overfetch */
 
     /* Cycle accounting */
     uint64_t  total_read_cycles;      /* Aggregate read cycles */

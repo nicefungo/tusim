@@ -457,6 +457,20 @@ static void test_dram_turnaround(void) {
           "burst-rounded turnaround set failed");
     CHECK(dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT,
           "burst-rounded mode not retained");
+    tu_dram_reset(dram);
+    for (int i = 0; i < 1001; ++i) tu_dram_tick(dram);
+    uint64_t bandwidth_before = dram->bandwidth_available;
+    tu_dram_read(dram, 0, 16, &cycles, &stall);
+    tu_dram_write(dram, 0, 80, &cycles, &stall);
+    CHECK(dram->stats.total_read_bytes == 16 &&
+          dram->stats.total_write_bytes == 80,
+          "rounded mode changed logical byte counters");
+    CHECK(dram->stats.total_read_occupied_bytes == 64 &&
+          dram->stats.total_write_occupied_bytes == 128,
+          "rounded occupied-byte counters wrong");
+    CHECK(dram->pending_read_bytes == 64 && dram->pending_write_bytes == 128 &&
+          dram->bandwidth_available == bandwidth_before - 192,
+          "rounded occupancy not wired into bandwidth window");
     tu_dram_destroy(dram);
     dram = tu_dram_create_custom(&two_channel_params, "turnaround-channels");
     CHECK(dram != NULL &&
