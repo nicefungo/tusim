@@ -49,19 +49,23 @@ static int run_case(const case_t *c) {
         expected_occupied = 2ULL * ((c->bytes + 63U) / 64U) * 64U;
     uint64_t occupied = dram->stats.total_read_occupied_bytes +
                         dram->stats.total_write_occupied_bytes;
-    printf("%c2%c %-12s %3u %5u %7" PRIu64 " %6" PRIu64 " %8" PRIu64 "\n",
+    tu_dram_stats_t stats;
+    tu_dram_get_stats(dram, &stats);
+    printf("%c2%c %-12s %3u %5u %7" PRIu64 " %6" PRIu64 " %8" PRIu64 " %7.1f\n",
            c->first, c->first == 'R' ? 'W' : 'R',
            c->mode == TU_DRAM_TURNAROUND_NONE ? "none" :
            (c->mode == TU_DRAM_TURNAROUND_FIXED ? "fixed" :
             (c->mode == TU_DRAM_TURNAROUND_IDLE_CREDIT ? "idle-credit" :
              (c->mode == TU_DRAM_TURNAROUND_BURST_CREDIT ? "burst-credit" : "burst-round"))),
            c->gap, c->bytes, service, dram->stats.total_turnaround_cycles,
-           occupied);
+           occupied, stats.payload_efficiency * 100.0);
     uint64_t expected_events = c->mode == TU_DRAM_TURNAROUND_NONE ? 0 : 1;
     int fail = service != c->service ||
                dram->stats.total_turnaround_cycles != c->turnaround ||
                dram->stats.total_turnaround_events != expected_events ||
-               occupied != expected_occupied;
+               occupied != expected_occupied ||
+               stats.payload_efficiency != (double)(2ULL * c->bytes) /
+                                           (double)expected_occupied;
     tu_dram_destroy(dram);
     return fail;
 }
@@ -99,14 +103,14 @@ int main(void) {
     };
     int failures = 0;
     puts("DRAM turnaround idle-credit sweep: R=10, W=8, R2W=3, W2R=8");
-    printf("%-3s %-12s %3s %5s %7s %6s %8s\n", "dir", "mode", "gap",
-           "bytes", "service", "ta_cyc", "occ_B");
+    printf("%-3s %-12s %3s %5s %7s %6s %8s %7s\n", "dir", "mode", "gap",
+           "bytes", "service", "ta_cyc", "occ_B", "useful%");
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i)
         failures += run_case(&cases[i]);
     if (failures) {
         fprintf(stderr, "FAIL: %d idle-credit rows violated exact gates\n", failures);
         return 1;
     }
-    puts("PASS: 28 rows passed exact completion-boundary and occupied-byte gates");
+    puts("PASS: 28 rows passed exact completion-boundary, occupancy, and payload-efficiency gates");
     return 0;
 }

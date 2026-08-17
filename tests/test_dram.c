@@ -471,6 +471,22 @@ static void test_dram_turnaround(void) {
     CHECK(dram->pending_read_bytes == 64 && dram->pending_write_bytes == 128 &&
           dram->bandwidth_available == bandwidth_before - 192,
           "rounded occupancy not wired into bandwidth window");
+    tu_dram_stats_t occupancy_stats;
+    tu_dram_get_stats(dram, &occupancy_stats);
+    double bw_scale = dram->core_clock_ghz / (double)dram->current_cycle;
+    CHECK(fabs(occupancy_stats.effective_read_bandwidth - 16.0 * bw_scale) < 1e-12,
+          "useful read bandwidth wrong");
+    CHECK(fabs(occupancy_stats.effective_read_occupied_bandwidth - 64.0 * bw_scale) < 1e-12,
+          "occupied read bandwidth wrong");
+    CHECK(fabs(occupancy_stats.effective_write_bandwidth - 80.0 * bw_scale) < 1e-12 &&
+          fabs(occupancy_stats.effective_write_occupied_bandwidth -
+               128.0 * bw_scale) < 1e-12,
+          "write useful/occupied bandwidth wrong");
+    CHECK(occupancy_stats.payload_efficiency > 0.4999 &&
+          occupancy_stats.payload_efficiency < 0.5001,
+          "combined payload efficiency wrong");
+    CHECK(occupancy_stats.occupied_utilization > occupancy_stats.utilization,
+          "occupied utilization did not expose overfetch");
     tu_dram_destroy(dram);
     dram = tu_dram_create_custom(&two_channel_params, "turnaround-channels");
     CHECK(dram != NULL &&

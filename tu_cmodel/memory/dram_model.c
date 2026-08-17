@@ -794,10 +794,22 @@ void tu_dram_get_stats(const tu_dram_model_t *dram, tu_dram_stats_t *stats) {
         (double)stats->total_read_bytes / total_cycles * core_cycles_per_sec / 1e9;
     stats->effective_write_bandwidth =
         (double)stats->total_write_bytes / total_cycles * core_cycles_per_sec / 1e9;
+    stats->effective_read_occupied_bandwidth =
+        (double)stats->total_read_occupied_bytes / total_cycles * core_cycles_per_sec / 1e9;
+    stats->effective_write_occupied_bandwidth =
+        (double)stats->total_write_occupied_bytes / total_cycles * core_cycles_per_sec / 1e9;
 
     double peak_bw = dram->params.bandwidth_gbps;
     double total_bw = stats->effective_read_bandwidth + stats->effective_write_bandwidth;
+    double occupied_bw = stats->effective_read_occupied_bandwidth +
+                         stats->effective_write_occupied_bandwidth;
+    uint64_t useful_bytes = stats->total_read_bytes + stats->total_write_bytes;
+    uint64_t occupied_bytes = stats->total_read_occupied_bytes +
+                              stats->total_write_occupied_bytes;
     stats->utilization = (peak_bw > 0) ? (total_bw / peak_bw) : 0.0;
+    stats->occupied_utilization = (peak_bw > 0) ? (occupied_bw / peak_bw) : 0.0;
+    stats->payload_efficiency = occupied_bytes > 0
+        ? (double)useful_bytes / (double)occupied_bytes : 0.0;
 }
 
 void tu_dram_print_stats(const tu_dram_model_t *dram, FILE *out) {
@@ -833,9 +845,13 @@ void tu_dram_print_stats(const tu_dram_model_t *dram, FILE *out) {
         "  Refresh events:        %lu\n"
         "  Refresh stall cycles:  %lu\n"
         "  ─────────────────────────────────\n"
-        "  Eff. read BW:          %.2f GB/s\n"
-        "  Eff. write BW:         %.2f GB/s\n"
-        "  Utilization:           %.1f%%\n"
+        "  Useful read BW:        %.2f GB/s\n"
+        "  Useful write BW:       %.2f GB/s\n"
+        "  Occupied read BW:      %.2f GB/s\n"
+        "  Occupied write BW:     %.2f GB/s\n"
+        "  Useful utilization:    %.1f%%\n"
+        "  Occupied utilization:  %.1f%%\n"
+        "  Payload efficiency:    %.1f%%\n"
         "────────────────────────────────\n",
         dram->name, tu_dram_type_name(dram->type),
         dram->params.bandwidth_gbps, dram->num_channels,
@@ -859,7 +875,10 @@ void tu_dram_print_stats(const tu_dram_model_t *dram, FILE *out) {
         (unsigned long)s.total_refresh_events,
         (unsigned long)s.total_refresh_stall_cycles,
         s.effective_read_bandwidth, s.effective_write_bandwidth,
-        s.utilization * 100.0
+        s.effective_read_occupied_bandwidth,
+        s.effective_write_occupied_bandwidth,
+        s.utilization * 100.0, s.occupied_utilization * 100.0,
+        s.payload_efficiency * 100.0
     );
 }
 

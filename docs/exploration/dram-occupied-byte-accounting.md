@@ -69,7 +69,7 @@ No public function signature, runtime configuration value, or zero/default behav
 
 ## Fidelity limits
 
-Occupied bytes are a deterministic model contract, not measured physical DRAM traffic. The model still omits burst chopping, request coalescing, byte masks, command/address and data phasing, read/write data timing, queues, reordering, bank groups, ranks, arbitration, PHY energy, and calibration. The coarse bandwidth window does not model per-beat scheduling or makespan. `effective_*_bandwidth` remains based on logical bytes, so it is useful-payload bandwidth rather than occupied-wire bandwidth.
+Occupied bytes are a deterministic model contract, not measured physical DRAM traffic. The model still omits burst chopping, request coalescing, byte masks, command/address and data phasing, read/write data timing, queues, reordering, bank groups, ranks, arbitration, PHY energy, and calibration. The coarse bandwidth window does not model per-beat scheduling or makespan. Historical `effective_*_bandwidth` remains based on logical bytes and `utilization` remains useful-payload utilization for compatibility; the follow-up in `dram-payload-efficiency.md` adds separate occupied-bandwidth/utilization fields and payload efficiency without redefining them.
 
 ## Verification
 

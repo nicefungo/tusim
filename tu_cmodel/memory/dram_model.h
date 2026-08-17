@@ -138,9 +138,13 @@ typedef struct {
     uint64_t  total_refresh_stall_cycles; /* Access cycles lost to refresh lockout */
 
     /* Derived metrics */
-    double    effective_read_bandwidth;   /* Actual achieved read BW in GB/s */
-    double    effective_write_bandwidth;  /* Actual achieved write BW in GB/s */
-    double    utilization;                /* Bandwidth utilization (0.0–1.0) */
+    double    effective_read_bandwidth;   /* Useful-payload read BW in GB/s */
+    double    effective_write_bandwidth;  /* Useful-payload write BW in GB/s */
+    double    effective_read_occupied_bandwidth;  /* Modeled bus read BW in GB/s */
+    double    effective_write_occupied_bandwidth; /* Modeled bus write BW in GB/s */
+    double    utilization;                /* Useful-payload BW / peak BW */
+    double    occupied_utilization;       /* Modeled occupied BW / peak BW */
+    double    payload_efficiency;         /* Useful bytes / occupied bytes */
 
 } tu_dram_stats_t;
 
