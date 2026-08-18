@@ -65,6 +65,8 @@ tu:
       turnaround_domain: "core_cycles"  # core_cycles | physical_ns
       read_to_write_turnaround: 0.0  # cycles or ns in selected domain
       write_to_read_turnaround: 0.0  # cycles or ns in selected domain
+      read_burst_bytes: 64   # rounded-mode read occupancy granule (power of two)
+      write_burst_bytes: 64  # rounded-mode write occupancy granule (power of two)
       refresh:
         mode: "none"        # none | all_bank | per_bank
         scheduling: "fixed" # fixed | deferred (opportunistic, bounded by max_deferral_ns)

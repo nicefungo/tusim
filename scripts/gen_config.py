@@ -235,6 +235,8 @@ def generate_header(config, output_path):
     L(f'#define TU_DRAM_TURNAROUND_DOMAIN {turnaround_domain_map[dram["turnaround_domain"]]}')
     L(f'#define TU_DRAM_READ_TO_WRITE_TURNAROUND {dram["read_to_write_turnaround"]}')
     L(f'#define TU_DRAM_WRITE_TO_READ_TURNAROUND {dram["write_to_read_turnaround"]}')
+    L(f'#define TU_DRAM_READ_BURST_BYTES {dram["read_burst_bytes"]}')
+    L(f'#define TU_DRAM_WRITE_BURST_BYTES {dram["write_burst_bytes"]}')
     refresh_map = {'none': 0, 'all_bank': 1, 'per_bank': 2}
     refresh_sched_map = {'fixed': 0, 'deferred': 1}
     refresh = dram['refresh']

@@ -189,6 +189,8 @@ tu_dram_model_t *tu_dram_create(tu_dram_type_t type) {
     dram->write_latency_source = dram->params.write_latency_cycles;
     dram->turnaround_mode = TU_DRAM_TURNAROUND_NONE;
     dram->turnaround_domain = TU_DRAM_TURNAROUND_CORE_CYCLES;
+    dram->read_burst_bytes = dram->params.burst_length;
+    dram->write_burst_bytes = dram->params.burst_length;
 
     /* Allocate per-channel state */
     if (!allocate_runtime_state(dram)) {
@@ -223,6 +225,8 @@ tu_dram_model_t *tu_dram_create_custom(const tu_dram_params_t *params,
     dram->write_latency_source = params->write_latency_cycles;
     dram->turnaround_mode = TU_DRAM_TURNAROUND_NONE;
     dram->turnaround_domain = TU_DRAM_TURNAROUND_CORE_CYCLES;
+    dram->read_burst_bytes = params->burst_length;
+    dram->write_burst_bytes = params->burst_length;
 
     if (!allocate_runtime_state(dram)) {
         free(dram);
@@ -296,6 +300,15 @@ tu_dram_model_t *tu_dram_create_from_config(const struct tu_config_t *cfg) {
             (tu_dram_turnaround_domain_t)cfg->dram_turnaround_domain,
             cfg->dram_read_to_write_turnaround,
             cfg->dram_write_to_read_turnaround)) {
+        tu_dram_destroy(dram);
+        return NULL;
+    }
+    if (!tu_dram_set_burst_granules(
+            dram,
+            cfg->dram_read_burst_bytes ? cfg->dram_read_burst_bytes
+                                       : dram->params.burst_length,
+            cfg->dram_write_burst_bytes ? cfg->dram_write_burst_bytes
+                                        : dram->params.burst_length)) {
         tu_dram_destroy(dram);
         return NULL;
     }
@@ -590,10 +603,10 @@ static uint64_t turnaround_for(tu_dram_model_t *dram, uint32_t channel,
  * the explicit fixed-protocol-burst mode rounds sub-burst and tail requests;
  * all compatibility and exact-byte modes preserve requested-byte accounting. */
 static uint64_t occupied_bytes_for(const tu_dram_model_t *dram,
-                                   uint32_t num_bytes) {
+                                   uint32_t num_bytes, bool is_read) {
     if (!dram || dram->turnaround_mode != TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT)
         return num_bytes;
-    uint64_t burst = dram->params.burst_length;
+    uint64_t burst = is_read ? dram->read_burst_bytes : dram->write_burst_bytes;
     return ((uint64_t)num_bytes + burst - 1) / burst * burst;
 }
 
@@ -656,7 +669,7 @@ void tu_dram_read(tu_dram_model_t *dram, uint64_t addr,
     }
 
     /* ---- Bandwidth contention ---- */
-    uint64_t occupied_bytes = occupied_bytes_for(dram, num_bytes);
+    uint64_t occupied_bytes = occupied_bytes_for(dram, num_bytes, true);
     uint64_t consumed_bw = dram->pending_read_bytes + dram->pending_write_bytes +
                            occupied_bytes;
     if (consumed_bw > dram->bandwidth_available) {
@@ -730,7 +743,7 @@ void tu_dram_write(tu_dram_model_t *dram, uint64_t addr,
         stall = dram->channel_available_cycle[channel] - dram->current_cycle;
     }
 
-    uint64_t occupied_bytes = occupied_bytes_for(dram, num_bytes);
+    uint64_t occupied_bytes = occupied_bytes_for(dram, num_bytes, false);
     uint64_t consumed_bw = dram->pending_read_bytes + dram->pending_write_bytes +
                            occupied_bytes;
     if (consumed_bw > dram->bandwidth_available) {
@@ -1045,6 +1058,18 @@ bool tu_dram_set_turnaround(tu_dram_model_t *dram,
     dram->write_to_read_turnaround_cycles = wtr_cycles;
     memset(dram->channel_last_direction, 0,
            dram->num_channels * sizeof(uint8_t));
+    return true;
+}
+
+bool tu_dram_set_burst_granules(tu_dram_model_t *dram,
+                                uint32_t read_bytes, uint32_t write_bytes) {
+    if (!dram || read_bytes == 0 ||
+        write_bytes == 0 || read_bytes > 1048576 || write_bytes > 1048576 ||
+        (read_bytes & (read_bytes - 1)) != 0 ||
+        (write_bytes & (write_bytes - 1)) != 0)
+        return false;
+    dram->read_burst_bytes = read_bytes;
+    dram->write_burst_bytes = write_bytes;
     return true;
 }
 

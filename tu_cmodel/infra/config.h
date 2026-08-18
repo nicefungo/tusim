@@ -160,6 +160,8 @@ typedef struct tu_config_t {
     int      dram_turnaround_domain; /* core_cycles=0, physical_ns=1 */
     double   dram_read_to_write_turnaround; /* cycles or ns by selected domain */
     double   dram_write_to_read_turnaround; /* cycles or ns by selected domain */
+    uint32_t dram_read_burst_bytes;  /* fixed read occupancy granule; 0 = preset */
+    uint32_t dram_write_burst_bytes; /* fixed write occupancy granule; 0 = preset */
     /* DRAM refresh (JEDEC tREFI/tRFC); zero fields mean "use defaults". */
     int      dram_refresh_mode;       /* none=0, all_bank=1, per_bank=2 */
     int      dram_refresh_scheduling; /* fixed=0, deferred=1 */

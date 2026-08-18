@@ -14,6 +14,7 @@ test-dram-row-timeout-sweep
 test-dram-row-timeout-domain-sweep
 test-dram-turnaround-sweep
 test-dram-turnaround-idle-sweep
+test-dram-directional-burst-sweep
 test-dram-address-mapping-sweep
 test-dram-refresh-sweep
 test-dram-refresh-phase-sweep

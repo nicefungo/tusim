@@ -277,6 +277,8 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->dram_turnaround_domain = TU_DRAM_CONFIG_TURNAROUND_CORE_CYCLES;
     cfg->dram_read_to_write_turnaround = 0.0;
     cfg->dram_write_to_read_turnaround = 0.0;
+    cfg->dram_read_burst_bytes = TU_DRAM_READ_BURST_BYTES;
+    cfg->dram_write_burst_bytes = TU_DRAM_WRITE_BURST_BYTES;
     cfg->dram_refresh_mode       = TU_DRAM_CONFIG_REFRESH_NONE;
     cfg->dram_refresh_scheduling = TU_DRAM_CONFIG_REFRESH_SCHED_FIXED;
     cfg->dram_refresh_rate       = 1;
@@ -495,6 +497,13 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
                              &cfg->dram_read_to_write_turnaround);
             parse_opt_double(dram, "write_to_read_turnaround",
                              &cfg->dram_write_to_read_turnaround);
+            int64_t burst_bytes;
+            if (parse_opt_int64(dram, "read_burst_bytes", &burst_bytes))
+                cfg->dram_read_burst_bytes = (burst_bytes >= 0 && burst_bytes <= 1048576)
+                    ? (uint32_t)burst_bytes : UINT32_MAX;
+            if (parse_opt_int64(dram, "write_burst_bytes", &burst_bytes))
+                cfg->dram_write_burst_bytes = (burst_bytes >= 0 && burst_bytes <= 1048576)
+                    ? (uint32_t)burst_bytes : UINT32_MAX;
             const tu_json_value_t *rf = tu_json_get(dram, "refresh");
             if (rf && rf->type == TU_JSON_OBJECT) {
                 const tu_json_value_t *rm = tu_json_get(rf, "mode");
@@ -872,6 +881,17 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
                      "fixed core-cycle DRAM turnaround requires at least one value >= 1");
         return -1;
     }
+    if (cfg->dram_read_burst_bytes == UINT32_MAX ||
+        cfg->dram_write_burst_bytes == UINT32_MAX ||
+        (cfg->dram_read_burst_bytes != 0 &&
+         (cfg->dram_read_burst_bytes & (cfg->dram_read_burst_bytes - 1)) != 0) ||
+        (cfg->dram_write_burst_bytes != 0 &&
+         (cfg->dram_write_burst_bytes & (cfg->dram_write_burst_bytes - 1)) != 0)) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DRAM read/write burst bytes must be 0 (preset) or powers of two up to 1048576");
+        return -1;
+    }
     if (cfg->dram_refresh_mode < TU_DRAM_CONFIG_REFRESH_NONE ||
         cfg->dram_refresh_mode > TU_DRAM_CONFIG_REFRESH_PER_BANK) {
         if (error_buf && error_size > 0)
@@ -1173,6 +1193,10 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             cfg->dram_read_to_write_turnaround);
     fprintf(out, "| `dram_write_to_read_turnaround` | %.3f | double | Write-to-read bus turnaround in selected domain |\n",
             cfg->dram_write_to_read_turnaround);
+    fprintf(out, "| `dram_read_burst_bytes` | %u | uint32 | Rounded-mode read occupancy granule; 0 inherits the DRAM preset |\n",
+            cfg->dram_read_burst_bytes);
+    fprintf(out, "| `dram_write_burst_bytes` | %u | uint32 | Rounded-mode write occupancy granule; 0 inherits the DRAM preset |\n",
+            cfg->dram_write_burst_bytes);
     fprintf(out, "| `dram_refresh_mode` | %d | int | 0=None (compat), 1=All-bank, 2=Per-bank (JEDEC tREFI/tRFC) |\n",
             cfg->dram_refresh_mode);
     fprintf(out, "| `dram_refresh_scheduling` | %d | int | 0=Fixed periodic, 1=Deferred (bounded postponement) |\n",

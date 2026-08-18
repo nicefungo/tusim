@@ -190,6 +190,8 @@ typedef struct {
     double write_to_read_turnaround_source; /* cycles or ns by domain */
     uint32_t read_to_write_turnaround_cycles;
     uint32_t write_to_read_turnaround_cycles;
+    uint32_t read_burst_bytes;  /* Occupancy granule for rounded read traffic */
+    uint32_t write_burst_bytes; /* Occupancy granule for rounded write traffic */
 
     /* Refresh state (JEDEC tREFI/tRFC; ns converted at core_clock_ghz) */
     tu_dram_refresh_mode_t      refresh_mode;
@@ -333,6 +335,11 @@ bool tu_dram_set_turnaround(tu_dram_model_t *dram,
                             tu_dram_turnaround_mode_t mode,
                             tu_dram_turnaround_domain_t domain,
                             double read_to_write, double write_to_read);
+
+/* Select independent fixed occupancy granules for reads and writes. Values
+ * must be nonzero powers of two. */
+bool tu_dram_set_burst_granules(tu_dram_model_t *dram,
+                                uint32_t read_bytes, uint32_t write_bytes);
 
 /* Configure the refresh model. ns timings are converted into the configured
  * TU/core-clock cycle domain. `rate` 0 is treated

@@ -471,19 +471,35 @@ static void test_dram_turnaround(void) {
     CHECK(dram->pending_read_bytes == 64 && dram->pending_write_bytes == 128 &&
           dram->bandwidth_available == bandwidth_before - 192,
           "rounded occupancy not wired into bandwidth window");
+
+    CHECK(tu_dram_set_burst_granules(dram, 128, 32),
+          "asymmetric burst granules rejected");
+    tu_dram_reset(dram);
+    for (int i = 0; i < 1001; ++i) tu_dram_tick(dram);
+    bandwidth_before = dram->bandwidth_available;
+    tu_dram_read(dram, 0, 16, &cycles, &stall);
+    tu_dram_write(dram, 0, 80, &cycles, &stall);
+    CHECK(dram->stats.total_read_occupied_bytes == 128 &&
+          dram->stats.total_write_occupied_bytes == 96,
+          "direction-specific burst granules not applied");
+    CHECK(dram->pending_read_bytes == 128 && dram->pending_write_bytes == 96 &&
+          dram->bandwidth_available == bandwidth_before - 224,
+          "asymmetric occupancy not wired into bandwidth window");
+    CHECK(!tu_dram_set_burst_granules(dram, 7, 32) &&
+          dram->read_burst_bytes == 128 && dram->write_burst_bytes == 32,
+          "invalid granule accepted or mutated state");
     tu_dram_stats_t occupancy_stats;
     tu_dram_get_stats(dram, &occupancy_stats);
     double bw_scale = dram->core_clock_ghz / (double)dram->current_cycle;
     CHECK(fabs(occupancy_stats.effective_read_bandwidth - 16.0 * bw_scale) < 1e-12,
           "useful read bandwidth wrong");
-    CHECK(fabs(occupancy_stats.effective_read_occupied_bandwidth - 64.0 * bw_scale) < 1e-12,
+    CHECK(fabs(occupancy_stats.effective_read_occupied_bandwidth - 128.0 * bw_scale) < 1e-12,
           "occupied read bandwidth wrong");
     CHECK(fabs(occupancy_stats.effective_write_bandwidth - 80.0 * bw_scale) < 1e-12 &&
           fabs(occupancy_stats.effective_write_occupied_bandwidth -
-               128.0 * bw_scale) < 1e-12,
+               96.0 * bw_scale) < 1e-12,
           "write useful/occupied bandwidth wrong");
-    CHECK(occupancy_stats.payload_efficiency > 0.4999 &&
-          occupancy_stats.payload_efficiency < 0.5001,
+    CHECK(fabs(occupancy_stats.payload_efficiency - (96.0 / 224.0)) < 1e-12,
           "combined payload efficiency wrong");
     CHECK(occupancy_stats.occupied_utilization > occupancy_stats.utilization,
           "occupied utilization did not expose overfetch");
@@ -510,13 +526,23 @@ static void test_dram_turnaround(void) {
         "{\"tu\":{\"memory\":{\"dram\":{\"type\":\"ddr5\","
         "\"core_clock_ghz\":2,\"turnaround_mode\":\"fixed\","
         "\"turnaround_domain\":\"physical_ns\","
-        "\"read_to_write_turnaround\":3,\"write_to_read_turnaround\":8}}}}",
+        "\"read_to_write_turnaround\":3,\"write_to_read_turnaround\":8,"
+        "\"read_burst_bytes\":128,\"write_burst_bytes\":32}}}}",
         &cfg, err, sizeof(err)) == 0, "turnaround config parse");
     dram = tu_dram_create_from_config(&cfg);
     CHECK(dram != NULL && dram->turnaround_mode == TU_DRAM_TURNAROUND_FIXED &&
           dram->read_to_write_turnaround_cycles == 6 &&
-          dram->write_to_read_turnaround_cycles == 16,
-          "turnaround config propagation");
+          dram->write_to_read_turnaround_cycles == 16 &&
+          dram->read_burst_bytes == 128 && dram->write_burst_bytes == 32,
+          "turnaround/burst-granule config propagation");
+    tu_dram_destroy(dram);
+    dram = NULL;
+    cfg.dram_read_burst_bytes = 0;
+    cfg.dram_write_burst_bytes = 0;
+    dram = tu_dram_create_from_config(&cfg);
+    CHECK(dram != NULL && dram->read_burst_bytes == dram->params.burst_length &&
+          dram->write_burst_bytes == dram->params.burst_length,
+          "zero-initialized burst fields did not inherit preset");
     tu_dram_destroy(dram);
     dram = NULL;
     CHECK(tu_config_load_string(

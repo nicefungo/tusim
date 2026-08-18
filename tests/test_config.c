@@ -331,10 +331,16 @@ int main(void) {
             "burst-credit turnaround parse");
         CHECK(tu_config_load_string(
             "{\"tu\":{\"memory\":{\"dram\":{\"turnaround_mode\":\"burst_round_credit\","
-            "\"read_to_write_turnaround\":3,\"write_to_read_turnaround\":8}}}}",
+            "\"read_to_write_turnaround\":3,\"write_to_read_turnaround\":8,"
+            "\"read_burst_bytes\":128,\"write_burst_bytes\":32}}}}",
             &cfg, err, sizeof(err)) == 0 &&
-            cfg.dram_turnaround_mode == TU_DRAM_CONFIG_TURNAROUND_BURST_ROUND_CREDIT,
-            "burst-rounded turnaround parse");
+            cfg.dram_turnaround_mode == TU_DRAM_CONFIG_TURNAROUND_BURST_ROUND_CREDIT &&
+            cfg.dram_read_burst_bytes == 128 && cfg.dram_write_burst_bytes == 32,
+            "burst-rounded turnaround/granule parse");
+        CHECK(tu_config_load_string(
+            "{\"tu\":{\"memory\":{\"dram\":{\"read_burst_bytes\":7}}}}",
+            &cfg, err, sizeof(err)) != 0, "invalid read burst granule accepted");
+        CHECK(strstr(err, "burst") != NULL, "wrong burst-granule error");
         CHECK(tu_config_load_string(
             "{\"tu\":{\"memory\":{\"dram\":{\"turnaround_mode\":\"adaptive\"}}}}",
             &cfg, err, sizeof(err)) != 0, "unknown turnaround mode accepted");

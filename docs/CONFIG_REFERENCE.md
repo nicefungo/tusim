@@ -67,6 +67,8 @@
 | `dram_turnaround_domain` | 0 | int | 0=Fixed TU/core cycles, 1=Physical ns converted at core clock |
 | `dram_read_to_write_turnaround` | 0.000 | double | Read-to-write bus turnaround in selected domain |
 | `dram_write_to_read_turnaround` | 0.000 | double | Write-to-read bus turnaround in selected domain |
+| `dram_read_burst_bytes` | 64 | uint32 | Rounded-mode read occupancy granule; 0 inherits the DRAM preset |
+| `dram_write_burst_bytes` | 64 | uint32 | Rounded-mode write occupancy granule; 0 inherits the DRAM preset |
 | `dram_refresh_mode` | 0 | int | 0=None (compat), 1=All-bank, 2=Per-bank (JEDEC tREFI/tRFC) |
 | `dram_refresh_scheduling` | 0 | int | 0=Fixed periodic, 1=Deferred (bounded postponement) |
 | `dram_refresh_rate` | 1 | uint32 | 1x/2x/4x refresh-rate multiplier (high-temp retention) |

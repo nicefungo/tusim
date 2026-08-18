@@ -53,6 +53,8 @@
         "turnaround_domain": "core_cycles",
         "read_to_write_turnaround": 0.0,
         "write_to_read_turnaround": 0.0,
+        "read_burst_bytes": 64,
+        "write_burst_bytes": 64,
         "refresh": {
           "mode": "none",
           "scheduling": "fixed",
