@@ -75,7 +75,8 @@ typedef enum {
     TU_DRAM_TURNAROUND_FIXED = 1,
     TU_DRAM_TURNAROUND_IDLE_CREDIT = 2,
     TU_DRAM_TURNAROUND_BURST_CREDIT = 3,
-    TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT = 4
+    TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT = 4,
+    TU_DRAM_TURNAROUND_BURST_SPAN_CREDIT = 5
 } tu_dram_turnaround_mode_t;
 
 typedef enum {
@@ -190,8 +191,8 @@ typedef struct {
     double write_to_read_turnaround_source; /* cycles or ns by domain */
     uint32_t read_to_write_turnaround_cycles;
     uint32_t write_to_read_turnaround_cycles;
-    uint32_t read_burst_bytes;  /* Occupancy granule for rounded read traffic */
-    uint32_t write_burst_bytes; /* Occupancy granule for rounded write traffic */
+    uint32_t read_burst_bytes;  /* Occupancy/alignment granule for rounded reads */
+    uint32_t write_burst_bytes; /* Occupancy/alignment granule for rounded writes */
 
     /* Refresh state (JEDEC tREFI/tRFC; ns converted at core_clock_ghz) */
     tu_dram_refresh_mode_t      refresh_mode;

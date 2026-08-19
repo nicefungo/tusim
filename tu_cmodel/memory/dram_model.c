@@ -586,7 +586,8 @@ static uint64_t turnaround_for(tu_dram_model_t *dram, uint32_t channel,
     if (cycles != 0 &&
         (dram->turnaround_mode == TU_DRAM_TURNAROUND_IDLE_CREDIT ||
          dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_CREDIT ||
-         dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT) &&
+         dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT ||
+         dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_SPAN_CREDIT) &&
         dram->current_cycle > dram->channel_available_cycle[channel]) {
         uint64_t idle = dram->current_cycle - dram->channel_available_cycle[channel];
         cycles = idle < cycles ? cycles - idle : 0;
@@ -599,15 +600,20 @@ static uint64_t turnaround_for(tu_dram_model_t *dram, uint32_t channel,
     return cycles;
 }
 
-/* Bytes charged to the serialized channel and coarse bandwidth window. Only
- * the explicit fixed-protocol-burst mode rounds sub-burst and tail requests;
- * all compatibility and exact-byte modes preserve requested-byte accounting. */
-static uint64_t occupied_bytes_for(const tu_dram_model_t *dram,
+/* Bytes charged to the serialized channel and coarse bandwidth window.
+ * ROUND rounds payload size and assumes aligned requests; SPAN counts every
+ * address-aligned protocol burst touched. Exact-byte modes preserve payload. */
+static uint64_t occupied_bytes_for(const tu_dram_model_t *dram, uint64_t addr,
                                    uint32_t num_bytes, bool is_read) {
-    if (!dram || dram->turnaround_mode != TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT)
+    if (!dram ||
+        (dram->turnaround_mode != TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT &&
+         dram->turnaround_mode != TU_DRAM_TURNAROUND_BURST_SPAN_CREDIT))
         return num_bytes;
     uint64_t burst = is_read ? dram->read_burst_bytes : dram->write_burst_bytes;
-    return ((uint64_t)num_bytes + burst - 1) / burst * burst;
+    uint64_t span = num_bytes;
+    if (dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_SPAN_CREDIT)
+        span += addr & (burst - 1);
+    return (span + burst - 1) / burst * burst;
 }
 
 void tu_dram_tick(tu_dram_model_t *dram) {
@@ -669,7 +675,7 @@ void tu_dram_read(tu_dram_model_t *dram, uint64_t addr,
     }
 
     /* ---- Bandwidth contention ---- */
-    uint64_t occupied_bytes = occupied_bytes_for(dram, num_bytes, true);
+    uint64_t occupied_bytes = occupied_bytes_for(dram, addr, num_bytes, true);
     uint64_t consumed_bw = dram->pending_read_bytes + dram->pending_write_bytes +
                            occupied_bytes;
     if (consumed_bw > dram->bandwidth_available) {
@@ -679,12 +685,12 @@ void tu_dram_read(tu_dram_model_t *dram, uint64_t addr,
     }
 
     /* Serialized-credit modes keep the bus occupied after base service.
-     * BURST_ROUND_CREDIT additionally charges complete protocol bursts, as a
-     * fixed-burst DRAM interface would for sub-burst and tail accesses. */
+     * Rounded modes charge complete size- or address-span protocol bursts. */
     uint64_t total_cycles = base_latency;
     uint64_t burst_cycles = 0;
     if (dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_CREDIT ||
-        dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT) {
+        dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT ||
+        dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_SPAN_CREDIT) {
         uint32_t width = dram->params.bus_width_bytes ? dram->params.bus_width_bytes : 1;
         burst_cycles = (occupied_bytes + width - 1) / width;
     }
@@ -743,7 +749,7 @@ void tu_dram_write(tu_dram_model_t *dram, uint64_t addr,
         stall = dram->channel_available_cycle[channel] - dram->current_cycle;
     }
 
-    uint64_t occupied_bytes = occupied_bytes_for(dram, num_bytes, false);
+    uint64_t occupied_bytes = occupied_bytes_for(dram, addr, num_bytes, false);
     uint64_t consumed_bw = dram->pending_read_bytes + dram->pending_write_bytes +
                            occupied_bytes;
     if (consumed_bw > dram->bandwidth_available) {
@@ -754,7 +760,8 @@ void tu_dram_write(tu_dram_model_t *dram, uint64_t addr,
     uint64_t total_cycles = base_latency;
     uint64_t burst_cycles = 0;
     if (dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_CREDIT ||
-        dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT) {
+        dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT ||
+        dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_SPAN_CREDIT) {
         uint32_t width = dram->params.bus_width_bytes ? dram->params.bus_width_bytes : 1;
         burst_cycles = (occupied_bytes + width - 1) / width;
     }
@@ -1043,7 +1050,7 @@ bool tu_dram_set_turnaround(tu_dram_model_t *dram,
                             double read_to_write, double write_to_read) {
     uint32_t rtw_cycles, wtr_cycles;
     if (!dram || mode < TU_DRAM_TURNAROUND_NONE ||
-        mode > TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT ||
+        mode > TU_DRAM_TURNAROUND_BURST_SPAN_CREDIT ||
         !turnaround_cycles_for(domain, read_to_write,
                                effective_core_clock(dram), &rtw_cycles) ||
         !turnaround_cycles_for(domain, write_to_read,

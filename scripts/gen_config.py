@@ -222,13 +222,15 @@ def generate_header(config, output_path):
     L(f'#define TU_DRAM_LATENCY_DOMAIN {latency_domain_map[dram["latency_domain"]]}')
     L(f'#define TU_DRAM_CORE_CLOCK_GHZ    {dram["core_clock_ghz"]}')
     turnaround_mode_map = {'none': 0, 'fixed': 1, 'idle_credit': 2,
-                           'burst_credit': 3, 'burst_round_credit': 4}
+                           'burst_credit': 3, 'burst_round_credit': 4,
+                           'burst_span_credit': 5}
     turnaround_domain_map = {'core_cycles': 0, 'physical_ns': 1}
     L('#define TU_DRAM_TURNAROUND_MODE_NONE  0')
     L('#define TU_DRAM_TURNAROUND_MODE_FIXED 1')
     L('#define TU_DRAM_TURNAROUND_MODE_IDLE_CREDIT 2')
     L('#define TU_DRAM_TURNAROUND_MODE_BURST_CREDIT 3')
     L('#define TU_DRAM_TURNAROUND_MODE_BURST_ROUND_CREDIT 4')
+    L('#define TU_DRAM_TURNAROUND_MODE_BURST_SPAN_CREDIT 5')
     L(f'#define TU_DRAM_TURNAROUND_MODE {turnaround_mode_map[dram["turnaround_mode"]]}')
     L('#define TU_DRAM_TURNAROUND_DOMAIN_CORE_CYCLES 0')
     L('#define TU_DRAM_TURNAROUND_DOMAIN_PHYSICAL_NS 1')

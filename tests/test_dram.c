@@ -457,6 +457,22 @@ static void test_dram_turnaround(void) {
           "burst-rounded turnaround set failed");
     CHECK(dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT,
           "burst-rounded mode not retained");
+    CHECK(tu_dram_set_turnaround(dram, TU_DRAM_TURNAROUND_BURST_SPAN_CREDIT,
+                                 TU_DRAM_TURNAROUND_CORE_CYCLES, 4, 7),
+          "address-span burst turnaround set failed");
+    CHECK(dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_SPAN_CREDIT,
+          "address-span burst mode not retained");
+    tu_dram_reset(dram);
+    tu_dram_read(dram, 1, 64, &cycles, &stall);
+    CHECK(dram->stats.total_read_bytes == 64 &&
+          dram->stats.total_read_occupied_bytes == 128,
+          "address-span mode did not charge both touched bursts");
+    CHECK(dram->channel_available_cycle[0] ==
+              dram->params.read_latency_cycles + 16,
+          "address-span occupancy not wired into completion boundary");
+    CHECK(tu_dram_set_turnaround(dram, TU_DRAM_TURNAROUND_BURST_ROUND_CREDIT,
+                                 TU_DRAM_TURNAROUND_CORE_CYCLES, 4, 7),
+          "restore size-rounded turnaround failed");
     tu_dram_reset(dram);
     for (int i = 0; i < 1001; ++i) tu_dram_tick(dram);
     uint64_t bandwidth_before = dram->bandwidth_available;
@@ -524,13 +540,14 @@ static void test_dram_turnaround(void) {
     char err[192];
     CHECK(tu_config_load_string(
         "{\"tu\":{\"memory\":{\"dram\":{\"type\":\"ddr5\","
-        "\"core_clock_ghz\":2,\"turnaround_mode\":\"fixed\","
+        "\"core_clock_ghz\":2,\"turnaround_mode\":\"burst_span_credit\","
         "\"turnaround_domain\":\"physical_ns\","
         "\"read_to_write_turnaround\":3,\"write_to_read_turnaround\":8,"
         "\"read_burst_bytes\":128,\"write_burst_bytes\":32}}}}",
         &cfg, err, sizeof(err)) == 0, "turnaround config parse");
     dram = tu_dram_create_from_config(&cfg);
-    CHECK(dram != NULL && dram->turnaround_mode == TU_DRAM_TURNAROUND_FIXED &&
+    CHECK(dram != NULL &&
+          dram->turnaround_mode == TU_DRAM_TURNAROUND_BURST_SPAN_CREDIT &&
           dram->read_to_write_turnaround_cycles == 6 &&
           dram->write_to_read_turnaround_cycles == 16 &&
           dram->read_burst_bytes == 128 && dram->write_burst_bytes == 32,
