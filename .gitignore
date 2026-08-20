@@ -16,6 +16,7 @@ test-dram-turnaround-sweep
 test-dram-turnaround-idle-sweep
 test-dram-directional-burst-sweep
 test-dram-burst-alignment-sweep
+test-dram-zero-byte-sweep
 test-dram-address-mapping-sweep
 test-dram-refresh-sweep
 test-dram-refresh-phase-sweep

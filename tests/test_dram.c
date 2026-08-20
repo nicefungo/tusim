@@ -1170,6 +1170,41 @@ done:;
     tu_dram_destroy(dram);
 }
 
+static void test_zero_byte_access_is_noop(void) {
+    TEST("Zero-byte DRAM accesses are side-effect-free no-ops");
+    tu_dram_model_t *dram = make_row_test_dram(TU_DRAM_ROW_OPEN_PAGE);
+    CHECK(dram != NULL, "create failed");
+    CHECK(tu_dram_set_turnaround(dram, TU_DRAM_TURNAROUND_BURST_SPAN_CREDIT,
+                                 TU_DRAM_TURNAROUND_CORE_CYCLES, 3, 8),
+          "span-credit mode rejected");
+    uint64_t cycles = UINT64_MAX, stall = UINT64_MAX;
+    uint64_t available_before = dram->channel_available_cycle[0];
+    uint64_t bandwidth_before = dram->bandwidth_available;
+
+    tu_dram_read(dram, 1, 0, &cycles, &stall);
+    CHECK(cycles == 0 && stall == 0, "zero-byte read returned service");
+    CHECK(dram->stats.total_reads == 0 &&
+          dram->stats.total_read_bytes == 0 &&
+          dram->stats.total_read_occupied_bytes == 0,
+          "zero-byte read changed counters");
+    CHECK(dram->channel_available_cycle[0] == available_before &&
+          dram->bandwidth_available == bandwidth_before &&
+          dram->open_rows[0] == UINT64_MAX,
+          "zero-byte read changed timing or row state");
+
+    tu_dram_write(dram, 63, 0, NULL, NULL);
+    CHECK(dram->stats.total_writes == 0 &&
+          dram->stats.total_write_bytes == 0 &&
+          dram->stats.total_write_occupied_bytes == 0,
+          "zero-byte write changed counters");
+    CHECK(dram->channel_last_direction[0] == 0 &&
+          dram->pending_read_bytes == 0 && dram->pending_write_bytes == 0,
+          "zero-byte access changed direction or pending traffic");
+    PASS();
+done:;
+    tu_dram_destroy(dram);
+}
+
 /* ---- Main ---- */
 int main(void) {
     printf("\n=== TU DRAM Model Tests ===\n\n");
@@ -1206,6 +1241,7 @@ int main(void) {
     test_refresh_closes_rows();
     test_core_clock_cycle_domain();
     test_latency_domain();
+    test_zero_byte_access_is_noop();
 
     printf("\n=== Results: %d/%d passed ===\n", tests_passed, tests_run);
     return (tests_passed == tests_run) ? 0 : 1;

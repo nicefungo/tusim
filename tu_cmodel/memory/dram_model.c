@@ -633,6 +633,12 @@ void tu_dram_read(tu_dram_model_t *dram, uint64_t addr,
         return;
     }
 
+    if (num_bytes == 0) {
+        if (cycles_out) *cycles_out = 0;
+        if (stall_out)  *stall_out = 0;
+        return;
+    }
+
     /* Ideal DRAM: zero-cycle, no tracking */
     if (dram->type == TU_DRAM_TYPE_IDEAL) {
         dram->stats.total_reads++;
@@ -714,6 +720,12 @@ void tu_dram_read(tu_dram_model_t *dram, uint64_t addr,
 void tu_dram_write(tu_dram_model_t *dram, uint64_t addr,
                    uint32_t num_bytes, uint64_t *cycles_out, uint64_t *stall_out) {
     if (!dram) {
+        if (cycles_out) *cycles_out = 0;
+        if (stall_out)  *stall_out = 0;
+        return;
+    }
+
+    if (num_bytes == 0) {
         if (cycles_out) *cycles_out = 0;
         if (stall_out)  *stall_out = 0;
         return;
