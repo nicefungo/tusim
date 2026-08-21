@@ -255,7 +255,8 @@ void tu_dram_write(tu_dram_model_t *dram, uint64_t addr,
 
 /*
  * Estimate cycles for a bulk transfer of `num_bytes` bytes without
- * actually executing it. Returns total cycles required.
+ * actually executing it. Returns total cycles required. A zero-byte transfer
+ * is no work and returns zero, matching tu_dram_read/write service semantics.
  * Useful for DMA engine planning.
  */
 uint64_t tu_dram_estimate_transfer(tu_dram_model_t *dram,

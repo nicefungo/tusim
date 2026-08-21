@@ -162,6 +162,12 @@ static void test_bandwidth_estimation(void) {
     tu_dram_model_t *dram = tu_dram_create(TU_DRAM_TYPE_HBM3);
     CHECK(dram != NULL, "create failed");
 
+    /* Empty planning requests must match the service API's no-work contract. */
+    CHECK(tu_dram_estimate_transfer(dram, 0, true) == 0,
+          "zero-byte read estimate charged latency");
+    CHECK(tu_dram_estimate_transfer(dram, 0, false) == 0,
+          "zero-byte write estimate charged latency");
+
     /* 819 GB/s HBM3. At 1 GHz core clock, that's ~819 bytes/cycle. */
     uint64_t est_read = tu_dram_estimate_transfer(dram, 819, true);
     CHECK(est_read > 0, "zero estimate");

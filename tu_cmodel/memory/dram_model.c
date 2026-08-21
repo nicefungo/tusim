@@ -795,7 +795,7 @@ void tu_dram_write(tu_dram_model_t *dram, uint64_t addr,
 
 uint64_t tu_dram_estimate_transfer(tu_dram_model_t *dram,
                                     uint32_t num_bytes, bool is_read) {
-    if (!dram || dram->type == TU_DRAM_TYPE_IDEAL) return 0;
+    if (!dram || num_bytes == 0 || dram->type == TU_DRAM_TYPE_IDEAL) return 0;
 
     /* Simple estimate: bytes / bandwidth * cycles + latency */
     double bw_bytes_per_cycle = dram->params.bandwidth_gbps /

@@ -38,14 +38,16 @@ static int run_zero_case(const mode_case_t *c, int is_read) {
     else
         tu_dram_write(dram, 63, 0, &cycles, &stall);
 
+    uint64_t estimate = tu_dram_estimate_transfer(dram, 0, is_read != 0);
     uint64_t requests = dram->stats.total_reads + dram->stats.total_writes;
     uint64_t occupied = dram->stats.total_read_occupied_bytes +
                         dram->stats.total_write_occupied_bytes;
-    printf("%-12s %c %5" PRIu64 " %5" PRIu64 " %8" PRIu64
+    printf("%-12s %c %5" PRIu64 " %5" PRIu64 " %5" PRIu64 " %8" PRIu64
            " %7" PRIu64 " %7" PRIu64 "\n",
-           c->name, is_read ? 'R' : 'W', cycles, stall, requests,
+           c->name, is_read ? 'R' : 'W', cycles, stall, estimate, requests,
            occupied, dram->stats.total_row_conflicts);
-    int fail = cycles != 0 || stall != 0 || requests != 0 || occupied != 0 ||
+    int fail = cycles != 0 || stall != 0 || estimate != 0 ||
+               requests != 0 || occupied != 0 ||
                dram->stats.total_row_conflicts != 0 ||
                dram->channel_last_direction[0] != 0 ||
                dram->channel_available_cycle[0] != 0 ||
@@ -84,8 +86,8 @@ int main(void) {
     };
     int failures = 0;
     puts("DRAM zero-byte sweep: open-page row model, 64 B granule");
-    printf("%-12s %s %5s %5s %8s %7s %7s\n",
-           "mode", "D", "cycles", "stall", "requests", "occ_B", "misses");
+    printf("%-12s %s %5s %5s %5s %8s %7s %7s\n",
+           "mode", "D", "cycles", "stall", "est", "requests", "occ_B", "misses");
     for (size_t i = 0; i < sizeof(modes) / sizeof(modes[0]); ++i) {
         failures += run_zero_case(&modes[i], 1);
         failures += run_zero_case(&modes[i], 0);
@@ -95,6 +97,6 @@ int main(void) {
         fprintf(stderr, "FAIL: %d zero-byte rows violated exact gates\n", failures);
         return 1;
     }
-    puts("PASS: 12 zero-byte rows are no-ops; one-byte control consumes service");
+    puts("PASS: 12 zero-byte service/estimate rows are no-ops; one-byte control consumes service");
     return 0;
 }
