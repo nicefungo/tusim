@@ -354,6 +354,11 @@ tu_runtime_config_t tu_config_to_runtime(const struct tu_config_t *cfg) {
     rt.sram_w_size      = cfg->sram_w_size_kb * 1024;
     rt.sram_a_size      = cfg->sram_a_size_kb * 1024;
     rt.sram_o_size      = cfg->sram_o_size_kb * 1024;
+    rt.sram_num_banks   = cfg->sram_num_banks;
+    rt.sram_bank_width  = cfg->sram_bank_width;
+    rt.sram_words_per_cycle = (uint8_t)cfg->sram_words_per_cycle;
+    rt.sram_stall_penalty = cfg->sram_stall_penalty;
+    rt.sram_bw_window_cycles = cfg->sram_bw_window_cycles;
     rt.counters_enabled = cfg->counters_enabled;
     rt.detailed_stalls  = cfg->detailed_stalls;
     rt.trace_enabled    = cfg->trace_enabled;
@@ -436,6 +441,15 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
             int64_t iv;
             if (parse_opt_int64(bank, "banks", &iv)) cfg->sram_num_banks = (uint32_t)iv;
             if (parse_opt_int64(bank, "bank_width_bytes", &iv)) cfg->sram_bank_width = (uint32_t)iv;
+            if (parse_opt_int64(bank, "words_per_refill", &iv))
+                cfg->sram_words_per_cycle =
+                    (iv >= 1 && iv <= UINT8_MAX) ? (uint32_t)iv : 0;
+            if (parse_opt_int64(bank, "refill_window_cycles", &iv))
+                cfg->sram_bw_window_cycles =
+                    (iv >= 1 && iv <= 1000000) ? (uint64_t)iv : 0;
+            if (parse_opt_int64(bank, "stall_penalty_cycles", &iv))
+                cfg->sram_stall_penalty =
+                    (iv >= 1 && iv <= UINT8_MAX) ? (uint8_t)iv : 0;
             const tu_json_value_t *cm = tu_json_get(bank, "conflict_model");
             if (cm && cm->type == TU_JSON_STRING)
                 cfg->sram_conflict_mode = parse_conflict_str(tu_json_as_string(cm, NULL));
@@ -760,6 +774,24 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
     if (cfg->sram_num_banks < 1 || cfg->sram_num_banks > 1024) {
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size, "num_banks must be [1,1024], got %u", cfg->sram_num_banks);
+        return -1;
+    }
+    if (cfg->sram_words_per_cycle < 1 || cfg->sram_words_per_cycle > UINT8_MAX) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size, "SRAM words_per_refill must be [1,255]");
+        return -1;
+    }
+    if (cfg->sram_bw_window_cycles < 1 ||
+        cfg->sram_bw_window_cycles > 1000000) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "SRAM refill_window_cycles must be [1,1000000]");
+        return -1;
+    }
+    if (cfg->sram_stall_penalty < 1) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "SRAM stall_penalty_cycles must be [1,255]");
         return -1;
     }
     uint32_t bw = cfg->dma_bus_width_bits;
@@ -1143,7 +1175,7 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             cfg->sram_num_banks);
     fprintf(out, "| `sram_bank_width` | %u | uint32 | Bytes per bank word |\n",
             cfg->sram_bank_width);
-    fprintf(out, "| `sram_words_per_cycle` | %u | uint32 | Max words per bank per cycle |\n",
+    fprintf(out, "| `sram_words_per_cycle` | %u | uint32 | Words granted per bank per refill window; per-cycle only when window=1 |\n",
             cfg->sram_words_per_cycle);
     fprintf(out, "| `sram_arb_mode` | %d | int | Arbitration: 0=None, 1=RR, 2=Priority |\n",
             cfg->sram_arb_mode);

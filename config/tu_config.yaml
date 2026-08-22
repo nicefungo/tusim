@@ -37,6 +37,9 @@ tu:
     banking:
       banks: 32           # Number of SRAM banks
       bank_width_bytes: 4 # Bytes per bank (word size)
+      words_per_refill: 1 # Grants per bank/window; a port count only when window=1
+      refill_window_cycles: 4 # Legacy throttled accounting; 1 models per-cycle issue
+      stall_penalty_cycles: 2
       conflict_model: "detect"  # none | detect (log warning) | stall_cycle (model penalty)
 
     # Memory access costs (cycles)

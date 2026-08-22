@@ -9,6 +9,7 @@ test-cmdq
 test-cmdq-dbg
 test-dma
 test-dram
+test-sram-issue-sweep
 test-dram-row-policy-sweep
 test-dram-row-timeout-sweep
 test-dram-row-timeout-domain-sweep

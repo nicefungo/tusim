@@ -4,6 +4,15 @@
 **Type:** Analytical sweep (standalone C, no cmodel dependency)
 **Parameter swept:** SRAM bank arbitration policy (NONE / Round-Robin / Priority)
 
+> **2026-08-22 executable re-audit:** This historical study is analytical,
+> and its source harness is absent from the current checkout. In the live
+> cmodel, `arb_mode` is stored but `sram_bw_consume()` never reads it; the
+> scalar access API also has no simultaneous requester/port identity from
+> which to implement RR or priority. NONE/RR/PRIORITY are therefore not
+> executable architectural alternatives, and the priority numbers below must
+> not be cited as cmodel measurements. See `sram-issue-grant-cadence.md` for
+> the now-executable grant/refill alternatives and arbitration fidelity limit.
+
 ## Motivation
 
 The cmodel SRAM has 32 banks with configurable arbitration (`TU_SRAM_ARB_MODE`): NONE (0), Round-Robin (1), Priority (2). This parameter controls how simultaneous accesses to the same bank are resolved. Previous sweeps have used the default RR mode without exploring whether the choice matters for throughput.
@@ -63,7 +72,7 @@ PRIORITY is useful when reads are on the critical path (e.g., weight-stationary 
 
 The cmodel's 32-bank SRAM with `TU_SRAM_WORDS_PER_CYCLE=1` means each bank can serve at most one access per cycle. With sequential, strided access patterns from DMA and systolic array, bank conflicts are rare. The dominant factor in SRAM throughput is the 4-cycle bandwidth refill window, not the arbitration policy.
 
-**Recommendation:** RR is the safe default. PRIORITY should be considered for dual-ported SRAM designs where simultaneous read+write to the same bank is expected (e.g., ping-pong buffer swaps, DMA/compute overlap on the same SRAM region).
+**Historical analytical recommendation only:** RR was assumed as a safe default. Implementing RR or PRIORITY now requires a batched request/port contract, grant ordering, replay, and fairness state; the current live model cannot compare them.
 
 ## Comparison with Existing Sweeps
 

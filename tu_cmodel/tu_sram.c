@@ -58,6 +58,16 @@ void tu_sram_init(tu_sram_region_t *r, uint32_t size_bytes, const char *name) {
 void tu_sram_init_bw(tu_sram_region_t *r, uint32_t size_bytes, const char *name,
                      uint8_t words_per_cycle, uint8_t arb_mode,
                      uint8_t stall_penalty, uint64_t refill_window) {
+    tu_sram_init_runtime(r, size_bytes, name, TU_SRAM_BANKS,
+                         TU_SRAM_BANK_WIDTH, words_per_cycle,
+                         stall_penalty, refill_window);
+    r->banks.arb_mode = arb_mode;
+}
+
+void tu_sram_init_runtime(tu_sram_region_t *r, uint32_t size_bytes,
+                          const char *name, uint32_t bank_count,
+                          uint32_t bank_width, uint8_t words_per_cycle,
+                          uint8_t stall_penalty, uint64_t refill_window) {
     memset(r, 0, sizeof(*r));
     r->total_size = size_bytes;
     r->name = name;
@@ -66,19 +76,19 @@ void tu_sram_init_bw(tu_sram_region_t *r, uint32_t size_bytes, const char *name,
     tu_sram_bank_t *b = &r->banks;
     b->data = (uint8_t *)calloc(1, size_bytes);
     b->size = size_bytes;
-    b->bank_count = TU_SRAM_BANKS;
-    b->bank_width = TU_SRAM_BANK_WIDTH;
-    b->words_per_cycle = words_per_cycle;
-    b->arb_mode = arb_mode;
-    b->stall_penalty = stall_penalty;
-    b->bw_refill_window = refill_window;
+    b->bank_count = bank_count ? bank_count : TU_SRAM_BANKS;
+    b->bank_width = bank_width ? bank_width : TU_SRAM_BANK_WIDTH;
+    b->words_per_cycle = words_per_cycle ? words_per_cycle : TU_SRAM_WORDS_PER_CYCLE;
+    b->arb_mode = TU_SRAM_ARB_MODE;
+    b->stall_penalty = stall_penalty ? stall_penalty : TU_SRAM_BW_STALL_PENALTY;
+    b->bw_refill_window = refill_window ? refill_window : TU_SRAM_BW_WINDOW_CYCLES;
     b->bw_modeling = true;
     b->current_cycle = 0;
 
     /* Allocate per-bank bandwidth meters */
     b->bw_banks = (tu_sram_bw_bank_t *)calloc(b->bank_count, sizeof(tu_sram_bw_bank_t));
     for (uint32_t i = 0; i < b->bank_count; i++) {
-        b->bw_banks[i].words_available = words_per_cycle;
+        b->bw_banks[i].words_available = b->words_per_cycle;
     }
 }
 

@@ -83,9 +83,18 @@ void tu_init_with_config(const tu_runtime_config_t *cfg) {
     g_tu.rt_cfg = *cfg;
 
     /* Allocate SRAM regions with banking */
-    tu_sram_init(&g_tu.sram_w, cfg->sram_w_size, "W-buf");
-    tu_sram_init(&g_tu.sram_a, cfg->sram_a_size, "A-buf");
-    tu_sram_init(&g_tu.sram_o, cfg->sram_o_size, "O-buf");
+    tu_sram_init_runtime(&g_tu.sram_w, cfg->sram_w_size, "W-buf",
+                         cfg->sram_num_banks, TU_SRAM_BANK_WIDTH,
+                         cfg->sram_words_per_cycle, cfg->sram_stall_penalty,
+                         cfg->sram_bw_window_cycles);
+    tu_sram_init_runtime(&g_tu.sram_a, cfg->sram_a_size, "A-buf",
+                         cfg->sram_num_banks, TU_SRAM_BANK_WIDTH,
+                         cfg->sram_words_per_cycle, cfg->sram_stall_penalty,
+                         cfg->sram_bw_window_cycles);
+    tu_sram_init_runtime(&g_tu.sram_o, cfg->sram_o_size, "O-buf",
+                         cfg->sram_num_banks, TU_SRAM_BANK_WIDTH,
+                         cfg->sram_words_per_cycle, cfg->sram_stall_penalty,
+                         cfg->sram_bw_window_cycles);
 
     /* Initialize DMA engine */
     tu_dma_init(TU_DMA_ASYNC_MODE ? true : false);

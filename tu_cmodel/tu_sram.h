@@ -6,10 +6,11 @@
  *
  * M2: Bandwidth Modeling
  * =======================
- * Each bank has a per-cycle bandwidth budget (TU_SRAM_WORDS_PER_CYCLE).
- * When multiple accesses target the same bank in the same cycle window,
- * bandwidth metering with refill-based budget + arbitration determines
- * which accesses proceed and which stall. Stall cycles are accumulated.
+ * Each bank has a per-refill-window bandwidth grant
+ * (TU_SRAM_WORDS_PER_CYCLE; historical identifier retained).
+ * When multiple accesses target the same bank in one refill window, the
+ * budget determines which accesses return a stall penalty. The arb_mode field
+ * is reserved metadata; scalar calls do not implement RR/priority ordering.
  */
 
 #ifndef TU_SRAM_H
@@ -49,7 +50,7 @@ typedef struct {
     tu_sram_bw_bank_t *bw_banks; /* Array of bandwidth meters (one per bank) */
     uint64_t   bw_refill_window; /* Cycles between refills */
     uint64_t   current_cycle;    /* Monotonically increasing cycle counter */
-    uint8_t    words_per_cycle;  /* Max words per bank per cycle */
+    uint8_t    words_per_cycle;  /* Words granted per bank/refill window */
     uint8_t    arb_mode;         /* Arbitration policy */
     uint8_t    stall_penalty;    /* Cycles to add per bandwidth stall */
     bool       bw_modeling;      /* Whether bandwidth modeling is active */
@@ -74,6 +75,14 @@ void tu_sram_init(tu_sram_region_t *r, uint32_t size_bytes, const char *name);
 void tu_sram_init_bw(tu_sram_region_t *r, uint32_t size_bytes, const char *name,
                      uint8_t words_per_cycle, uint8_t arb_mode,
                      uint8_t stall_penalty, uint64_t refill_window);
+
+/* Runtime-geometry variant. Zero-valued fields inherit checked-in defaults.
+ * words_per_cycle is a grant per refill window; it is literally a per-cycle
+ * issue rate only when refill_window is one cycle. */
+void tu_sram_init_runtime(tu_sram_region_t *r, uint32_t size_bytes,
+                          const char *name, uint32_t bank_count,
+                          uint32_t bank_width, uint8_t words_per_cycle,
+                          uint8_t stall_penalty, uint64_t refill_window);
 
 /* Destroy SRAM region (frees all memory) */
 void tu_sram_destroy(tu_sram_region_t *r);

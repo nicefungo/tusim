@@ -136,7 +136,8 @@ extern "C" {
  * SRAM Bandwidth Model (M2)
  * ================================================================ */
 
-/* Maximum words per bank per cycle (1 = single-ported, 2 = dual-ported) */
+/* Words granted per bank per refill window. This equals a physical per-cycle
+ * issue rate only when TU_SRAM_BW_WINDOW_CYCLES is one. */
 #define TU_SRAM_WORDS_PER_CYCLE 1
 
 /* Arbitration policy when multiple accesses hit the same bank */
@@ -291,6 +292,11 @@ typedef struct {
     uint32_t sram_w_size;
     uint32_t sram_a_size;
     uint32_t sram_o_size;
+    uint32_t sram_num_banks;
+    uint32_t sram_bank_width;
+    uint8_t  sram_words_per_cycle;
+    uint8_t  sram_stall_penalty;
+    uint64_t sram_bw_window_cycles;
     bool     counters_enabled;
     bool     detailed_stalls;
     bool     trace_enabled;
@@ -313,6 +319,11 @@ static inline tu_runtime_config_t tu_runtime_config_default(void) {
         .sram_w_size       = TU_SRAM_W_SIZE,
         .sram_a_size       = TU_SRAM_A_SIZE,
         .sram_o_size       = TU_SRAM_O_SIZE,
+        .sram_num_banks    = TU_SRAM_BANKS,
+        .sram_bank_width   = TU_SRAM_BANK_WIDTH,
+        .sram_words_per_cycle = TU_SRAM_WORDS_PER_CYCLE,
+        .sram_stall_penalty = TU_SRAM_BW_STALL_PENALTY,
+        .sram_bw_window_cycles = TU_SRAM_BW_WINDOW_CYCLES,
         .counters_enabled  = TU_COUNTERS_ENABLED,
         .detailed_stalls   = TU_COUNTERS_DETAILED_STALLS,
         .trace_enabled     = TU_TRACE_ENABLED,
