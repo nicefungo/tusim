@@ -212,3 +212,83 @@ Baseline validated against cmodel output (test-cmodel and test-bench pass at 16�
 1. **DMA channels × workload scale:** How does the optimal channel count change with problem size? Do very large models (M=2048, N=2048) benefit from 4+ channels?
 2. **Asymmetric channel bandwidth:** Should the W channel have higher bandwidth than the A channel? Weights are reused across spatial tiles — does the W-channel bottleneck differently?
 3. **Channel-to-buffer binding flexibility:** Current design hard-binds channel 0→W, 1→A, 2→O. Would a flexible binding (any channel → any buffer) improve utilization for non-GEMM workloads (attention, convolution)?
+
+---
+
+## 2026-08-23 Live Descriptor-Engine Re-audit and Implementation
+
+The preceding results are retained as a historical analytical study. They are **not live cmodel evidence**: the canonical JSON loader parsed `channels`, `max_outstanding`, and `async_mode`, but `tu_config_to_runtime()` dropped all three and `tu_init_with_config()` always initialized compile-time DMA defaults. The historical tiled-GEMM schedule also assumes compute/DMA overlap that the descriptor engine does not execute.
+
+### Implemented alternatives and compatibility
+
+The live path now preserves these physically plausible candidate designs in one binary:
+
+| Selected channels | Why a hardware team might choose it | Expected sacrifice |
+|---:|---|---|
+| 1 | Minimum engine/control/CDC state; suitable when traffic is serialized upstream or area and verification dominate | Independent W/A/O streams serialize |
+| 2 | Separates two simultaneous streams (for example W and A, or read and write) without a third engine | A third ready stream shares one channel |
+| 3 | Dedicated capacity for the canonical W/A/O streams | More engines, ports, routing, clock gating, and verification; idle capacity for one- or two-stream phases |
+| 4–8 model capacity | Represents general channels or wider multi-producer candidates without recompilation | Not benchmark-justified here; physical ports, shared-memory contention, binding, and control costs are unmodeled |
+
+`TU_DMA_CHANNELS=3`, `TU_DMA_MAX_OUTSTANDING=4`, and synchronous mode remain the checked-in defaults. Zero-valued fields in a directly constructed `tu_runtime_config_t` inherit those defaults, preserving legacy callers. Canonical config validation accepts 1–8 channels and 1–65,535 outstanding descriptors. Counts above the fixed eight-entry model capacity fail closed rather than silently clamping or indexing beyond the channel array.
+
+`max_outstanding` now means active plus pending descriptors. Previously an active descriptor stopped counting as soon as it was dequeued, allowing `max_outstanding + 1` live descriptors per channel.
+
+### Executable matrix
+
+Command:
+
+```sh
+make test-dma-channel-sweep
+```
+
+Configuration: 4,096 useful bytes per stream; 32 B/cycle compile-time DMA bus; 50-cycle read base; default 32-bank SRAM with one grant per four-cycle refill window and two cycles per denied scalar grant. The live engine charges 1,984 SRAM-stall cycles per stream, for 2,162 modeled service cycles. Completion includes the first issue tick.
+
+| Ready streams | Channels | Completion ticks | Useful bytes/tick |
+|---:|---:|---:|---:|
+| 1 | 1 | 2,163 | 1.894 |
+| 1 | 2 | 2,163 | 1.894 |
+| 1 | 3 | 2,163 | 1.894 |
+| 2 | 1 | 4,325 | 1.894 |
+| 2 | 2 | 2,163 | 3.787 |
+| 2 | 3 | 2,163 | 3.787 |
+| 3 | 1 | 6,487 | 1.894 |
+| 3 | 2 | 4,325 | 2.841 |
+| 3 | 3 | 2,163 | 5.681 |
+
+The discriminating result is workload-conditional: two channels halve completion time only when two equal independent streams are ready; a third channel adds no benefit until a third stream is ready. The result is deterministic per-channel overlap, not proof of three independent physical DRAM or SRAM ports.
+
+Queue admission was separately gated before the first tick:
+
+| `max_outstanding` | Submissions attempted | Accepted |
+|---:|---:|---:|
+| 1 | 4 | 1 |
+| 2 | 4 | 2 |
+| 4 | 4 | 4 |
+
+No queue-depth throughput speedup is claimed. The model has no descriptor-producer issue latency, command-fetch bandwidth, finite completion queue, or CPU/compiler scheduling timeline; depth currently controls admission and lookahead capacity only.
+
+### Multi-objective interpretation
+
+| Dimension | Gain | Sacrifice / limitation |
+|---|---|---|
+| Throughput | More channels overlap independent ready streams in the measured matrix | No gain when stream count is below channel count; shared physical-port contention is absent |
+| Latency | Two streams fall 4,325→2,163 ticks on 1→2 channels; three fall 6,487→2,163 on 1→3 | Values include the cmodel's coarse 1,984-cycle SRAM grant penalty and are uncalibrated |
+| Area/resources | One channel minimizes DMA engines and descriptor state | Incremental channel/queue area is unquantified; likely grows with engines, outstanding tables, ports, and routing |
+| Power/energy | Fewer channels can reduce idle/leakage/control overhead; clock gating may limit idle cost | Dynamic and leakage energy are not wired to DMA channels or descriptor depth |
+| SRAM/DRAM traffic | Useful bytes are identical across channel counts | The model does not arbitrate shared SRAM/DRAM ports, so parallel channels do not expose contention or extra buffering traffic |
+| Numerical accuracy | Byte-exact transfer output is identical | No arithmetic or quantization semantics are involved |
+| Control complexity | One channel has the simplest ordering; fixed W/A/O channels are easy to verify | More channels require ordering, signaling, error, reset, and potentially deadlock/fairness verification |
+| Verification burden | Runtime alternatives share one state-machine implementation and fail-closed gates | Descriptor ownership/chaining remains subtle; priority is metadata-only and was not promoted into a policy |
+| Compiler/runtime | Runtime can choose channel count and admitted lookahead without rebuilding | Binding/scheduling policy, rejection recovery, and compute-overlap integration remain unspecified |
+
+### Files and verification
+
+- Runtime path: `tu_cmodel/tu_config.h`, `scripts/gen_config.py`, `tu_cmodel/infra/config.c`, `tu_cmodel/tu_cmodel.c`.
+- Engine behavior: `tu_cmodel/dma_descriptor.{h,c}`.
+- Gates: `tests/test_dma.c`, `tests/test_config.c`, `tests/test_dma_channel_sweep.c`.
+- Commands: `make test-dma`, `make test-config`, `make test-dma-channel-sweep`, followed by clean full build and `make test-quick`.
+
+### Deferred follow-ups
+
+Do not infer queue-aware GEMM speedup, physical channel count, or a universal default from this matrix. Channel binding, asymmetric widths, priorities, shared-port arbitration/backpressure, producer timing, and end-to-end compute overlap remain blocked until the cmodel has explicit contracts and discriminating workloads for those behaviors.

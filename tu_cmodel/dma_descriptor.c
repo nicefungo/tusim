@@ -30,7 +30,12 @@ void tu_dma_init_full(bool async, uint32_t num_channels, uint32_t max_queue_dept
     memset(&g_tu_dma, 0, sizeof(g_tu_dma));
     g_tu_dma.async_mode = async;
     g_tu_dma.num_channels = num_channels > 0 ? num_channels : TU_DMA_CHANNELS;
-    if (g_tu_dma.num_channels > 8) g_tu_dma.num_channels = 8;
+    if (g_tu_dma.num_channels > TU_DMA_ENGINE_MAX_CHANNELS) {
+        fprintf(stderr, "DMA: channel count %u exceeds model capacity %u\n",
+                g_tu_dma.num_channels, TU_DMA_ENGINE_MAX_CHANNELS);
+        g_tu_dma.num_channels = 0; /* fail closed; never silently clamp */
+        return;
+    }
 
     for (uint32_t i = 0; i < g_tu_dma.num_channels; i++) {
         g_tu_dma.channels[i].channel_id = (uint8_t)i;
@@ -589,9 +594,10 @@ uint32_t tu_dma_submit_desc(tu_dma_descriptor_t *desc) {
 
     tu_dma_channel_state_t *ch = &g_tu_dma.channels[ch_id];
 
-    if (ch->queue_depth >= ch->max_depth && ch->max_depth > 0) {
-        fprintf(stderr, "DMA: channel %u queue full (depth=%u max=%u)\n",
-                ch_id, ch->queue_depth, ch->max_depth);
+    uint32_t outstanding = ch->queue_depth + (ch->active ? 1u : 0u);
+    if (outstanding >= ch->max_depth && ch->max_depth > 0) {
+        fprintf(stderr, "DMA: channel %u outstanding limit reached (count=%u max=%u)\n",
+                ch_id, outstanding, ch->max_depth);
         tu_dma_desc_destroy(desc);
         return 0;
     }

@@ -177,6 +177,7 @@ extern "C" {
 #define TU_DMA_BUS_WIDTH_BYTES  (TU_DMA_BUS_WIDTH_BITS / 8)
 #define TU_DMA_MAX_BURST_BYTES  64
 #define TU_DMA_CHANNELS         3
+#define TU_DMA_ENGINE_MAX_CHANNELS 8
 #define TU_DMA_MAX_OUTSTANDING  4
 #define TU_DMA_ASYNC_MODE       0
 
@@ -297,6 +298,9 @@ typedef struct {
     uint8_t  sram_words_per_cycle;
     uint8_t  sram_stall_penalty;
     uint64_t sram_bw_window_cycles;
+    uint32_t dma_num_channels;
+    uint32_t dma_max_outstanding;
+    bool     dma_async_mode;
     bool     counters_enabled;
     bool     detailed_stalls;
     bool     trace_enabled;
@@ -324,6 +328,9 @@ static inline tu_runtime_config_t tu_runtime_config_default(void) {
         .sram_words_per_cycle = TU_SRAM_WORDS_PER_CYCLE,
         .sram_stall_penalty = TU_SRAM_BW_STALL_PENALTY,
         .sram_bw_window_cycles = TU_SRAM_BW_WINDOW_CYCLES,
+        .dma_num_channels   = TU_DMA_CHANNELS,
+        .dma_max_outstanding = TU_DMA_MAX_OUTSTANDING,
+        .dma_async_mode     = TU_DMA_ASYNC_MODE ? true : false,
         .counters_enabled  = TU_COUNTERS_ENABLED,
         .detailed_stalls   = TU_COUNTERS_DETAILED_STALLS,
         .trace_enabled     = TU_TRACE_ENABLED,

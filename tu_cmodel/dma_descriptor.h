@@ -116,7 +116,9 @@ typedef struct {
 
 /* ---- DMA Engine ---- */
 typedef struct {
-    tu_dma_channel_state_t  channels[TU_DMA_CHANNELS];
+    /* Fixed model capacity is independent of the selected/default channel
+     * count so one binary can compare candidate 1..8-channel designs. */
+    tu_dma_channel_state_t  channels[TU_DMA_ENGINE_MAX_CHANNELS];
     uint32_t                num_channels;
     bool                    async_mode;
     uint64_t                current_cycle;

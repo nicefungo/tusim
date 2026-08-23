@@ -201,6 +201,8 @@ int main(void) {
             "  },"
             "  \"dma\": {"
             "    \"bus_width_bits\": 512,"
+            "    \"channels\": 2,"
+            "    \"max_outstanding\": 7,"
             "    \"async_mode\": true"
             "  }"
             "}}";
@@ -218,7 +220,12 @@ int main(void) {
         CHECK(cfg.sram_num_banks == 64, "banks");
         CHECK(cfg.sram_bank_width == 8, "bank_width");
         CHECK(cfg.dma_bus_width_bits == 512, "dma_bus");
+        CHECK(cfg.dma_num_channels == 2, "DMA channels parse");
+        CHECK(cfg.dma_max_outstanding == 7, "DMA outstanding parse");
         CHECK(cfg.dma_async_mode, "async");
+        CHECK(rt.dma_num_channels == 2, "DMA channels runtime propagation");
+        CHECK(rt.dma_max_outstanding == 7, "DMA outstanding runtime propagation");
+        CHECK(rt.dma_async_mode, "DMA async runtime propagation");
         PASS();
     }
 
@@ -474,6 +481,20 @@ int main(void) {
         PASS();
     }
 
+    TEST("Config: validation fail (bad DMA geometry)");
+    {
+        tu_config_t cfg;
+        tu_config_default(&cfg);
+        cfg.dma_num_channels = 0;
+        CHECK(tu_config_validate(&cfg, NULL, 0) != 0, "should reject channels=0");
+        cfg.dma_num_channels = TU_DMA_ENGINE_MAX_CHANNELS + 1;
+        CHECK(tu_config_validate(&cfg, NULL, 0) != 0, "should reject channels above capacity");
+        cfg.dma_num_channels = 3;
+        cfg.dma_max_outstanding = 0;
+        CHECK(tu_config_validate(&cfg, NULL, 0) != 0, "should reject max_outstanding=0");
+        PASS();
+    }
+
     TEST("Config: interconnect switching parse + validation");
     {
         const char *json =
@@ -577,6 +598,9 @@ int main(void) {
         cfg.pe_rows = 8; cfg.pe_cols = 8;
         cfg.pe_pipeline_depth = 4;
         cfg.dataflow_mode = TU_DATAFLOW_OUTPUT_STATIONARY;
+        cfg.dma_num_channels = 2;
+        cfg.dma_max_outstanding = 7;
+        cfg.dma_async_mode = false;
 
         int err = tu_init_from_config(&cfg);
         CHECK(err == 0, "init");
@@ -587,6 +611,11 @@ int main(void) {
               "rt_dataflow_mode");
         CHECK(strcmp(tu_get_dataflow_name(), "output_stationary") == 0,
               "active config dataflow");
+        CHECK(g_tu_dma.num_channels == 2, "active DMA channels");
+        CHECK(g_tu_dma.channels[0].max_depth == 7 &&
+              g_tu_dma.channels[1].max_depth == 7,
+              "active DMA outstanding depth");
+        CHECK(!g_tu_dma.async_mode, "active DMA mode");
 
         /* Small MMA: 8×8×8, W=all 1.0, A=all 2.0 → O[m][n] = 8*2 = 16.0 */
         fp16_t w[64], a[64];

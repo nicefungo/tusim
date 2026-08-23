@@ -96,8 +96,10 @@ void tu_init_with_config(const tu_runtime_config_t *cfg) {
                          cfg->sram_words_per_cycle, cfg->sram_stall_penalty,
                          cfg->sram_bw_window_cycles);
 
-    /* Initialize DMA engine */
-    tu_dma_init(TU_DMA_ASYNC_MODE ? true : false);
+    /* Initialize DMA engine from the executable runtime configuration. */
+    tu_dma_init_full(cfg->dma_async_mode,
+                     cfg->dma_num_channels,
+                     cfg->dma_max_outstanding);
 
     /* Initialize command queue */
     g_tu.cmdq = tu_cmdq_create(TU_ISA_QUEUE_DEPTH, TU_CYCLE_MODEL == TU_CYCLE_MODEL_FUNCTIONAL);

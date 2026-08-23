@@ -456,6 +456,61 @@ static void test_dma_stats(void) {
 }
 
 /* ================================================================
+ * Test 11: Runtime channel capacity must fail closed
+ * ================================================================ */
+static void test_dma_channel_capacity(void) {
+    TEST("Runtime channel count 1..8; overflow fails closed");
+
+    tu_dma_init_full(true, TU_DMA_ENGINE_MAX_CHANNELS, 4);
+    if (g_tu_dma.num_channels != TU_DMA_ENGINE_MAX_CHANNELS) {
+        FAIL("max channel count did not initialize");
+        return;
+    }
+    tu_dma_destroy();
+
+    tu_dma_init_full(true, TU_DMA_ENGINE_MAX_CHANNELS + 1, 4);
+    if (g_tu_dma.num_channels == 0) PASS();
+    else FAIL("unsupported count silently became %u", g_tu_dma.num_channels);
+    tu_dma_destroy();
+}
+
+/* ================================================================
+ * Test 12: max_outstanding includes the active descriptor
+ * ================================================================ */
+static void test_dma_outstanding_includes_active(void) {
+    TEST("Max outstanding counts active + queued descriptors");
+
+    tu_dma_init_full(true, 1, 1);
+    tu_sram_region_t sram;
+    tu_sram_init(&sram, 256, "outstanding");
+    static uint8_t src0[64], src1[64];
+    memset(src0, 0x11, sizeof(src0));
+    memset(src1, 0x22, sizeof(src1));
+
+    tu_dma_descriptor_t *d0 = tu_dma_desc_create_linear(
+        0, TU_DMA_DIR_HOST_TO_TU, &sram, 0, src0, 1, sizeof(src0));
+    uint32_t id0 = tu_dma_submit_desc(d0);
+    tu_dma_tick(); /* d0 becomes active; pending depth returns to zero */
+
+    tu_dma_descriptor_t *d1 = tu_dma_desc_create_linear(
+        0, TU_DMA_DIR_HOST_TO_TU, &sram, 64, src1, 1, sizeof(src1));
+    uint32_t id1 = tu_dma_submit_desc(d1);
+
+    for (int i = 0; i < 200; i++) tu_dma_tick();
+    uint8_t *raw = tu_sram_raw_ptr(&sram);
+    int ok = id0 > 0 && id1 == 0 && g_tu_dma.channels[0].total_submitted == 1;
+    for (size_t i = 0; i < sizeof(src0) && ok; i++) ok = raw[i] == 0x11;
+    for (size_t i = 0; i < sizeof(src1) && ok; i++) ok = raw[64 + i] == 0;
+
+    if (ok) PASS();
+    else FAIL("id0=%u id1=%u submitted=%lu", id0, id1,
+              (unsigned long)g_tu_dma.channels[0].total_submitted);
+
+    tu_sram_destroy(&sram);
+    tu_dma_destroy();
+}
+
+/* ================================================================
  * Main
  * ================================================================ */
 int main(void) {
@@ -472,6 +527,8 @@ int main(void) {
     test_dma_legacy_api();
     test_dma_completion_signal();
     test_dma_stats();
+    test_dma_channel_capacity();
+    test_dma_outstanding_includes_active();
 
     printf("\n═══════════════════════════════════════════\n");
     printf("  %d/%d tests passed\n", tests_pass, tests_run);

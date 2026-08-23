@@ -359,6 +359,9 @@ tu_runtime_config_t tu_config_to_runtime(const struct tu_config_t *cfg) {
     rt.sram_words_per_cycle = (uint8_t)cfg->sram_words_per_cycle;
     rt.sram_stall_penalty = cfg->sram_stall_penalty;
     rt.sram_bw_window_cycles = cfg->sram_bw_window_cycles;
+    rt.dma_num_channels = cfg->dma_num_channels;
+    rt.dma_max_outstanding = cfg->dma_max_outstanding;
+    rt.dma_async_mode = cfg->dma_async_mode;
     rt.counters_enabled = cfg->counters_enabled;
     rt.detailed_stalls  = cfg->detailed_stalls;
     rt.trace_enabled    = cfg->trace_enabled;
@@ -798,6 +801,20 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
     if (bw < 32 || bw > 1024 || (bw & (bw - 1)) != 0) {
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size, "dma_bus_width must be power of 2 [32,1024], got %u", bw);
+        return -1;
+    }
+    if (cfg->dma_num_channels < 1 ||
+        cfg->dma_num_channels > TU_DMA_ENGINE_MAX_CHANNELS) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size, "DMA channels must be [1,%u], got %u",
+                     TU_DMA_ENGINE_MAX_CHANNELS, cfg->dma_num_channels);
+        return -1;
+    }
+    if (cfg->dma_max_outstanding < 1 || cfg->dma_max_outstanding > 65535) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DMA max_outstanding must be [1,65535], got %u",
+                     cfg->dma_max_outstanding);
         return -1;
     }
     if (cfg->isa_queue_depth == 0) {
