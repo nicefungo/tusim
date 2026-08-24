@@ -1,9 +1,8 @@
 /*
- * Runtime DMA channel-count and outstanding-depth exploration.
+ * Runtime DMA channel-count, bus-topology, and outstanding-depth exploration.
  *
- * This is cmodel-linked because it probes the live descriptor state machine.
- * It intentionally reports descriptor-engine completion time only; it is not
- * an end-to-end GEMM overlap or physical AXI/DRAM throughput model.
+ * This probes the live async descriptor state machine. Completion time is not
+ * an end-to-end GEMM, calibrated AXI, DRAM, or shared-SRAM throughput result.
  */
 #include "tu_cmodel/dma_descriptor.h"
 #include <stdint.h>
@@ -30,13 +29,19 @@ static uint64_t completed_count(uint32_t channels) {
     return total;
 }
 
-static int run_stream_case(uint32_t streams, uint32_t channels,
+static const char *mode_name(int mode) {
+    return mode == TU_DMA_BUS_MODE_SHARED_SERIAL ? "shared_serial" : "independent";
+}
+
+static int run_stream_case(uint32_t streams, uint32_t channels, int bus_mode,
                            uint64_t *ticks_out) {
     tu_sram_region_t sram;
     tu_dma_descriptor_t *desc[STREAMS_MAX] = {0};
     tu_sram_init(&sram, STREAMS_MAX * STREAM_BYTES, "dma-sweep");
-    tu_dma_init_full(true, channels, STREAMS_MAX);
-    if (g_tu_dma.num_channels != channels) return -1;
+    tu_dma_init_config(true, channels, STREAMS_MAX, bus_mode);
+    if (g_tu_dma.num_channels != channels ||
+        g_tu_dma.bus_mode != (tu_dma_bus_mode_t)bus_mode)
+        return -1;
 
     for (uint32_t i = 0; i < streams; i++) {
         memset(sources[i], (int)(0x30u + i), STREAM_BYTES);
@@ -60,20 +65,19 @@ static int run_stream_case(uint32_t streams, uint32_t channels,
         }
     }
 
-    uint64_t waves = (streams + channels - 1u) / channels;
+    uint64_t waves = bus_mode == TU_DMA_BUS_MODE_SHARED_SERIAL ? streams :
+                     (streams + channels - 1u) / channels;
     uint64_t expected = 1u + waves * EXPECTED_XFER_CYCLES;
     if (g_tu_dma.current_cycle != expected) {
         fprintf(stderr,
-                "FAIL streams=%u channels=%u ticks=%lu expected=%lu\n",
-                streams, channels, (unsigned long)g_tu_dma.current_cycle,
+                "FAIL mode=%s streams=%u channels=%u ticks=%lu expected=%lu\n",
+                mode_name(bus_mode), streams, channels,
+                (unsigned long)g_tu_dma.current_cycle,
                 (unsigned long)expected);
         return -5;
     }
 
     *ticks_out = g_tu_dma.current_cycle;
-
-    /* Completed descriptors are no longer engine-reachable, but queue links
-     * remain in their next fields. Break those links before caller cleanup. */
     for (uint32_t i = 0; i < streams; i++) desc[i]->next = NULL;
     tu_dma_destroy();
     for (uint32_t i = 0; i < streams; i++) tu_dma_desc_destroy(desc[i]);
@@ -108,18 +112,25 @@ static int run_capacity_case(uint32_t depth, uint32_t *accepted_out) {
 }
 
 int main(void) {
-    printf("DMA live descriptor sweep (4096 B/stream, %u B/cycle, %u-cycle base, %u SRAM-stall cycles)\n",
+    printf("DMA live topology sweep (4096 B/stream, %u B/cycle, %u-cycle base, %u SRAM-stall cycles)\n",
            TU_DMA_BUS_WIDTH_BYTES, TU_LATENCY_DRAM_READ,
            (unsigned)EXPECTED_SRAM_STALLS);
-    printf("streams channels completion_ticks useful_bytes_per_tick\n");
-    for (uint32_t streams = 1; streams <= 3; streams++) {
-        for (uint32_t channels = 1; channels <= 3; channels++) {
-            uint64_t ticks = 0;
-            int rc = run_stream_case(streams, channels, &ticks);
-            if (rc != 0) return 10 + (-rc);
-            double rate = (double)(streams * STREAM_BYTES) / (double)ticks;
-            printf("%7u %8u %16lu %21.3f\n",
-                   streams, channels, (unsigned long)ticks, rate);
+    printf("topology streams channels completion_ticks useful_bytes_per_tick\n");
+    const int modes[] = {
+        TU_DMA_BUS_MODE_INDEPENDENT,
+        TU_DMA_BUS_MODE_SHARED_SERIAL
+    };
+    for (uint32_t m = 0; m < sizeof(modes) / sizeof(modes[0]); m++) {
+        for (uint32_t streams = 1; streams <= 3; streams++) {
+            for (uint32_t channels = 1; channels <= 3; channels++) {
+                uint64_t ticks = 0;
+                int rc = run_stream_case(streams, channels, modes[m], &ticks);
+                if (rc != 0) return 10 + (-rc);
+                double rate = (double)(streams * STREAM_BYTES) / (double)ticks;
+                printf("%13s %7u %8u %16lu %21.3f\n",
+                       mode_name(modes[m]), streams, channels,
+                       (unsigned long)ticks, rate);
+            }
         }
     }
 
@@ -132,6 +143,6 @@ int main(void) {
         printf("%15u %27u %8u\n", depths[i], 4u, accepted);
     }
 
-    printf("PASS: channel timing, data movement, and outstanding-depth gates\n");
+    printf("PASS: topology timing, data movement, and outstanding-depth gates\n");
     return 0;
 }

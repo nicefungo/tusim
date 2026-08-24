@@ -94,6 +94,12 @@ typedef enum {
     TU_DRAM_CONFIG_REFRESH_SCHED_DEFERRED = 1
 } tu_dram_config_refresh_scheduling_t;
 
+/* Zero preserves the historical independently serviceable channel paths. */
+typedef enum {
+    TU_DMA_CONFIG_BUS_INDEPENDENT = 0,
+    TU_DMA_CONFIG_BUS_SHARED_SERIAL = 1
+} tu_dma_config_bus_mode_t;
+
 /* ================================================================
  * Full Configuration Struct
  * ================================================================
@@ -176,6 +182,7 @@ typedef struct tu_config_t {
     uint32_t dma_bus_width_bits;
     uint32_t dma_max_burst_bytes;
     uint32_t dma_num_channels;
+    int      dma_bus_mode;          /* independent=0, shared_serial=1 */
     uint32_t dma_max_outstanding;
     bool     dma_async_mode;
     bool     dma_multicast_enabled;  /* DM4: multicast/broadcast DMA */

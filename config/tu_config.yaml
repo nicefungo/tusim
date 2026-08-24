@@ -83,7 +83,8 @@ tu:
   dma:
     bus_width_bits: 256   # AXI bus width
     max_burst_bytes: 64   # Maximum burst size
-    channels: 3           # Number of independent DMA channels
+    channels: 3           # Number of DMA scheduling channels
+    bus_topology: "independent"  # independent (compat) | shared_serial
     max_outstanding: 4    # Maximum outstanding requests per channel
     async_mode: false     # true = async DMA with completion notification
 

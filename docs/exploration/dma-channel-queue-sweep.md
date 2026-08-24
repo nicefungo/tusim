@@ -292,3 +292,65 @@ No queue-depth throughput speedup is claimed. The model has no descriptor-produc
 ### Deferred follow-ups
 
 Do not infer queue-aware GEMM speedup, physical channel count, or a universal default from this matrix. Channel binding, asymmetric widths, priorities, shared-port arbitration/backpressure, producer timing, and end-to-end compute overlap remain blocked until the cmodel has explicit contracts and discriminating workloads for those behaviors.
+
+---
+
+## 2026-08-24 Shared-versus-Independent DMA Data Paths
+
+### Architecture question and alternatives
+
+The 2026-08-23 matrix treated every selected channel as independently serviceable. That is one plausible high-throughput implementation, but it makes channel count scale without a shared-bus cost. This follow-up asks: **when multiple descriptor queues are useful for control, must they also imply multiple full-bandwidth data paths?**
+
+The cmodel now preserves both materially distinct candidates:
+
+| Runtime `bus_topology` | Physical interpretation | Why a team might choose it | Principal sacrifice |
+|---|---|---|---|
+| `independent` (zero/default) | Each selected channel may start one full transfer concurrently | Dedicated W/A/O movers or independently ported memory paths; lowest ready-stream latency | Replicated engines/ports/routing and a much stronger SRAM/DRAM feed assumption |
+| `shared_serial` | Per-channel queues feed one non-preemptive data path; queue selection rotates after each transfer | Lower-area shared mover while retaining stream separation, ordering, and descriptors | No payload-throughput scaling from channel count; a long transfer blocks other queues |
+
+The mode is a cmodel configuration alternative, not a claim that a physical chip would switch topology dynamically. `independent` remains the compatibility default. The old `tu_dma_init_full()` API also preserves independent behavior; `tu_dma_init_config()` carries the explicit topology.
+
+### Executable matrix
+
+Command: `make test-dma-channel-sweep`
+
+The transfer controls are unchanged from the previous live study: 4,096 B per stream, compile-time 32 B/cycle path, 50-cycle base service, and 1,984 current-model SRAM stall cycles per stream. Every row gates exact returned bytes and exact completion ticks.
+
+| Topology | Ready streams | Channels | Completion ticks | Useful B/tick |
+|---|---:|---:|---:|---:|
+| independent | 1 | 1 / 2 / 3 | 2,163 | 1.894 |
+| independent | 2 | 1 | 4,325 | 1.894 |
+| independent | 2 | 2 / 3 | 2,163 | 3.787 |
+| independent | 3 | 1 | 6,487 | 1.894 |
+| independent | 3 | 2 | 4,325 | 2.841 |
+| independent | 3 | 3 | 2,163 | 5.681 |
+| shared_serial | 1 | 1 / 2 / 3 | 2,163 | 1.894 |
+| shared_serial | 2 | 1 / 2 / 3 | 4,325 | 1.894 |
+| shared_serial | 3 | 1 / 2 / 3 | 6,487 | 1.894 |
+
+The result closes the earlier interpretation gap rather than selecting a winner. With two ready streams, two independent paths reduce completion from 4,325 to 2,163 ticks (50.0% lower), while two shared queues correctly remain at 4,325. With three ready streams, three independent paths reduce 6,487 to 2,163 ticks (66.7% lower); shared-serial stays at 6,487 regardless of queue count. Extra queues can still provide admission, isolation, and round-robin ordering in shared mode, but not bandwidth.
+
+### Gain-versus-sacrifice assessment
+
+| Dimension | Independent paths | Shared-serial path | Fidelity boundary |
+|---|---|---|---|
+| Throughput | Scales with simultaneously ready streams up to selected channels in this matrix | Fixed at one transfer's modeled rate | Neither mode models a partially shared crossbar, aggregate DRAM cap, or SRAM-port arbitration |
+| Latency | Lowest for independent ready streams | Head-of-line blocking across queues; round-robin only at descriptor boundaries | Submission and completion software latency are absent |
+| Area/resources | Expected to require replicated movers, ports, buffering, and routes | Expected lower datapath/port area; still retains per-channel queue state | Area is unquantified |
+| Power/energy | More concurrently active engines and routing likely raise dynamic power; shorter execution can reduce leakage time | Less concurrent datapath activity but longer completion for multi-stream batches | No DMA topology energy counters or physical power calibration |
+| SRAM/DRAM traffic | Identical useful bytes | Identical useful bytes | Shared-mode serialization is modeled, but independent mode still assumes independently serviceable memory paths; contention/overfetch are absent |
+| Numerical accuracy | Byte-exact outputs are identical | Byte-exact outputs are identical | No arithmetic semantics are involved |
+| Control complexity | Multiple simultaneous active transfers, completions, errors, and resets | One active transfer and descriptor-boundary RR; simpler datapath, but queue fairness remains stateful | Priorities, preemption, cancellation, and starvation limits are not modeled |
+| Verification burden | Must gate true concurrency and all channel interactions | Must gate serialization, rotation, and no fallback | The sweep covers 18 topology/stream/channel rows; hazardous ownership remains a separate concern |
+| Compiler/runtime | Can map independent W/A/O streams for overlap | Can retain stream queues on a cost-constrained single mover | No automatic binding, cost model, or end-to-end compute/DMA scheduler |
+
+### Implementation and verification surface
+
+- Configuration: `config/tu_config.{yaml,json}` → generated defaults → canonical parse/validation → runtime conversion → `tu_init_with_config()` → live descriptor engine.
+- Runtime: `TU_DMA_BUS_MODE_INDEPENDENT` and `TU_DMA_BUS_MODE_SHARED_SERIAL`; unsupported values fail closed.
+- Shared mode starts at most one descriptor globally and rotates the next eligible channel after completion. It is non-preemptive by design.
+- Gates: `make test-dma`, `make test-config`, and `make test-dma-channel-sweep`, followed by clean full build and `make test-quick`.
+
+### Remaining realistic variants
+
+A partially shared fabric (for example two movers behind one aggregate DRAM interface), weighted priority, transfer preemption, asymmetric channel width, and shared SRAM/DRAM backpressure are valuable but not READY. They require an explicit aggregate-bandwidth, arbitration, and replay contract; adding scalar penalties now would invent behavior rather than clarify this measured trade-off.

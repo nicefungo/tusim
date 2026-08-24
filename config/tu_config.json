@@ -74,6 +74,7 @@
       "bus_width_bits": 256,
       "max_burst_bytes": 64,
       "channels": 3,
+      "bus_topology": "independent",
       "max_outstanding": 4,
       "async_mode": false,
       "multicast_enabled": false

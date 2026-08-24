@@ -39,6 +39,11 @@ typedef enum {
     TU_DMA_NUM_CHANNELS = 3
 } tu_dma_channel_t;
 
+typedef enum {
+    TU_DMA_BUS_MODE_INDEPENDENT = 0,
+    TU_DMA_BUS_MODE_SHARED_SERIAL = 1
+} tu_dma_bus_mode_t;
+
 /* ---- Transfer direction ---- */
 typedef enum {
     TU_DMA_DIR_HOST_TO_TU   = 0,  /* Load: DRAM → SRAM */
@@ -120,6 +125,8 @@ typedef struct {
      * count so one binary can compare candidate 1..8-channel designs. */
     tu_dma_channel_state_t  channels[TU_DMA_ENGINE_MAX_CHANNELS];
     uint32_t                num_channels;
+    tu_dma_bus_mode_t       bus_mode;
+    uint32_t                next_shared_channel;
     bool                    async_mode;
     uint64_t                current_cycle;
     uint64_t                total_bytes;
@@ -131,6 +138,8 @@ extern tu_dma_engine_t g_tu_dma;
 
 /* ---- Lifecycle ---- */
 void tu_dma_init_full(bool async, uint32_t num_channels, uint32_t max_queue_depth);
+void tu_dma_init_config(bool async, uint32_t num_channels,
+                        uint32_t max_queue_depth, int bus_mode);
 void tu_dma_init(bool async);
 void tu_dma_destroy(void);
 

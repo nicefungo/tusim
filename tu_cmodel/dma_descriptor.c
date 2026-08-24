@@ -26,9 +26,16 @@ tu_dma_engine_t g_tu_dma = {0};
  * Lifecycle
  * ================================================================ */
 
-void tu_dma_init_full(bool async, uint32_t num_channels, uint32_t max_queue_depth) {
+void tu_dma_init_config(bool async, uint32_t num_channels,
+                        uint32_t max_queue_depth, int bus_mode) {
     memset(&g_tu_dma, 0, sizeof(g_tu_dma));
     g_tu_dma.async_mode = async;
+    if (bus_mode != TU_DMA_BUS_MODE_INDEPENDENT &&
+        bus_mode != TU_DMA_BUS_MODE_SHARED_SERIAL) {
+        fprintf(stderr, "DMA: unsupported bus mode %d\n", bus_mode);
+        return;
+    }
+    g_tu_dma.bus_mode = (tu_dma_bus_mode_t)bus_mode;
     g_tu_dma.num_channels = num_channels > 0 ? num_channels : TU_DMA_CHANNELS;
     if (g_tu_dma.num_channels > TU_DMA_ENGINE_MAX_CHANNELS) {
         fprintf(stderr, "DMA: channel count %u exceeds model capacity %u\n",
@@ -41,6 +48,11 @@ void tu_dma_init_full(bool async, uint32_t num_channels, uint32_t max_queue_dept
         g_tu_dma.channels[i].channel_id = (uint8_t)i;
         g_tu_dma.channels[i].max_depth = max_queue_depth > 0 ? max_queue_depth : TU_DMA_MAX_OUTSTANDING;
     }
+}
+
+void tu_dma_init_full(bool async, uint32_t num_channels, uint32_t max_queue_depth) {
+    tu_dma_init_config(async, num_channels, max_queue_depth,
+                       TU_DMA_BUS_MODE_INDEPENDENT);
 }
 
 void tu_dma_init(bool async) {
@@ -636,19 +648,43 @@ int tu_dma_tick(void) {
     for (uint32_t i = 0; i < g_tu_dma.num_channels; i++) {
         tu_dma_channel_state_t *ch = &g_tu_dma.channels[i];
 
-        /* If there's an active descriptor, it completes this tick */
         if (ch->active && ch->active->cycles_completed <= g_tu_dma.current_cycle) {
             ch->active = NULL;
             ch->total_completed++;
             completed++;
         }
 
-        /* Dequeue next descriptor if channel is idle */
-        if (!ch->active && ch->head) {
+        /* Compatibility mode: each channel has an independently serviceable
+         * data path and may begin one transfer on the same model tick. */
+        if (g_tu_dma.bus_mode == TU_DMA_BUS_MODE_INDEPENDENT &&
+            !ch->active && ch->head) {
             ch->active = ch->head;
             ch->head = ch->head->next;
             ch->queue_depth--;
             tu_dma_execute_desc(ch->active);
+        }
+    }
+
+    /* Shared-serial mode represents multiple descriptor queues feeding one
+     * physical data path. Start at most one transfer, rotating among queues. */
+    if (g_tu_dma.bus_mode == TU_DMA_BUS_MODE_SHARED_SERIAL) {
+        bool bus_busy = false;
+        for (uint32_t i = 0; i < g_tu_dma.num_channels; i++)
+            bus_busy = bus_busy || g_tu_dma.channels[i].active != NULL;
+
+        if (!bus_busy) {
+            for (uint32_t probe = 0; probe < g_tu_dma.num_channels; probe++) {
+                uint32_t i = (g_tu_dma.next_shared_channel + probe) %
+                             g_tu_dma.num_channels;
+                tu_dma_channel_state_t *ch = &g_tu_dma.channels[i];
+                if (!ch->head) continue;
+                ch->active = ch->head;
+                ch->head = ch->head->next;
+                ch->queue_depth--;
+                tu_dma_execute_desc(ch->active);
+                g_tu_dma.next_shared_channel = (i + 1u) % g_tu_dma.num_channels;
+                break;
+            }
         }
     }
 

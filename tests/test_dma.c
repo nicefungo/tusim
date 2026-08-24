@@ -459,18 +459,28 @@ static void test_dma_stats(void) {
  * Test 11: Runtime channel capacity must fail closed
  * ================================================================ */
 static void test_dma_channel_capacity(void) {
-    TEST("Runtime channel count 1..8; overflow fails closed");
+    TEST("Runtime channels/topology fail closed");
 
-    tu_dma_init_full(true, TU_DMA_ENGINE_MAX_CHANNELS, 4);
-    if (g_tu_dma.num_channels != TU_DMA_ENGINE_MAX_CHANNELS) {
-        FAIL("max channel count did not initialize");
+    tu_dma_init_config(true, TU_DMA_ENGINE_MAX_CHANNELS, 4,
+                       TU_DMA_BUS_MODE_SHARED_SERIAL);
+    if (g_tu_dma.num_channels != TU_DMA_ENGINE_MAX_CHANNELS ||
+        g_tu_dma.bus_mode != TU_DMA_BUS_MODE_SHARED_SERIAL) {
+        FAIL("max channel count/topology did not initialize");
         return;
     }
     tu_dma_destroy();
 
     tu_dma_init_full(true, TU_DMA_ENGINE_MAX_CHANNELS + 1, 4);
+    if (g_tu_dma.num_channels != 0) {
+        FAIL("unsupported count silently became %u", g_tu_dma.num_channels);
+        tu_dma_destroy();
+        return;
+    }
+    tu_dma_destroy();
+
+    tu_dma_init_config(true, 3, 4, 2);
     if (g_tu_dma.num_channels == 0) PASS();
-    else FAIL("unsupported count silently became %u", g_tu_dma.num_channels);
+    else FAIL("unsupported topology initialized %u channels", g_tu_dma.num_channels);
     tu_dma_destroy();
 }
 

@@ -40,7 +40,7 @@
 | `sram_o_size_kb` | 64 | uint32 | Output/accumulator buffer size (KB) |
 | `sram_num_banks` | 32 | uint32 | Number of SRAM banks |
 | `sram_bank_width` | 4 | uint32 | Bytes per bank word |
-| `sram_words_per_cycle` | 1 | uint32 | Max words per bank per cycle |
+| `sram_words_per_cycle` | 1 | uint32 | Words granted per bank per refill window; per-cycle only when window=1 |
 | `sram_arb_mode` | 1 | int | Arbitration: 0=None, 1=RR, 2=Priority |
 | `sram_conflict_mode` | 1 | int | Conflict: 0=None, 1=Detect, 2=Stall |
 | `sram_stall_penalty` | 2 | uint8 | Stall penalty cycles |
@@ -84,6 +84,7 @@
 | `dma_bus_width_bits` | 256 | uint32 | AXI bus width |
 | `dma_max_burst_bytes` | 64 | uint32 | Max burst size |
 | `dma_num_channels` | 3 | uint32 | DMA channel count |
+| `dma_bus_topology` | independent | enum | Channel data paths: independent or shared_serial |
 | `dma_max_outstanding` | 4 | uint32 | Max outstanding descriptors |
 | `dma_async_mode` | `false` | bool | Async DMA with descriptor queues |
 | `dma_multicast_enabled` | `false` | bool | Multicast/broadcast DMA |
