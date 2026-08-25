@@ -26,8 +26,9 @@ tu_dma_engine_t g_tu_dma = {0};
  * Lifecycle
  * ================================================================ */
 
-void tu_dma_init_config(bool async, uint32_t num_channels,
-                        uint32_t max_queue_depth, int bus_mode) {
+void tu_dma_init_config_policy(bool async, uint32_t num_channels,
+                               uint32_t max_queue_depth, int bus_mode,
+                               int arb_policy) {
     memset(&g_tu_dma, 0, sizeof(g_tu_dma));
     g_tu_dma.async_mode = async;
     if (bus_mode != TU_DMA_BUS_MODE_INDEPENDENT &&
@@ -36,6 +37,12 @@ void tu_dma_init_config(bool async, uint32_t num_channels,
         return;
     }
     g_tu_dma.bus_mode = (tu_dma_bus_mode_t)bus_mode;
+    if (arb_policy != TU_DMA_ARB_ROUND_ROBIN &&
+        arb_policy != TU_DMA_ARB_STRICT_PRIORITY) {
+        fprintf(stderr, "DMA: unsupported arbitration policy %d\n", arb_policy);
+        return;
+    }
+    g_tu_dma.arb_policy = (tu_dma_arb_policy_t)arb_policy;
     g_tu_dma.num_channels = num_channels > 0 ? num_channels : TU_DMA_CHANNELS;
     if (g_tu_dma.num_channels > TU_DMA_ENGINE_MAX_CHANNELS) {
         fprintf(stderr, "DMA: channel count %u exceeds model capacity %u\n",
@@ -48,6 +55,12 @@ void tu_dma_init_config(bool async, uint32_t num_channels,
         g_tu_dma.channels[i].channel_id = (uint8_t)i;
         g_tu_dma.channels[i].max_depth = max_queue_depth > 0 ? max_queue_depth : TU_DMA_MAX_OUTSTANDING;
     }
+}
+
+void tu_dma_init_config(bool async, uint32_t num_channels,
+                        uint32_t max_queue_depth, int bus_mode) {
+    tu_dma_init_config_policy(async, num_channels, max_queue_depth, bus_mode,
+                              TU_DMA_ARB_ROUND_ROBIN);
 }
 
 void tu_dma_init_full(bool async, uint32_t num_channels, uint32_t max_queue_depth) {
@@ -666,18 +679,30 @@ int tu_dma_tick(void) {
     }
 
     /* Shared-serial mode represents multiple descriptor queues feeding one
-     * physical data path. Start at most one transfer, rotating among queues. */
+     * physical data path. Start at most one transfer, using round-robin or
+     * strict descriptor priority with a rotating tie-break. */
     if (g_tu_dma.bus_mode == TU_DMA_BUS_MODE_SHARED_SERIAL) {
         bool bus_busy = false;
         for (uint32_t i = 0; i < g_tu_dma.num_channels; i++)
             bus_busy = bus_busy || g_tu_dma.channels[i].active != NULL;
 
         if (!bus_busy) {
+            uint8_t best_priority = 0;
+            if (g_tu_dma.arb_policy == TU_DMA_ARB_STRICT_PRIORITY) {
+                for (uint32_t i = 0; i < g_tu_dma.num_channels; i++) {
+                    tu_dma_descriptor_t *head = g_tu_dma.channels[i].head;
+                    if (head && head->priority > best_priority)
+                        best_priority = head->priority;
+                }
+            }
             for (uint32_t probe = 0; probe < g_tu_dma.num_channels; probe++) {
                 uint32_t i = (g_tu_dma.next_shared_channel + probe) %
                              g_tu_dma.num_channels;
                 tu_dma_channel_state_t *ch = &g_tu_dma.channels[i];
                 if (!ch->head) continue;
+                if (g_tu_dma.arb_policy == TU_DMA_ARB_STRICT_PRIORITY &&
+                    ch->head->priority != best_priority)
+                    continue;
                 ch->active = ch->head;
                 ch->head = ch->head->next;
                 ch->queue_depth--;

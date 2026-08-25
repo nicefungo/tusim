@@ -203,6 +203,7 @@ int main(void) {
             "    \"bus_width_bits\": 512,"
             "    \"channels\": 2,"
             "    \"bus_topology\": \"shared_serial\","
+            "    \"arbitration\": \"strict_priority\","
             "    \"max_outstanding\": 7,"
             "    \"async_mode\": true"
             "  }"
@@ -224,11 +225,15 @@ int main(void) {
         CHECK(cfg.dma_num_channels == 2, "DMA channels parse");
         CHECK(cfg.dma_bus_mode == TU_DMA_CONFIG_BUS_SHARED_SERIAL,
               "DMA bus topology parse");
+        CHECK(cfg.dma_arb_policy == TU_DMA_CONFIG_ARB_STRICT_PRIORITY,
+              "DMA arbitration parse");
         CHECK(cfg.dma_max_outstanding == 7, "DMA outstanding parse");
         CHECK(cfg.dma_async_mode, "async");
         CHECK(rt.dma_num_channels == 2, "DMA channels runtime propagation");
         CHECK(rt.dma_bus_mode == TU_DMA_CONFIG_BUS_SHARED_SERIAL,
               "DMA bus topology runtime propagation");
+        CHECK(rt.dma_arb_policy == TU_DMA_CONFIG_ARB_STRICT_PRIORITY,
+              "DMA arbitration runtime propagation");
         CHECK(rt.dma_max_outstanding == 7, "DMA outstanding runtime propagation");
         CHECK(rt.dma_async_mode, "DMA async runtime propagation");
         PASS();
@@ -500,6 +505,10 @@ int main(void) {
         cfg.dma_max_outstanding = 4;
         cfg.dma_bus_mode = 2;
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0, "should reject bus topology=2");
+        cfg.dma_bus_mode = TU_DMA_CONFIG_BUS_INDEPENDENT;
+        cfg.dma_arb_policy = 2;
+        CHECK(tu_config_validate(&cfg, NULL, 0) != 0, "should reject arbitration=2");
+        cfg.dma_arb_policy = TU_DMA_CONFIG_ARB_ROUND_ROBIN;
         char err[128] = {0};
         CHECK(tu_config_load_string(
                   "{\"tu\":{\"dma\":{\"bus_topology\":\"shared\"}}}",
@@ -507,6 +516,10 @@ int main(void) {
               "should reject misspelled bus topology");
         CHECK(strstr(err, "bus_topology") != NULL,
               "wrong DMA topology validation error");
+        CHECK(tu_config_load_string(
+                  "{\"tu\":{\"dma\":{\"arbitration\":\"priority\"}}}",
+                  &cfg, err, sizeof(err)) != 0,
+              "should reject misspelled arbitration");
         PASS();
     }
 
@@ -615,6 +628,7 @@ int main(void) {
         cfg.dataflow_mode = TU_DATAFLOW_OUTPUT_STATIONARY;
         cfg.dma_num_channels = 2;
         cfg.dma_bus_mode = TU_DMA_CONFIG_BUS_SHARED_SERIAL;
+        cfg.dma_arb_policy = TU_DMA_CONFIG_ARB_STRICT_PRIORITY;
         cfg.dma_max_outstanding = 7;
         cfg.dma_async_mode = false;
 
@@ -630,6 +644,8 @@ int main(void) {
         CHECK(g_tu_dma.num_channels == 2, "active DMA channels");
         CHECK(g_tu_dma.bus_mode == TU_DMA_BUS_MODE_SHARED_SERIAL,
               "active DMA bus topology");
+        CHECK(g_tu_dma.arb_policy == TU_DMA_ARB_STRICT_PRIORITY,
+              "active DMA arbitration");
         CHECK(g_tu_dma.channels[0].max_depth == 7 &&
               g_tu_dma.channels[1].max_depth == 7,
               "active DMA outstanding depth");

@@ -9,6 +9,7 @@ test-cmdq
 test-cmdq-dbg
 test-dma
 test-dma-channel-sweep
+test-dma-arbitration-sweep
 test-dram
 test-sram-issue-sweep
 test-dram-row-policy-sweep

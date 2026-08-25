@@ -152,6 +152,14 @@ static int parse_dma_bus_mode_str(const char *s) {
     return -1;
 }
 
+static int parse_dma_arb_policy_str(const char *s) {
+    if (!s || strcmp(s, "round_robin") == 0)
+        return TU_DMA_CONFIG_ARB_ROUND_ROBIN;
+    if (strcmp(s, "strict_priority") == 0)
+        return TU_DMA_CONFIG_ARB_STRICT_PRIORITY;
+    return -1;
+}
+
 static int parse_power_tech_node_str(const char *s) {
     if (!s || strcmp(s, "auto") == 0) return 0;
     if (strcmp(s, "45nm") == 0) return 1;
@@ -301,6 +309,7 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->dma_max_burst_bytes = 64;
     cfg->dma_num_channels    = 3;
     cfg->dma_bus_mode        = TU_DMA_CONFIG_BUS_INDEPENDENT;
+    cfg->dma_arb_policy      = TU_DMA_CONFIG_ARB_ROUND_ROBIN;
     cfg->dma_max_outstanding = 4;
     cfg->dma_async_mode      = false;
     cfg->dma_multicast_enabled = false;
@@ -370,6 +379,7 @@ tu_runtime_config_t tu_config_to_runtime(const struct tu_config_t *cfg) {
     rt.sram_bw_window_cycles = cfg->sram_bw_window_cycles;
     rt.dma_num_channels = cfg->dma_num_channels;
     rt.dma_bus_mode = cfg->dma_bus_mode;
+    rt.dma_arb_policy = cfg->dma_arb_policy;
     rt.dma_max_outstanding = cfg->dma_max_outstanding;
     rt.dma_async_mode = cfg->dma_async_mode;
     rt.counters_enabled = cfg->counters_enabled;
@@ -573,6 +583,9 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
         const tu_json_value_t *bus_mode = tu_json_get(d, "bus_topology");
         if (bus_mode && bus_mode->type == TU_JSON_STRING)
             cfg->dma_bus_mode = parse_dma_bus_mode_str(tu_json_as_string(bus_mode, NULL));
+        const tu_json_value_t *arb = tu_json_get(d, "arbitration");
+        if (arb && arb->type == TU_JSON_STRING)
+            cfg->dma_arb_policy = parse_dma_arb_policy_str(tu_json_as_string(arb, NULL));
         if (parse_opt_int64(d, "max_outstanding", &iv)) cfg->dma_max_outstanding = (uint32_t)iv;
         parse_opt_bool(d, "async_mode", &cfg->dma_async_mode);
         parse_opt_bool(d, "multicast_enabled", &cfg->dma_multicast_enabled);
@@ -835,6 +848,13 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
                      "DMA bus_topology must be independent or shared_serial");
+        return -1;
+    }
+    if (cfg->dma_arb_policy < TU_DMA_CONFIG_ARB_ROUND_ROBIN ||
+        cfg->dma_arb_policy > TU_DMA_CONFIG_ARB_STRICT_PRIORITY) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DMA arbitration must be round_robin or strict_priority");
         return -1;
     }
     if (cfg->isa_queue_depth == 0) {
@@ -1295,6 +1315,8 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             cfg->dma_num_channels);
     fprintf(out, "| `dma_bus_topology` | %s | enum | Channel data paths: independent or shared_serial |\n",
             cfg->dma_bus_mode == TU_DMA_CONFIG_BUS_SHARED_SERIAL ? "shared_serial" : "independent");
+    fprintf(out, "| `dma_arbitration` | %s | enum | Shared-serial selection: round_robin or strict_priority |\n",
+            cfg->dma_arb_policy == TU_DMA_CONFIG_ARB_STRICT_PRIORITY ? "strict_priority" : "round_robin");
     fprintf(out, "| `dma_max_outstanding` | %u | uint32 | Max outstanding descriptors |\n",
             cfg->dma_max_outstanding);
     fprintf(out, "| `dma_async_mode` | %s | bool | Async DMA with descriptor queues |\n",

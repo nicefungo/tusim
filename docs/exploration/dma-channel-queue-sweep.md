@@ -279,7 +279,7 @@ No queue-depth throughput speedup is claimed. The model has no descriptor-produc
 | SRAM/DRAM traffic | Useful bytes are identical across channel counts | The model does not arbitrate shared SRAM/DRAM ports, so parallel channels do not expose contention or extra buffering traffic |
 | Numerical accuracy | Byte-exact transfer output is identical | No arithmetic or quantization semantics are involved |
 | Control complexity | One channel has the simplest ordering; fixed W/A/O channels are easy to verify | More channels require ordering, signaling, error, reset, and potentially deadlock/fairness verification |
-| Verification burden | Runtime alternatives share one state-machine implementation and fail-closed gates | Descriptor ownership/chaining remains subtle; priority is metadata-only and was not promoted into a policy |
+| Verification burden | Runtime alternatives share one state-machine implementation and fail-closed gates | Descriptor ownership/chaining remains subtle; shared arbitration is evaluated separately in `dma-shared-arbitration.md` |
 | Compiler/runtime | Runtime can choose channel count and admitted lookahead without rebuilding | Binding/scheduling policy, rejection recovery, and compute-overlap integration remain unspecified |
 
 ### Files and verification
@@ -291,7 +291,7 @@ No queue-depth throughput speedup is claimed. The model has no descriptor-produc
 
 ### Deferred follow-ups
 
-Do not infer queue-aware GEMM speedup, physical channel count, or a universal default from this matrix. Channel binding, asymmetric widths, priorities, shared-port arbitration/backpressure, producer timing, and end-to-end compute overlap remain blocked until the cmodel has explicit contracts and discriminating workloads for those behaviors.
+Do not infer queue-aware GEMM speedup, physical channel count, or a universal default from this matrix. Channel binding, asymmetric widths, shared-port backpressure, producer timing, and end-to-end compute overlap remain blocked until the cmodel has explicit contracts and discriminating workloads. Shared-serial descriptor-boundary priority is now covered by `dma-shared-arbitration.md`; it does not establish beat-level preemption or compiler-assigned QoS.
 
 ---
 
@@ -340,7 +340,7 @@ The result closes the earlier interpretation gap rather than selecting a winner.
 | Power/energy | More concurrently active engines and routing likely raise dynamic power; shorter execution can reduce leakage time | Less concurrent datapath activity but longer completion for multi-stream batches | No DMA topology energy counters or physical power calibration |
 | SRAM/DRAM traffic | Identical useful bytes | Identical useful bytes | Shared-mode serialization is modeled, but independent mode still assumes independently serviceable memory paths; contention/overfetch are absent |
 | Numerical accuracy | Byte-exact outputs are identical | Byte-exact outputs are identical | No arithmetic semantics are involved |
-| Control complexity | Multiple simultaneous active transfers, completions, errors, and resets | One active transfer and descriptor-boundary RR; simpler datapath, but queue fairness remains stateful | Priorities, preemption, cancellation, and starvation limits are not modeled |
+| Control complexity | Multiple simultaneous active transfers, completions, errors, and resets | One active transfer and descriptor-boundary arbitration; simpler datapath, but queue fairness/priority remains stateful | Round-robin and strict priority are modeled separately; preemption, cancellation, aging, and starvation limits are not |
 | Verification burden | Must gate true concurrency and all channel interactions | Must gate serialization, rotation, and no fallback | The sweep covers 18 topology/stream/channel rows; hazardous ownership remains a separate concern |
 | Compiler/runtime | Can map independent W/A/O streams for overlap | Can retain stream queues on a cost-constrained single mover | No automatic binding, cost model, or end-to-end compute/DMA scheduler |
 
@@ -353,4 +353,4 @@ The result closes the earlier interpretation gap rather than selecting a winner.
 
 ### Remaining realistic variants
 
-A partially shared fabric (for example two movers behind one aggregate DRAM interface), weighted priority, transfer preemption, asymmetric channel width, and shared SRAM/DRAM backpressure are valuable but not READY. They require an explicit aggregate-bandwidth, arbitration, and replay contract; adding scalar penalties now would invent behavior rather than clarify this measured trade-off.
+A partially shared fabric (for example two movers behind one aggregate DRAM interface), weighted/aging priority, transfer preemption, asymmetric channel width, and shared SRAM/DRAM backpressure are valuable but not READY. Round-robin and strict descriptor priority are now executable in `dma-shared-arbitration.md`; the remaining variants require sustained-arrival traces plus explicit aggregate-bandwidth and replay contracts.

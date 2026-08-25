@@ -44,6 +44,14 @@ typedef enum {
     TU_DMA_BUS_MODE_SHARED_SERIAL = 1
 } tu_dma_bus_mode_t;
 
+/* Shared-serial descriptor-boundary arbitration. Round-robin is the
+ * compatibility default; strict priority uses descriptor.priority and
+ * round-robin tie-breaking. Independent paths do not consume this policy. */
+typedef enum {
+    TU_DMA_ARB_ROUND_ROBIN = 0,
+    TU_DMA_ARB_STRICT_PRIORITY = 1
+} tu_dma_arb_policy_t;
+
 /* ---- Transfer direction ---- */
 typedef enum {
     TU_DMA_DIR_HOST_TO_TU   = 0,  /* Load: DRAM → SRAM */
@@ -126,6 +134,7 @@ typedef struct {
     tu_dma_channel_state_t  channels[TU_DMA_ENGINE_MAX_CHANNELS];
     uint32_t                num_channels;
     tu_dma_bus_mode_t       bus_mode;
+    tu_dma_arb_policy_t     arb_policy;
     uint32_t                next_shared_channel;
     bool                    async_mode;
     uint64_t                current_cycle;
@@ -140,6 +149,9 @@ extern tu_dma_engine_t g_tu_dma;
 void tu_dma_init_full(bool async, uint32_t num_channels, uint32_t max_queue_depth);
 void tu_dma_init_config(bool async, uint32_t num_channels,
                         uint32_t max_queue_depth, int bus_mode);
+void tu_dma_init_config_policy(bool async, uint32_t num_channels,
+                               uint32_t max_queue_depth, int bus_mode,
+                               int arb_policy);
 void tu_dma_init(bool async);
 void tu_dma_destroy(void);
 

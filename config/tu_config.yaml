@@ -85,6 +85,7 @@ tu:
     max_burst_bytes: 64   # Maximum burst size
     channels: 3           # Number of DMA scheduling channels
     bus_topology: "independent"  # independent (compat) | shared_serial
+    arbitration: "round_robin"   # round_robin (compat) | strict_priority
     max_outstanding: 4    # Maximum outstanding requests per channel
     async_mode: false     # true = async DMA with completion notification
 

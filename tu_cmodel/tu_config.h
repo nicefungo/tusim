@@ -181,6 +181,9 @@ extern "C" {
 #define TU_DMA_BUS_INDEPENDENT  0
 #define TU_DMA_BUS_SHARED_SERIAL 1
 #define TU_DMA_BUS_MODE         TU_DMA_BUS_INDEPENDENT
+#define TU_DMA_ARB_DEFAULT_ROUND_ROBIN  0
+#define TU_DMA_ARB_DEFAULT_STRICT_PRIORITY 1
+#define TU_DMA_ARB_POLICY       TU_DMA_ARB_DEFAULT_ROUND_ROBIN
 #define TU_DMA_MAX_OUTSTANDING  4
 #define TU_DMA_ASYNC_MODE       0
 
@@ -303,6 +306,7 @@ typedef struct {
     uint64_t sram_bw_window_cycles;
     uint32_t dma_num_channels;
     int      dma_bus_mode;
+    int      dma_arb_policy;
     uint32_t dma_max_outstanding;
     bool     dma_async_mode;
     bool     counters_enabled;
@@ -334,6 +338,7 @@ static inline tu_runtime_config_t tu_runtime_config_default(void) {
         .sram_bw_window_cycles = TU_SRAM_BW_WINDOW_CYCLES,
         .dma_num_channels   = TU_DMA_CHANNELS,
         .dma_bus_mode       = TU_DMA_BUS_MODE,
+        .dma_arb_policy     = TU_DMA_ARB_POLICY,
         .dma_max_outstanding = TU_DMA_MAX_OUTSTANDING,
         .dma_async_mode     = TU_DMA_ASYNC_MODE ? true : false,
         .counters_enabled  = TU_COUNTERS_ENABLED,

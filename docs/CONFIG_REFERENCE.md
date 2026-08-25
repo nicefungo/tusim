@@ -85,6 +85,7 @@
 | `dma_max_burst_bytes` | 64 | uint32 | Max burst size |
 | `dma_num_channels` | 3 | uint32 | DMA channel count |
 | `dma_bus_topology` | independent | enum | Channel data paths: independent or shared_serial |
+| `dma_arbitration` | round_robin | enum | Shared-serial selection: round_robin or strict_priority |
 | `dma_max_outstanding` | 4 | uint32 | Max outstanding descriptors |
 | `dma_async_mode` | `false` | bool | Async DMA with descriptor queues |
 | `dma_multicast_enabled` | `false` | bool | Multicast/broadcast DMA |
