@@ -576,6 +576,42 @@ static void test_dma_shared_arbitration(void) {
     if (ok) PASS(); else FAIL("policy selection or rejection failed");
 }
 
+static void test_dma_channel_binding(void) {
+    TEST("Explicit / round-robin / least-outstanding channel binding");
+    tu_sram_region_t sram;
+    static uint8_t src[3][16];
+    tu_dma_descriptor_t *d[3] = {0};
+    int ok = 1;
+    tu_sram_init(&sram, 64, "binding");
+
+    tu_dma_init_config_full(true, 3, 4, TU_DMA_BUS_MODE_INDEPENDENT,
+                            TU_DMA_ARB_ROUND_ROBIN, TU_DMA_BIND_ROUND_ROBIN);
+    for (uint8_t i = 0; i < 3; i++) {
+        d[i] = tu_dma_desc_create_linear(0, TU_DMA_DIR_HOST_TO_TU,
+                                         &sram, i * 16, src[i], 1, 16);
+        ok = ok && d[i] && tu_dma_submit_desc(d[i]) > 0 && d[i]->channel == i;
+    }
+    tu_dma_flush_all();
+    tu_dma_destroy();
+    for (uint8_t i = 0; i < 3; i++) { d[i]->next = NULL; tu_dma_desc_destroy(d[i]); }
+
+    tu_dma_init_config_full(true, 3, 4, TU_DMA_BUS_MODE_INDEPENDENT,
+                            TU_DMA_ARB_ROUND_ROBIN, TU_DMA_BIND_LEAST_OUTSTANDING);
+    d[0] = tu_dma_desc_create_linear(2, TU_DMA_DIR_HOST_TO_TU,
+                                     &sram, 0, src[0], 1, 16);
+    ok = ok && d[0] && tu_dma_submit_desc(d[0]) > 0 && d[0]->channel == 0;
+    tu_dma_flush_all();
+    tu_dma_destroy();
+    d[0]->next = NULL; tu_dma_desc_destroy(d[0]);
+
+    tu_dma_init_config_full(true, 3, 4, TU_DMA_BUS_MODE_INDEPENDENT,
+                            TU_DMA_ARB_ROUND_ROBIN, 99);
+    ok = ok && g_tu_dma.num_channels == 0;
+    tu_dma_destroy();
+    tu_sram_destroy(&sram);
+    if (ok) PASS(); else FAIL("binding assignment/default/rejection failed");
+}
+
 /* ================================================================
  * Main
  * ================================================================ */
@@ -596,6 +632,7 @@ int main(void) {
     test_dma_channel_capacity();
     test_dma_outstanding_includes_active();
     test_dma_shared_arbitration();
+    test_dma_channel_binding();
 
     printf("\n═══════════════════════════════════════════\n");
     printf("  %d/%d tests passed\n", tests_pass, tests_run);

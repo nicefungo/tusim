@@ -175,6 +175,8 @@ int main(void) {
               "DRAM turnaround defaults");
         CHECK(cfg.power_tech_node == 0, "power tech auto default");
         CHECK(cfg.power_clock_freq_mhz == 0.0, "power clock auto default");
+        CHECK(cfg.dma_binding_policy == TU_DMA_CONFIG_BIND_EXPLICIT,
+              "DMA explicit binding default");
         PASS();
     }
 
@@ -204,6 +206,7 @@ int main(void) {
             "    \"channels\": 2,"
             "    \"bus_topology\": \"shared_serial\","
             "    \"arbitration\": \"strict_priority\","
+            "    \"channel_binding\": \"least_outstanding\","
             "    \"max_outstanding\": 7,"
             "    \"async_mode\": true"
             "  }"
@@ -227,6 +230,8 @@ int main(void) {
               "DMA bus topology parse");
         CHECK(cfg.dma_arb_policy == TU_DMA_CONFIG_ARB_STRICT_PRIORITY,
               "DMA arbitration parse");
+        CHECK(cfg.dma_binding_policy == TU_DMA_CONFIG_BIND_LEAST_OUTSTANDING,
+              "DMA binding parse");
         CHECK(cfg.dma_max_outstanding == 7, "DMA outstanding parse");
         CHECK(cfg.dma_async_mode, "async");
         CHECK(rt.dma_num_channels == 2, "DMA channels runtime propagation");
@@ -234,6 +239,8 @@ int main(void) {
               "DMA bus topology runtime propagation");
         CHECK(rt.dma_arb_policy == TU_DMA_CONFIG_ARB_STRICT_PRIORITY,
               "DMA arbitration runtime propagation");
+        CHECK(rt.dma_binding_policy == TU_DMA_CONFIG_BIND_LEAST_OUTSTANDING,
+              "DMA binding runtime propagation");
         CHECK(rt.dma_max_outstanding == 7, "DMA outstanding runtime propagation");
         CHECK(rt.dma_async_mode, "DMA async runtime propagation");
         PASS();
@@ -509,6 +516,9 @@ int main(void) {
         cfg.dma_arb_policy = 2;
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0, "should reject arbitration=2");
         cfg.dma_arb_policy = TU_DMA_CONFIG_ARB_ROUND_ROBIN;
+        cfg.dma_binding_policy = 3;
+        CHECK(tu_config_validate(&cfg, NULL, 0) != 0, "should reject binding=3");
+        cfg.dma_binding_policy = TU_DMA_CONFIG_BIND_EXPLICIT;
         char err[128] = {0};
         CHECK(tu_config_load_string(
                   "{\"tu\":{\"dma\":{\"bus_topology\":\"shared\"}}}",

@@ -26,9 +26,9 @@ tu_dma_engine_t g_tu_dma = {0};
  * Lifecycle
  * ================================================================ */
 
-void tu_dma_init_config_policy(bool async, uint32_t num_channels,
-                               uint32_t max_queue_depth, int bus_mode,
-                               int arb_policy) {
+void tu_dma_init_config_full(bool async, uint32_t num_channels,
+                             uint32_t max_queue_depth, int bus_mode,
+                             int arb_policy, int binding_policy) {
     memset(&g_tu_dma, 0, sizeof(g_tu_dma));
     g_tu_dma.async_mode = async;
     if (bus_mode != TU_DMA_BUS_MODE_INDEPENDENT &&
@@ -43,6 +43,13 @@ void tu_dma_init_config_policy(bool async, uint32_t num_channels,
         return;
     }
     g_tu_dma.arb_policy = (tu_dma_arb_policy_t)arb_policy;
+    if (binding_policy != TU_DMA_BIND_EXPLICIT &&
+        binding_policy != TU_DMA_BIND_ROUND_ROBIN &&
+        binding_policy != TU_DMA_BIND_LEAST_OUTSTANDING) {
+        fprintf(stderr, "DMA: unsupported binding policy %d\n", binding_policy);
+        return;
+    }
+    g_tu_dma.binding_policy = (tu_dma_binding_policy_t)binding_policy;
     g_tu_dma.num_channels = num_channels > 0 ? num_channels : TU_DMA_CHANNELS;
     if (g_tu_dma.num_channels > TU_DMA_ENGINE_MAX_CHANNELS) {
         fprintf(stderr, "DMA: channel count %u exceeds model capacity %u\n",
@@ -55,6 +62,13 @@ void tu_dma_init_config_policy(bool async, uint32_t num_channels,
         g_tu_dma.channels[i].channel_id = (uint8_t)i;
         g_tu_dma.channels[i].max_depth = max_queue_depth > 0 ? max_queue_depth : TU_DMA_MAX_OUTSTANDING;
     }
+}
+
+void tu_dma_init_config_policy(bool async, uint32_t num_channels,
+                               uint32_t max_queue_depth, int bus_mode,
+                               int arb_policy) {
+    tu_dma_init_config_full(async, num_channels, max_queue_depth, bus_mode,
+                            arb_policy, TU_DMA_BIND_EXPLICIT);
 }
 
 void tu_dma_init_config(bool async, uint32_t num_channels,
@@ -611,6 +625,23 @@ uint32_t tu_dma_submit_desc(tu_dma_descriptor_t *desc) {
     if (!desc) return 0;
 
     uint32_t ch_id = desc->channel;
+    if (g_tu_dma.binding_policy == TU_DMA_BIND_ROUND_ROBIN) {
+        ch_id = g_tu_dma.next_binding_channel;
+    } else if (g_tu_dma.binding_policy == TU_DMA_BIND_LEAST_OUTSTANDING &&
+               g_tu_dma.num_channels > 0) {
+        uint32_t best_count = UINT32_MAX;
+        for (uint32_t probe = 0; probe < g_tu_dma.num_channels; probe++) {
+            uint32_t i = (g_tu_dma.next_binding_channel + probe) %
+                         g_tu_dma.num_channels;
+            tu_dma_channel_state_t *candidate = &g_tu_dma.channels[i];
+            uint32_t count = candidate->queue_depth +
+                             (candidate->active ? 1u : 0u);
+            if (count < best_count) {
+                best_count = count;
+                ch_id = i;
+            }
+        }
+    }
     if (ch_id >= g_tu_dma.num_channels) {
         fprintf(stderr, "DMA: invalid channel %u\n", ch_id);
         tu_dma_desc_destroy(desc);
@@ -625,6 +656,12 @@ uint32_t tu_dma_submit_desc(tu_dma_descriptor_t *desc) {
                 ch_id, outstanding, ch->max_depth);
         tu_dma_desc_destroy(desc);
         return 0;
+    }
+
+    /* Commit automatic binding state only after every rejection gate. */
+    if (g_tu_dma.binding_policy != TU_DMA_BIND_EXPLICIT) {
+        desc->channel = (uint8_t)ch_id;
+        g_tu_dma.next_binding_channel = (ch_id + 1u) % g_tu_dma.num_channels;
     }
 
     /* Enqueue */

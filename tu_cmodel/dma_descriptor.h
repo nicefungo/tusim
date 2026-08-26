@@ -52,6 +52,14 @@ typedef enum {
     TU_DMA_ARB_STRICT_PRIORITY = 1
 } tu_dma_arb_policy_t;
 
+/* Descriptor-to-queue binding. Explicit preserves the producer-selected
+ * channel. Automatic policies rebind at accepted submission boundaries. */
+typedef enum {
+    TU_DMA_BIND_EXPLICIT = 0,
+    TU_DMA_BIND_ROUND_ROBIN = 1,
+    TU_DMA_BIND_LEAST_OUTSTANDING = 2
+} tu_dma_binding_policy_t;
+
 /* ---- Transfer direction ---- */
 typedef enum {
     TU_DMA_DIR_HOST_TO_TU   = 0,  /* Load: DRAM → SRAM */
@@ -136,6 +144,8 @@ typedef struct {
     tu_dma_bus_mode_t       bus_mode;
     tu_dma_arb_policy_t     arb_policy;
     uint32_t                next_shared_channel;
+    tu_dma_binding_policy_t binding_policy;
+    uint32_t                next_binding_channel;
     bool                    async_mode;
     uint64_t                current_cycle;
     uint64_t                total_bytes;
@@ -152,6 +162,9 @@ void tu_dma_init_config(bool async, uint32_t num_channels,
 void tu_dma_init_config_policy(bool async, uint32_t num_channels,
                                uint32_t max_queue_depth, int bus_mode,
                                int arb_policy);
+void tu_dma_init_config_full(bool async, uint32_t num_channels,
+                             uint32_t max_queue_depth, int bus_mode,
+                             int arb_policy, int binding_policy);
 void tu_dma_init(bool async);
 void tu_dma_destroy(void);
 
