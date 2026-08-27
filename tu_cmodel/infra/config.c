@@ -167,6 +167,8 @@ static int parse_dma_binding_policy_str(const char *s) {
         return TU_DMA_CONFIG_BIND_ROUND_ROBIN;
     if (strcmp(s, "least_outstanding") == 0)
         return TU_DMA_CONFIG_BIND_LEAST_OUTSTANDING;
+    if (strcmp(s, "least_bytes") == 0)
+        return TU_DMA_CONFIG_BIND_LEAST_BYTES;
     return -1;
 }
 
@@ -874,10 +876,10 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
         return -1;
     }
     if (cfg->dma_binding_policy < TU_DMA_CONFIG_BIND_EXPLICIT ||
-        cfg->dma_binding_policy > TU_DMA_CONFIG_BIND_LEAST_OUTSTANDING) {
+        cfg->dma_binding_policy > TU_DMA_CONFIG_BIND_LEAST_BYTES) {
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
-                     "DMA channel_binding must be explicit, round_robin, or least_outstanding");
+                     "DMA channel_binding must be explicit, round_robin, least_outstanding, or least_bytes");
         return -1;
     }
     if (cfg->isa_queue_depth == 0) {
@@ -1343,8 +1345,10 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
     const char *binding_name = cfg->dma_binding_policy == TU_DMA_CONFIG_BIND_ROUND_ROBIN ?
                                "round_robin" :
                                (cfg->dma_binding_policy == TU_DMA_CONFIG_BIND_LEAST_OUTSTANDING ?
-                                "least_outstanding" : "explicit");
-    fprintf(out, "| `dma_channel_binding` | %s | enum | Descriptor queue binding: explicit, round_robin, or least_outstanding |\n",
+                                "least_outstanding" :
+                                (cfg->dma_binding_policy == TU_DMA_CONFIG_BIND_LEAST_BYTES ?
+                                 "least_bytes" : "explicit"));
+    fprintf(out, "| `dma_channel_binding` | %s | enum | Descriptor queue binding: explicit, round_robin, least_outstanding, or least_bytes |\n",
             binding_name);
     fprintf(out, "| `dma_max_outstanding` | %u | uint32 | Max outstanding descriptors |\n",
             cfg->dma_max_outstanding);

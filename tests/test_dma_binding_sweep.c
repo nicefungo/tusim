@@ -11,6 +11,7 @@ static uint8_t src[N][12288];
 static const char *name(int p) {
     if (p == TU_DMA_BIND_ROUND_ROBIN) return "round_robin";
     if (p == TU_DMA_BIND_LEAST_OUTSTANDING) return "least_outstanding";
+    if (p == TU_DMA_BIND_LEAST_BYTES) return "least_bytes";
     return "explicit";
 }
 
@@ -75,11 +76,16 @@ static int run_case(int policy, uint8_t assigned[N], uint64_t done[N],
         const uint64_t t[N] = {435,179,179,613,486,486};
         if (memcmp(assigned, a, N) != 0 || memcmp(done, t, sizeof(t)) != 0)
             return -6;
-    } else {
+    } else if (policy == TU_DMA_BIND_LEAST_OUTSTANDING) {
         const uint8_t a[N] = {0,1,2,1,2,0};
         const uint64_t t[N] = {435,179,179,486,486,613};
         if (memcmp(assigned, a, N) != 0 || memcmp(done, t, sizeof(t)) != 0)
             return -7;
+    } else {
+        const uint8_t a[N] = {0,1,2,1,2,1};
+        const uint64_t t[N] = {435,179,179,486,486,664};
+        if (memcmp(assigned, a, N) != 0 || memcmp(done, t, sizeof(t)) != 0)
+            return -8;
     }
 
     tu_dma_destroy();
@@ -112,10 +118,10 @@ static int rejection_gates(void) {
 
 int main(void) {
     const int policies[] = {TU_DMA_BIND_EXPLICIT, TU_DMA_BIND_ROUND_ROBIN,
-                            TU_DMA_BIND_LEAST_OUTSTANDING};
+                            TU_DMA_BIND_LEAST_OUTSTANDING, TU_DMA_BIND_LEAST_BYTES};
     printf("DMA channel binding sweep (all descriptors request channel 0)\n");
     printf("policy assignments completion_cycles batch\n");
-    for (uint32_t p = 0; p < 3; p++) {
+    for (uint32_t p = 0; p < 4; p++) {
         uint8_t a[N] = {0}; uint64_t d[N] = {0}, batch = 0;
         int rc = run_case(policies[p], a, d, &batch);
         if (rc != 0) { fprintf(stderr, "FAIL %s rc=%d\n", name(policies[p]), rc); return 10-rc; }

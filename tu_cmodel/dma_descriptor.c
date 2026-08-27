@@ -45,7 +45,8 @@ void tu_dma_init_config_full(bool async, uint32_t num_channels,
     g_tu_dma.arb_policy = (tu_dma_arb_policy_t)arb_policy;
     if (binding_policy != TU_DMA_BIND_EXPLICIT &&
         binding_policy != TU_DMA_BIND_ROUND_ROBIN &&
-        binding_policy != TU_DMA_BIND_LEAST_OUTSTANDING) {
+        binding_policy != TU_DMA_BIND_LEAST_OUTSTANDING &&
+        binding_policy != TU_DMA_BIND_LEAST_BYTES) {
         fprintf(stderr, "DMA: unsupported binding policy %d\n", binding_policy);
         return;
     }
@@ -621,6 +622,13 @@ accounting:
  * Submission & Async Execution
  * ================================================================ */
 
+static uint64_t channel_assigned_bytes(const tu_dma_channel_state_t *ch) {
+    uint64_t bytes = ch->active ? ch->active->total_bytes : 0;
+    for (const tu_dma_descriptor_t *d = ch->head; d; d = d->next)
+        bytes += d->total_bytes;
+    return bytes;
+}
+
 uint32_t tu_dma_submit_desc(tu_dma_descriptor_t *desc) {
     if (!desc) return 0;
 
@@ -638,6 +646,18 @@ uint32_t tu_dma_submit_desc(tu_dma_descriptor_t *desc) {
                              (candidate->active ? 1u : 0u);
             if (count < best_count) {
                 best_count = count;
+                ch_id = i;
+            }
+        }
+    } else if (g_tu_dma.binding_policy == TU_DMA_BIND_LEAST_BYTES &&
+               g_tu_dma.num_channels > 0) {
+        uint64_t best_bytes = UINT64_MAX;
+        for (uint32_t probe = 0; probe < g_tu_dma.num_channels; probe++) {
+            uint32_t i = (g_tu_dma.next_binding_channel + probe) %
+                         g_tu_dma.num_channels;
+            uint64_t bytes = channel_assigned_bytes(&g_tu_dma.channels[i]);
+            if (bytes < best_bytes) {
+                best_bytes = bytes;
                 ch_id = i;
             }
         }

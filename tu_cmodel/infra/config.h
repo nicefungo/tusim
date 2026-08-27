@@ -108,7 +108,8 @@ typedef enum {
 typedef enum {
     TU_DMA_CONFIG_BIND_EXPLICIT = 0,
     TU_DMA_CONFIG_BIND_ROUND_ROBIN = 1,
-    TU_DMA_CONFIG_BIND_LEAST_OUTSTANDING = 2
+    TU_DMA_CONFIG_BIND_LEAST_OUTSTANDING = 2,
+    TU_DMA_CONFIG_BIND_LEAST_BYTES = 3
 } tu_dma_config_binding_policy_t;
 
 /* ================================================================
@@ -195,7 +196,7 @@ typedef struct tu_config_t {
     uint32_t dma_num_channels;
     int      dma_bus_mode;          /* independent=0, shared_serial=1 */
     int      dma_arb_policy;        /* round_robin=0, strict_priority=1 */
-    int      dma_binding_policy;    /* explicit=0, round_robin=1, least_outstanding=2 */
+    int      dma_binding_policy;    /* explicit=0, round_robin=1, least_outstanding=2, least_bytes=3 */
     uint32_t dma_max_outstanding;
     bool     dma_async_mode;
     bool     dma_multicast_enabled;  /* DM4: multicast/broadcast DMA */
