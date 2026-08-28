@@ -283,7 +283,9 @@ def generate_header(config, output_path):
     L('#define TU_DMA_BIND_DEFAULT_ROUND_ROBIN 1')
     L('#define TU_DMA_BIND_DEFAULT_LEAST_OUTSTANDING 2')
     L('#define TU_DMA_BIND_DEFAULT_LEAST_BYTES 3')
-    bind_map = {'explicit': 0, 'round_robin': 1, 'least_outstanding': 2, 'least_bytes': 3}
+    L('#define TU_DMA_BIND_DEFAULT_LEAST_PROJECTED_CYCLES 4')
+    bind_map = {'explicit': 0, 'round_robin': 1, 'least_outstanding': 2,
+                'least_bytes': 3, 'least_projected_cycles': 4}
     L(f'#define TU_DMA_BIND_POLICY      {bind_map[dma.get("channel_binding", "explicit")]}')
     L(f'#define TU_DMA_MAX_OUTSTANDING  {dma["max_outstanding"]}')
     L(f'#define TU_DMA_ASYNC_MODE       {1 if dma["async_mode"] else 0}')

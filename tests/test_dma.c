@@ -577,7 +577,7 @@ static void test_dma_shared_arbitration(void) {
 }
 
 static void test_dma_channel_binding(void) {
-    TEST("Explicit / round-robin / least-outstanding / least-bytes binding");
+    TEST("Explicit / RR / least-outstanding / bytes / projected-cycles binding");
     tu_sram_region_t sram;
     static uint8_t src[3][16];
     tu_dma_descriptor_t *d[3] = {0};
@@ -606,6 +606,16 @@ static void test_dma_channel_binding(void) {
 
     tu_dma_init_config_full(true, 3, 4, TU_DMA_BUS_MODE_INDEPENDENT,
                             TU_DMA_ARB_ROUND_ROBIN, TU_DMA_BIND_LEAST_BYTES);
+    d[0] = tu_dma_desc_create_linear(2, TU_DMA_DIR_HOST_TO_TU,
+                                     &sram, 0, src[0], 1, 16);
+    ok = ok && d[0] && tu_dma_submit_desc(d[0]) > 0 && d[0]->channel == 0;
+    tu_dma_flush_all();
+    tu_dma_destroy();
+    d[0]->next = NULL; tu_dma_desc_destroy(d[0]);
+
+    tu_dma_init_config_full(true, 3, 4, TU_DMA_BUS_MODE_INDEPENDENT,
+                            TU_DMA_ARB_ROUND_ROBIN,
+                            TU_DMA_BIND_LEAST_PROJECTED_CYCLES);
     d[0] = tu_dma_desc_create_linear(2, TU_DMA_DIR_HOST_TO_TU,
                                      &sram, 0, src[0], 1, 16);
     ok = ok && d[0] && tu_dma_submit_desc(d[0]) > 0 && d[0]->channel == 0;

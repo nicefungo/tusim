@@ -58,7 +58,8 @@ typedef enum {
     TU_DMA_BIND_EXPLICIT = 0,
     TU_DMA_BIND_ROUND_ROBIN = 1,
     TU_DMA_BIND_LEAST_OUTSTANDING = 2,
-    TU_DMA_BIND_LEAST_BYTES = 3
+    TU_DMA_BIND_LEAST_BYTES = 3,
+    TU_DMA_BIND_LEAST_PROJECTED_CYCLES = 4
 } tu_dma_binding_policy_t;
 
 /* ---- Transfer direction ---- */

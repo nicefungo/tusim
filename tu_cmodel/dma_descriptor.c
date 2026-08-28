@@ -46,7 +46,8 @@ void tu_dma_init_config_full(bool async, uint32_t num_channels,
     if (binding_policy != TU_DMA_BIND_EXPLICIT &&
         binding_policy != TU_DMA_BIND_ROUND_ROBIN &&
         binding_policy != TU_DMA_BIND_LEAST_OUTSTANDING &&
-        binding_policy != TU_DMA_BIND_LEAST_BYTES) {
+        binding_policy != TU_DMA_BIND_LEAST_BYTES &&
+        binding_policy != TU_DMA_BIND_LEAST_PROJECTED_CYCLES) {
         fprintf(stderr, "DMA: unsupported binding policy %d\n", binding_policy);
         return;
     }
@@ -629,6 +630,25 @@ static uint64_t channel_assigned_bytes(const tu_dma_channel_state_t *ch) {
     return bytes;
 }
 
+/* Side-effect-free queue estimate in the descriptor engine's coarse service
+ * domain. The live active descriptor uses its exact scheduled completion;
+ * queued work uses base latency plus payload serialization. SRAM refill
+ * penalties are stateful and intentionally excluded rather than guessed. */
+static uint64_t descriptor_coarse_cycles(const tu_dma_descriptor_t *desc) {
+    return TU_LATENCY_DRAM_READ +
+           (desc->total_bytes + TU_DMA_BUS_WIDTH_BYTES - 1u) /
+           TU_DMA_BUS_WIDTH_BYTES;
+}
+
+static uint64_t channel_projected_cycles(const tu_dma_channel_state_t *ch) {
+    uint64_t cycles = 0;
+    if (ch->active && ch->active->cycles_completed > g_tu_dma.current_cycle)
+        cycles = ch->active->cycles_completed - g_tu_dma.current_cycle;
+    for (const tu_dma_descriptor_t *d = ch->head; d; d = d->next)
+        cycles += descriptor_coarse_cycles(d);
+    return cycles;
+}
+
 uint32_t tu_dma_submit_desc(tu_dma_descriptor_t *desc) {
     if (!desc) return 0;
 
@@ -658,6 +678,18 @@ uint32_t tu_dma_submit_desc(tu_dma_descriptor_t *desc) {
             uint64_t bytes = channel_assigned_bytes(&g_tu_dma.channels[i]);
             if (bytes < best_bytes) {
                 best_bytes = bytes;
+                ch_id = i;
+            }
+        }
+    } else if (g_tu_dma.binding_policy == TU_DMA_BIND_LEAST_PROJECTED_CYCLES &&
+               g_tu_dma.num_channels > 0) {
+        uint64_t best_cycles = UINT64_MAX;
+        for (uint32_t probe = 0; probe < g_tu_dma.num_channels; probe++) {
+            uint32_t i = (g_tu_dma.next_binding_channel + probe) %
+                         g_tu_dma.num_channels;
+            uint64_t cycles = channel_projected_cycles(&g_tu_dma.channels[i]);
+            if (cycles < best_cycles) {
+                best_cycles = cycles;
                 ch_id = i;
             }
         }

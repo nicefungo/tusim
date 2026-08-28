@@ -206,7 +206,7 @@ int main(void) {
             "    \"channels\": 2,"
             "    \"bus_topology\": \"shared_serial\","
             "    \"arbitration\": \"strict_priority\","
-            "    \"channel_binding\": \"least_bytes\","
+            "    \"channel_binding\": \"least_projected_cycles\","
             "    \"max_outstanding\": 7,"
             "    \"async_mode\": true"
             "  }"
@@ -230,7 +230,7 @@ int main(void) {
               "DMA bus topology parse");
         CHECK(cfg.dma_arb_policy == TU_DMA_CONFIG_ARB_STRICT_PRIORITY,
               "DMA arbitration parse");
-        CHECK(cfg.dma_binding_policy == TU_DMA_CONFIG_BIND_LEAST_BYTES,
+        CHECK(cfg.dma_binding_policy == TU_DMA_CONFIG_BIND_LEAST_PROJECTED_CYCLES,
               "DMA binding parse");
         CHECK(cfg.dma_max_outstanding == 7, "DMA outstanding parse");
         CHECK(cfg.dma_async_mode, "async");
@@ -239,7 +239,7 @@ int main(void) {
               "DMA bus topology runtime propagation");
         CHECK(rt.dma_arb_policy == TU_DMA_CONFIG_ARB_STRICT_PRIORITY,
               "DMA arbitration runtime propagation");
-        CHECK(rt.dma_binding_policy == TU_DMA_CONFIG_BIND_LEAST_BYTES,
+        CHECK(rt.dma_binding_policy == TU_DMA_CONFIG_BIND_LEAST_PROJECTED_CYCLES,
               "DMA binding runtime propagation");
         CHECK(rt.dma_max_outstanding == 7, "DMA outstanding runtime propagation");
         CHECK(rt.dma_async_mode, "DMA async runtime propagation");
@@ -516,8 +516,8 @@ int main(void) {
         cfg.dma_arb_policy = 2;
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0, "should reject arbitration=2");
         cfg.dma_arb_policy = TU_DMA_CONFIG_ARB_ROUND_ROBIN;
-        cfg.dma_binding_policy = 4;
-        CHECK(tu_config_validate(&cfg, NULL, 0) != 0, "should reject binding=4");
+        cfg.dma_binding_policy = 5;
+        CHECK(tu_config_validate(&cfg, NULL, 0) != 0, "should reject binding=5");
         cfg.dma_binding_policy = TU_DMA_CONFIG_BIND_EXPLICIT;
         char err[128] = {0};
         CHECK(tu_config_load_string(
@@ -643,7 +643,7 @@ int main(void) {
         cfg.dma_num_channels = 2;
         cfg.dma_bus_mode = TU_DMA_CONFIG_BUS_SHARED_SERIAL;
         cfg.dma_arb_policy = TU_DMA_CONFIG_ARB_STRICT_PRIORITY;
-        cfg.dma_binding_policy = TU_DMA_CONFIG_BIND_LEAST_BYTES;
+        cfg.dma_binding_policy = TU_DMA_CONFIG_BIND_LEAST_PROJECTED_CYCLES;
         cfg.dma_max_outstanding = 7;
         cfg.dma_async_mode = false;
 
@@ -661,7 +661,7 @@ int main(void) {
               "active DMA bus topology");
         CHECK(g_tu_dma.arb_policy == TU_DMA_ARB_STRICT_PRIORITY,
               "active DMA arbitration");
-        CHECK(g_tu_dma.binding_policy == TU_DMA_BIND_LEAST_BYTES,
+        CHECK(g_tu_dma.binding_policy == TU_DMA_BIND_LEAST_PROJECTED_CYCLES,
               "active DMA channel binding");
         CHECK(g_tu_dma.channels[0].max_depth == 7 &&
               g_tu_dma.channels[1].max_depth == 7,

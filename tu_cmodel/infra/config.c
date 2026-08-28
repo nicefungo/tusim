@@ -169,6 +169,8 @@ static int parse_dma_binding_policy_str(const char *s) {
         return TU_DMA_CONFIG_BIND_LEAST_OUTSTANDING;
     if (strcmp(s, "least_bytes") == 0)
         return TU_DMA_CONFIG_BIND_LEAST_BYTES;
+    if (strcmp(s, "least_projected_cycles") == 0)
+        return TU_DMA_CONFIG_BIND_LEAST_PROJECTED_CYCLES;
     return -1;
 }
 
@@ -876,10 +878,10 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
         return -1;
     }
     if (cfg->dma_binding_policy < TU_DMA_CONFIG_BIND_EXPLICIT ||
-        cfg->dma_binding_policy > TU_DMA_CONFIG_BIND_LEAST_BYTES) {
+        cfg->dma_binding_policy > TU_DMA_CONFIG_BIND_LEAST_PROJECTED_CYCLES) {
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
-                     "DMA channel_binding must be explicit, round_robin, least_outstanding, or least_bytes");
+                     "DMA channel_binding must be explicit, round_robin, least_outstanding, least_bytes, or least_projected_cycles");
         return -1;
     }
     if (cfg->isa_queue_depth == 0) {
@@ -1347,8 +1349,10 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
                                (cfg->dma_binding_policy == TU_DMA_CONFIG_BIND_LEAST_OUTSTANDING ?
                                 "least_outstanding" :
                                 (cfg->dma_binding_policy == TU_DMA_CONFIG_BIND_LEAST_BYTES ?
-                                 "least_bytes" : "explicit"));
-    fprintf(out, "| `dma_channel_binding` | %s | enum | Descriptor queue binding: explicit, round_robin, least_outstanding, or least_bytes |\n",
+                                 "least_bytes" :
+                                 (cfg->dma_binding_policy == TU_DMA_CONFIG_BIND_LEAST_PROJECTED_CYCLES ?
+                                  "least_projected_cycles" : "explicit")));
+    fprintf(out, "| `dma_channel_binding` | %s | enum | Descriptor queue binding: explicit, round_robin, least_outstanding, least_bytes, or least_projected_cycles |\n",
             binding_name);
     fprintf(out, "| `dma_max_outstanding` | %u | uint32 | Max outstanding descriptors |\n",
             cfg->dma_max_outstanding);
