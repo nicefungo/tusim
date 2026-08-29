@@ -625,11 +625,13 @@ int main(void) {
         tu_config_default(&cfg);
         cfg.pe_rows = 32; cfg.pe_cols = 64;
         cfg.sram_w_size_kb = 256;
+        cfg.dma_bus_width_bits = 512;
 
         tu_runtime_config_t rt = tu_config_to_runtime(&cfg);
         CHECK(rt.pe_rows == 32, "rt_rows");
         CHECK(rt.pe_cols == 64, "rt_cols");
         CHECK(rt.sram_w_size == 256 * 1024, "rt_w_size");
+        CHECK(rt.dma_bus_width_bits == 512, "rt_dma_bus_width");
         PASS();
     }
 
@@ -640,6 +642,7 @@ int main(void) {
         cfg.pe_rows = 8; cfg.pe_cols = 8;
         cfg.pe_pipeline_depth = 4;
         cfg.dataflow_mode = TU_DATAFLOW_OUTPUT_STATIONARY;
+        cfg.dma_bus_width_bits = 512;
         cfg.dma_num_channels = 2;
         cfg.dma_bus_mode = TU_DMA_CONFIG_BUS_SHARED_SERIAL;
         cfg.dma_arb_policy = TU_DMA_CONFIG_ARB_STRICT_PRIORITY;
@@ -657,6 +660,7 @@ int main(void) {
         CHECK(strcmp(tu_get_dataflow_name(), "output_stationary") == 0,
               "active config dataflow");
         CHECK(g_tu_dma.num_channels == 2, "active DMA channels");
+        CHECK(g_tu_dma.bus_width_bytes == 64, "active DMA bus width");
         CHECK(g_tu_dma.bus_mode == TU_DMA_BUS_MODE_SHARED_SERIAL,
               "active DMA bus topology");
         CHECK(g_tu_dma.arb_policy == TU_DMA_ARB_STRICT_PRIORITY,

@@ -392,6 +392,7 @@ tu_runtime_config_t tu_config_to_runtime(const struct tu_config_t *cfg) {
     rt.sram_words_per_cycle = (uint8_t)cfg->sram_words_per_cycle;
     rt.sram_stall_penalty = cfg->sram_stall_penalty;
     rt.sram_bw_window_cycles = cfg->sram_bw_window_cycles;
+    rt.dma_bus_width_bits = cfg->dma_bus_width_bits;
     rt.dma_num_channels = cfg->dma_num_channels;
     rt.dma_bus_mode = cfg->dma_bus_mode;
     rt.dma_arb_policy = cfg->dma_arb_policy;

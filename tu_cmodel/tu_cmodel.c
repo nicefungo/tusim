@@ -97,12 +97,13 @@ void tu_init_with_config(const tu_runtime_config_t *cfg) {
                          cfg->sram_bw_window_cycles);
 
     /* Initialize DMA engine from the executable runtime configuration. */
-    tu_dma_init_config_full(cfg->dma_async_mode,
+    tu_dma_init_config_arch(cfg->dma_async_mode,
                             cfg->dma_num_channels,
                             cfg->dma_max_outstanding,
                             cfg->dma_bus_mode,
                             cfg->dma_arb_policy,
-                            cfg->dma_binding_policy);
+                            cfg->dma_binding_policy,
+                            cfg->dma_bus_width_bits);
 
     /* Initialize command queue */
     g_tu.cmdq = tu_cmdq_create(TU_ISA_QUEUE_DEPTH, TU_CYCLE_MODEL == TU_CYCLE_MODEL_FUNCTIONAL);
@@ -199,7 +200,8 @@ void tu_dma_load_o(const void *host_ptr, uint32_t tu_offset, uint32_t size_bytes
     check_sram_bounds(&g_tu.sram_o, tu_offset, size_bytes);
     tu_sram_write_bulk(&g_tu.sram_o, tu_offset, host_ptr, size_bytes);
     g_tu.total_dma_bytes += size_bytes;
-    g_tu.estimated_cycles += (size_bytes + TU_DMA_BUS_WIDTH_BYTES - 1) / TU_DMA_BUS_WIDTH_BYTES;
+    g_tu.estimated_cycles += (size_bytes + g_tu_dma.bus_width_bytes - 1u) /
+                             g_tu_dma.bus_width_bytes;
 }
 
 /* ---- MMA (parameterized systolic array) ---- */

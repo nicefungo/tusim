@@ -26,9 +26,10 @@ tu_dma_engine_t g_tu_dma = {0};
  * Lifecycle
  * ================================================================ */
 
-void tu_dma_init_config_full(bool async, uint32_t num_channels,
+void tu_dma_init_config_arch(bool async, uint32_t num_channels,
                              uint32_t max_queue_depth, int bus_mode,
-                             int arb_policy, int binding_policy) {
+                             int arb_policy, int binding_policy,
+                             uint32_t bus_width_bits) {
     memset(&g_tu_dma, 0, sizeof(g_tu_dma));
     g_tu_dma.async_mode = async;
     if (bus_mode != TU_DMA_BUS_MODE_INDEPENDENT &&
@@ -52,6 +53,15 @@ void tu_dma_init_config_full(bool async, uint32_t num_channels,
         return;
     }
     g_tu_dma.binding_policy = (tu_dma_binding_policy_t)binding_policy;
+    if (bus_width_bits == 0)
+        bus_width_bits = TU_DMA_BUS_WIDTH_BITS; /* zero-initialized runtime compatibility */
+    if (bus_width_bits < 32 || bus_width_bits > 1024 ||
+        (bus_width_bits & (bus_width_bits - 1u)) != 0) {
+        fprintf(stderr, "DMA: bus width must be a power of two in [32,1024], got %u\n",
+                bus_width_bits);
+        return;
+    }
+    g_tu_dma.bus_width_bytes = bus_width_bits / 8u;
     g_tu_dma.num_channels = num_channels > 0 ? num_channels : TU_DMA_CHANNELS;
     if (g_tu_dma.num_channels > TU_DMA_ENGINE_MAX_CHANNELS) {
         fprintf(stderr, "DMA: channel count %u exceeds model capacity %u\n",
@@ -64,6 +74,13 @@ void tu_dma_init_config_full(bool async, uint32_t num_channels,
         g_tu_dma.channels[i].channel_id = (uint8_t)i;
         g_tu_dma.channels[i].max_depth = max_queue_depth > 0 ? max_queue_depth : TU_DMA_MAX_OUTSTANDING;
     }
+}
+
+void tu_dma_init_config_full(bool async, uint32_t num_channels,
+                             uint32_t max_queue_depth, int bus_mode,
+                             int arb_policy, int binding_policy) {
+    tu_dma_init_config_arch(async, num_channels, max_queue_depth, bus_mode,
+                            arb_policy, binding_policy, TU_DMA_BUS_WIDTH_BITS);
 }
 
 void tu_dma_init_config_policy(bool async, uint32_t num_channels,
@@ -578,7 +595,8 @@ void tu_dma_execute_desc(tu_dma_descriptor_t *desc) {
 accounting:
     /* For multicast, account fanout cost: N× the per-destination transfer */
     uint64_t transfer_cycles = TU_LATENCY_DRAM_READ;  /* base latency */
-    transfer_cycles += (desc->total_bytes + TU_DMA_BUS_WIDTH_BYTES - 1) / TU_DMA_BUS_WIDTH_BYTES;
+    transfer_cycles += (desc->total_bytes + g_tu_dma.bus_width_bytes - 1u) /
+                       g_tu_dma.bus_width_bytes;
 
     /* M2: Account for SRAM bandwidth stalls */
     uint64_t sram_stall_cycles = 0;
@@ -636,8 +654,8 @@ static uint64_t channel_assigned_bytes(const tu_dma_channel_state_t *ch) {
  * penalties are stateful and intentionally excluded rather than guessed. */
 static uint64_t descriptor_coarse_cycles(const tu_dma_descriptor_t *desc) {
     return TU_LATENCY_DRAM_READ +
-           (desc->total_bytes + TU_DMA_BUS_WIDTH_BYTES - 1u) /
-           TU_DMA_BUS_WIDTH_BYTES;
+           (desc->total_bytes + g_tu_dma.bus_width_bytes - 1u) /
+           g_tu_dma.bus_width_bytes;
 }
 
 static uint64_t channel_projected_cycles(const tu_dma_channel_state_t *ch) {
@@ -851,7 +869,8 @@ void tu_dma_load(tu_dma_channel_t ch, tu_sram_region_t *dst,
     g_tu_dma.total_bytes += bytes;
     g_tu_dma.total_transfers++;
     g_tu_dma.estimated_cycles += TU_LATENCY_DRAM_READ;
-    g_tu_dma.estimated_cycles += (bytes + TU_DMA_BUS_WIDTH_BYTES - 1) / TU_DMA_BUS_WIDTH_BYTES;
+    g_tu_dma.estimated_cycles += (bytes + g_tu_dma.bus_width_bytes - 1u) /
+                                 g_tu_dma.bus_width_bytes;
 }
 
 void tu_dma_store(tu_dma_channel_t ch, tu_sram_region_t *src,
@@ -868,7 +887,8 @@ void tu_dma_store(tu_dma_channel_t ch, tu_sram_region_t *src,
     g_tu_dma.total_bytes += bytes;
     g_tu_dma.total_transfers++;
     g_tu_dma.estimated_cycles += TU_LATENCY_DRAM_WRITE;
-    g_tu_dma.estimated_cycles += (bytes + TU_DMA_BUS_WIDTH_BYTES - 1) / TU_DMA_BUS_WIDTH_BYTES;
+    g_tu_dma.estimated_cycles += (bytes + g_tu_dma.bus_width_bytes - 1u) /
+                                 g_tu_dma.bus_width_bytes;
 }
 
 void tu_dma_sync(void) {

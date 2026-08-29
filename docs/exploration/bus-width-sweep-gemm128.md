@@ -94,6 +94,10 @@ Architecturally, this means the PE array should not be scaled beyond 16×16 unle
 - If targeting 64×64: would need ~1024-bit bus (extrapolating: 64 rows × 16 bits/row = 1024-bit)
 - The 16 bits/PE-row rule of thumb is derived from: at 256-bit / 16 PE-rows = 16 bits/row, util=72.6%; at 512-bit / 32 PE-rows = 16 bits/row, util=57.0% (close enough for a first-order estimate)
 
+## Runtime implementation follow-up (2026-08-29)
+
+The original table below is an analytical GEMM study and must not be treated as proof that JSON runtime width reached live DMA service. `dma-runtime-bus-width.md` re-audits that path and finds the canonical field was dropped before `tu_runtime_config_t`; the descriptor engine always used the compiled 256-bit macro. The follow-up wires the runtime width into live descriptor and queued-service accounting and gates 128/256/512-bit 4 KiB transfers. Compute-engine estimators that still consume compile-time macros remain separate evidence surfaces.
+
 ## Methodology
 
 Analytical cycle model validated against cmodel output (PE array sweep confirmed at 256-bit):

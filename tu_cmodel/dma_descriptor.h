@@ -148,6 +148,7 @@ typedef struct {
     uint32_t                next_shared_channel;
     tu_dma_binding_policy_t binding_policy;
     uint32_t                next_binding_channel;
+    uint32_t                bus_width_bytes;
     bool                    async_mode;
     uint64_t                current_cycle;
     uint64_t                total_bytes;
@@ -167,6 +168,10 @@ void tu_dma_init_config_policy(bool async, uint32_t num_channels,
 void tu_dma_init_config_full(bool async, uint32_t num_channels,
                              uint32_t max_queue_depth, int bus_mode,
                              int arb_policy, int binding_policy);
+void tu_dma_init_config_arch(bool async, uint32_t num_channels,
+                             uint32_t max_queue_depth, int bus_mode,
+                             int arb_policy, int binding_policy,
+                             uint32_t bus_width_bits);
 void tu_dma_init(bool async);
 void tu_dma_destroy(void);
 

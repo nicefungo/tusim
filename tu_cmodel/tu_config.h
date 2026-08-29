@@ -310,6 +310,7 @@ typedef struct {
     uint8_t  sram_words_per_cycle;
     uint8_t  sram_stall_penalty;
     uint64_t sram_bw_window_cycles;
+    uint32_t dma_bus_width_bits;
     uint32_t dma_num_channels;
     int      dma_bus_mode;
     int      dma_arb_policy;
@@ -343,6 +344,7 @@ static inline tu_runtime_config_t tu_runtime_config_default(void) {
         .sram_words_per_cycle = TU_SRAM_WORDS_PER_CYCLE,
         .sram_stall_penalty = TU_SRAM_BW_STALL_PENALTY,
         .sram_bw_window_cycles = TU_SRAM_BW_WINDOW_CYCLES,
+        .dma_bus_width_bits  = TU_DMA_BUS_WIDTH_BITS,
         .dma_num_channels   = TU_DMA_CHANNELS,
         .dma_bus_mode       = TU_DMA_BUS_MODE,
         .dma_arb_policy     = TU_DMA_ARB_POLICY,
