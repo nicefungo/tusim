@@ -12,6 +12,7 @@ test-dma-channel-sweep
 test-dma-arbitration-sweep
 test-dma-binding-sweep
 test-dma-bus-width-sweep
+test-dma-directional-latency-sweep
 test-dram
 test-sram-issue-sweep
 test-dram-row-policy-sweep
