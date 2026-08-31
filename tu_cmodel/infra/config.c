@@ -321,6 +321,7 @@ void tu_config_default(struct tu_config_t *cfg) {
 
     cfg->dma_bus_width_bits  = 256;
     cfg->dma_max_burst_bytes = 64;
+    cfg->dma_burst_issue_cycles = 0;
     cfg->dma_num_channels    = 3;
     cfg->dma_bus_mode        = TU_DMA_CONFIG_BUS_INDEPENDENT;
     cfg->dma_arb_policy      = TU_DMA_CONFIG_ARB_ROUND_ROBIN;
@@ -404,6 +405,8 @@ tu_runtime_config_t tu_config_to_runtime(const struct tu_config_t *cfg) {
          latency_clock : 1.0));
     rt.dma_latency_configured = true;
     rt.dma_bus_width_bits = cfg->dma_bus_width_bits;
+    rt.dma_max_burst_bytes = cfg->dma_max_burst_bytes;
+    rt.dma_burst_issue_cycles = cfg->dma_burst_issue_cycles;
     rt.dma_num_channels = cfg->dma_num_channels;
     rt.dma_bus_mode = cfg->dma_bus_mode;
     rt.dma_arb_policy = cfg->dma_arb_policy;
@@ -607,6 +610,7 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
         int64_t iv;
         if (parse_opt_int64(d, "bus_width_bits", &iv)) cfg->dma_bus_width_bits = (uint32_t)iv;
         if (parse_opt_int64(d, "max_burst_bytes", &iv)) cfg->dma_max_burst_bytes = (uint32_t)iv;
+        if (parse_opt_int64(d, "burst_issue_cycles", &iv)) cfg->dma_burst_issue_cycles = (uint32_t)iv;
         if (parse_opt_int64(d, "channels", &iv)) cfg->dma_num_channels = (uint32_t)iv;
         const tu_json_value_t *bus_mode = tu_json_get(d, "bus_topology");
         if (bus_mode && bus_mode->type == TU_JSON_STRING)
@@ -859,6 +863,21 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
     if (bw < 32 || bw > 1024 || (bw & (bw - 1)) != 0) {
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size, "dma_bus_width must be power of 2 [32,1024], got %u", bw);
+        return -1;
+    }
+    uint32_t burst = cfg->dma_max_burst_bytes;
+    if (burst < 16 || burst > 65536 || (burst & (burst - 1)) != 0) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DMA max_burst_bytes must be power of 2 [16,65536], got %u",
+                     burst);
+        return -1;
+    }
+    if (cfg->dma_burst_issue_cycles > 1024) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DMA burst_issue_cycles must be [0,1024], got %u",
+                     cfg->dma_burst_issue_cycles);
         return -1;
     }
     if (cfg->dma_num_channels < 1 ||
@@ -1350,6 +1369,8 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             cfg->dma_bus_width_bits);
     fprintf(out, "| `dma_max_burst_bytes` | %u | uint32 | Max burst size |\n",
             cfg->dma_max_burst_bytes);
+    fprintf(out, "| `dma_burst_issue_cycles` | %u | uint32 | Per-burst address/control issue cost |\n",
+            cfg->dma_burst_issue_cycles);
     fprintf(out, "| `dma_num_channels` | %u | uint32 | DMA channel count |\n",
             cfg->dma_num_channels);
     fprintf(out, "| `dma_bus_topology` | %s | enum | Channel data paths: independent or shared_serial |\n",

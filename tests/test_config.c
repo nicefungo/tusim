@@ -155,6 +155,8 @@ int main(void) {
         CHECK(cfg.sram_a_size_kb == 64, "a_size");
         CHECK(cfg.sram_o_size_kb == 64, "o_size");
         CHECK(cfg.dma_bus_width_bits == 256, "bus");
+        CHECK(cfg.dma_max_burst_bytes == 64, "DMA burst default");
+        CHECK(cfg.dma_burst_issue_cycles == 0, "DMA burst issue default");
         CHECK(cfg.cycle_model == 2, "cycle");
         CHECK(cfg.counters_enabled, "counters");
         CHECK(cfg.dataflow_mode == 0, "dataflow");
@@ -203,6 +205,8 @@ int main(void) {
             "  },"
             "  \"dma\": {"
             "    \"bus_width_bits\": 512,"
+            "    \"max_burst_bytes\": 128,"
+            "    \"burst_issue_cycles\": 2,"
             "    \"channels\": 2,"
             "    \"bus_topology\": \"shared_serial\","
             "    \"arbitration\": \"strict_priority\","
@@ -225,6 +229,8 @@ int main(void) {
         CHECK(cfg.sram_num_banks == 64, "banks");
         CHECK(cfg.sram_bank_width == 8, "bank_width");
         CHECK(cfg.dma_bus_width_bits == 512, "dma_bus");
+        CHECK(cfg.dma_max_burst_bytes == 128, "DMA max burst parse");
+        CHECK(cfg.dma_burst_issue_cycles == 2, "DMA burst issue parse");
         CHECK(cfg.dma_num_channels == 2, "DMA channels parse");
         CHECK(cfg.dma_bus_mode == TU_DMA_CONFIG_BUS_SHARED_SERIAL,
               "DMA bus topology parse");
@@ -235,6 +241,8 @@ int main(void) {
         CHECK(cfg.dma_max_outstanding == 7, "DMA outstanding parse");
         CHECK(cfg.dma_async_mode, "async");
         CHECK(rt.dma_num_channels == 2, "DMA channels runtime propagation");
+        CHECK(rt.dma_max_burst_bytes == 128, "DMA max burst runtime propagation");
+        CHECK(rt.dma_burst_issue_cycles == 2, "DMA burst issue runtime propagation");
         CHECK(rt.dma_bus_mode == TU_DMA_CONFIG_BUS_SHARED_SERIAL,
               "DMA bus topology runtime propagation");
         CHECK(rt.dma_arb_policy == TU_DMA_CONFIG_ARB_STRICT_PRIORITY,
@@ -507,6 +515,12 @@ int main(void) {
         cfg.dma_num_channels = TU_DMA_ENGINE_MAX_CHANNELS + 1;
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0, "should reject channels above capacity");
         cfg.dma_num_channels = 3;
+        cfg.dma_max_burst_bytes = 96;
+        CHECK(tu_config_validate(&cfg, NULL, 0) != 0, "should reject max_burst=96");
+        cfg.dma_max_burst_bytes = 64;
+        cfg.dma_burst_issue_cycles = 1025;
+        CHECK(tu_config_validate(&cfg, NULL, 0) != 0, "should reject burst issue above 1024");
+        cfg.dma_burst_issue_cycles = 0;
         cfg.dma_max_outstanding = 0;
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0, "should reject max_outstanding=0");
         cfg.dma_max_outstanding = 4;

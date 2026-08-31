@@ -149,6 +149,8 @@ typedef struct {
     tu_dma_binding_policy_t binding_policy;
     uint32_t                next_binding_channel;
     uint32_t                bus_width_bytes;
+    uint32_t                max_burst_bytes;
+    uint32_t                burst_issue_cycles;
     uint32_t                read_latency_cycles;
     uint32_t                write_latency_cycles;
     bool                    async_mode;
@@ -180,6 +182,14 @@ void tu_dma_init_config_timing(bool async, uint32_t num_channels,
                                uint32_t bus_width_bits,
                                uint32_t read_latency_cycles,
                                uint32_t write_latency_cycles);
+void tu_dma_init_config_burst(bool async, uint32_t num_channels,
+                              uint32_t max_queue_depth, int bus_mode,
+                              int arb_policy, int binding_policy,
+                              uint32_t bus_width_bits,
+                              uint32_t read_latency_cycles,
+                              uint32_t write_latency_cycles,
+                              uint32_t max_burst_bytes,
+                              uint32_t burst_issue_cycles);
 void tu_dma_init(bool async);
 void tu_dma_destroy(void);
 

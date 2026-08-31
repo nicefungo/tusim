@@ -194,6 +194,7 @@ typedef struct tu_config_t {
     /* ---- DMA ---- */
     uint32_t dma_bus_width_bits;
     uint32_t dma_max_burst_bytes;
+    uint32_t dma_burst_issue_cycles; /* per-burst address/control issue cost */
     uint32_t dma_num_channels;
     int      dma_bus_mode;          /* independent=0, shared_serial=1 */
     int      dma_arb_policy;        /* round_robin=0, strict_priority=1 */

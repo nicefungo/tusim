@@ -176,6 +176,7 @@ extern "C" {
 #define TU_DMA_BUS_WIDTH_BITS   256
 #define TU_DMA_BUS_WIDTH_BYTES  (TU_DMA_BUS_WIDTH_BITS / 8)
 #define TU_DMA_MAX_BURST_BYTES  64
+#define TU_DMA_BURST_ISSUE_CYCLES 0
 #define TU_DMA_CHANNELS         3
 #define TU_DMA_ENGINE_MAX_CHANNELS 8
 #define TU_DMA_BUS_INDEPENDENT  0
@@ -314,6 +315,8 @@ typedef struct {
     uint32_t dma_write_latency_cycles;
     bool     dma_latency_configured;
     uint32_t dma_bus_width_bits;
+    uint32_t dma_max_burst_bytes;
+    uint32_t dma_burst_issue_cycles;
     uint32_t dma_num_channels;
     int      dma_bus_mode;
     int      dma_arb_policy;
@@ -351,6 +354,8 @@ static inline tu_runtime_config_t tu_runtime_config_default(void) {
         .dma_write_latency_cycles = TU_LATENCY_DRAM_WRITE,
         .dma_latency_configured = true,
         .dma_bus_width_bits  = TU_DMA_BUS_WIDTH_BITS,
+        .dma_max_burst_bytes = TU_DMA_MAX_BURST_BYTES,
+        .dma_burst_issue_cycles = TU_DMA_BURST_ISSUE_CYCLES,
         .dma_num_channels   = TU_DMA_CHANNELS,
         .dma_bus_mode       = TU_DMA_BUS_MODE,
         .dma_arb_policy     = TU_DMA_ARB_POLICY,
