@@ -14,6 +14,7 @@ test-dma-binding-sweep
 test-dma-bus-width-sweep
 test-dma-directional-latency-sweep
 test-dma-burst-issue-sweep
+test-dma-directional-burst-sweep
 test-dram
 test-sram-issue-sweep
 test-dram-row-policy-sweep

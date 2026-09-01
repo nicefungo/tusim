@@ -83,6 +83,8 @@ tu:
   dma:
     bus_width_bits: 256   # AXI bus width
     max_burst_bytes: 64   # Maximum burst size
+    read_max_burst_bytes: 64  # Read/load burst limit; 0 inherits max_burst_bytes
+    write_max_burst_bytes: 64 # Write/store burst limit; 0 inherits max_burst_bytes
     burst_issue_cycles: 0 # Per-burst address/control issue cost; 0 preserves legacy overlap
     channels: 3           # Number of DMA scheduling channels
     bus_topology: "independent"  # independent (compat) | shared_serial

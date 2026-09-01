@@ -156,6 +156,9 @@ int main(void) {
         CHECK(cfg.sram_o_size_kb == 64, "o_size");
         CHECK(cfg.dma_bus_width_bits == 256, "bus");
         CHECK(cfg.dma_max_burst_bytes == 64, "DMA burst default");
+        CHECK(cfg.dma_read_max_burst_bytes == 0 &&
+              cfg.dma_write_max_burst_bytes == 0,
+              "DMA directional burst inheritance defaults");
         CHECK(cfg.dma_burst_issue_cycles == 0, "DMA burst issue default");
         CHECK(cfg.cycle_model == 2, "cycle");
         CHECK(cfg.counters_enabled, "counters");
@@ -206,6 +209,8 @@ int main(void) {
             "  \"dma\": {"
             "    \"bus_width_bits\": 512,"
             "    \"max_burst_bytes\": 128,"
+            "    \"read_max_burst_bytes\": 256,"
+            "    \"write_max_burst_bytes\": 32,"
             "    \"burst_issue_cycles\": 2,"
             "    \"channels\": 2,"
             "    \"bus_topology\": \"shared_serial\","
@@ -230,6 +235,9 @@ int main(void) {
         CHECK(cfg.sram_bank_width == 8, "bank_width");
         CHECK(cfg.dma_bus_width_bits == 512, "dma_bus");
         CHECK(cfg.dma_max_burst_bytes == 128, "DMA max burst parse");
+        CHECK(cfg.dma_read_max_burst_bytes == 256 &&
+              cfg.dma_write_max_burst_bytes == 32,
+              "DMA directional burst parse");
         CHECK(cfg.dma_burst_issue_cycles == 2, "DMA burst issue parse");
         CHECK(cfg.dma_num_channels == 2, "DMA channels parse");
         CHECK(cfg.dma_bus_mode == TU_DMA_CONFIG_BUS_SHARED_SERIAL,
@@ -242,6 +250,9 @@ int main(void) {
         CHECK(cfg.dma_async_mode, "async");
         CHECK(rt.dma_num_channels == 2, "DMA channels runtime propagation");
         CHECK(rt.dma_max_burst_bytes == 128, "DMA max burst runtime propagation");
+        CHECK(rt.dma_read_max_burst_bytes == 256 &&
+              rt.dma_write_max_burst_bytes == 32,
+              "DMA directional burst runtime propagation");
         CHECK(rt.dma_burst_issue_cycles == 2, "DMA burst issue runtime propagation");
         CHECK(rt.dma_bus_mode == TU_DMA_CONFIG_BUS_SHARED_SERIAL,
               "DMA bus topology runtime propagation");
@@ -518,6 +529,14 @@ int main(void) {
         cfg.dma_max_burst_bytes = 96;
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0, "should reject max_burst=96");
         cfg.dma_max_burst_bytes = 64;
+        cfg.dma_read_max_burst_bytes = 96;
+        CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
+              "should reject read_max_burst=96");
+        cfg.dma_read_max_burst_bytes = 0;
+        cfg.dma_write_max_burst_bytes = 96;
+        CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
+              "should reject write_max_burst=96");
+        cfg.dma_write_max_burst_bytes = 0;
         cfg.dma_burst_issue_cycles = 1025;
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0, "should reject burst issue above 1024");
         cfg.dma_burst_issue_cycles = 0;

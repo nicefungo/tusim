@@ -83,6 +83,8 @@
 |-------|-------|------|-------------|
 | `dma_bus_width_bits` | 256 | uint32 | AXI bus width |
 | `dma_max_burst_bytes` | 64 | uint32 | Max burst size |
+| `dma_read_max_burst_bytes` | 0 | uint32 | Read/load burst limit; 0 inherits common maximum |
+| `dma_write_max_burst_bytes` | 0 | uint32 | Write/store burst limit; 0 inherits common maximum |
 | `dma_burst_issue_cycles` | 0 | uint32 | Per-burst address/control issue cost |
 | `dma_num_channels` | 3 | uint32 | DMA channel count |
 | `dma_bus_topology` | independent | enum | Channel data paths: independent or shared_serial |

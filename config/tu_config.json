@@ -73,6 +73,8 @@
     "dma": {
       "bus_width_bits": 256,
       "max_burst_bytes": 64,
+      "read_max_burst_bytes": 64,
+      "write_max_burst_bytes": 64,
       "burst_issue_cycles": 0,
       "channels": 3,
       "bus_topology": "independent",

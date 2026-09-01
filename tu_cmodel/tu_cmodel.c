@@ -97,19 +97,21 @@ void tu_init_with_config(const tu_runtime_config_t *cfg) {
                          cfg->sram_bw_window_cycles);
 
     /* Initialize DMA engine from the executable runtime configuration. */
-    tu_dma_init_config_burst(cfg->dma_async_mode,
-                              cfg->dma_num_channels,
-                              cfg->dma_max_outstanding,
-                              cfg->dma_bus_mode,
-                              cfg->dma_arb_policy,
-                              cfg->dma_binding_policy,
-                              cfg->dma_bus_width_bits,
-                              cfg->dma_latency_configured ?
-                                  cfg->dma_read_latency_cycles : TU_LATENCY_DRAM_READ,
-                              cfg->dma_latency_configured ?
-                                  cfg->dma_write_latency_cycles : TU_LATENCY_DRAM_WRITE,
-                              cfg->dma_max_burst_bytes,
-                              cfg->dma_burst_issue_cycles);
+    tu_dma_init_config_directional_burst(cfg->dma_async_mode,
+                                          cfg->dma_num_channels,
+                                          cfg->dma_max_outstanding,
+                                          cfg->dma_bus_mode,
+                                          cfg->dma_arb_policy,
+                                          cfg->dma_binding_policy,
+                                          cfg->dma_bus_width_bits,
+                                          cfg->dma_latency_configured ?
+                                              cfg->dma_read_latency_cycles : TU_LATENCY_DRAM_READ,
+                                          cfg->dma_latency_configured ?
+                                              cfg->dma_write_latency_cycles : TU_LATENCY_DRAM_WRITE,
+                                          cfg->dma_max_burst_bytes,
+                                          cfg->dma_read_max_burst_bytes,
+                                          cfg->dma_write_max_burst_bytes,
+                                          cfg->dma_burst_issue_cycles);
 
     /* Initialize command queue */
     g_tu.cmdq = tu_cmdq_create(TU_ISA_QUEUE_DEPTH, TU_CYCLE_MODEL == TU_CYCLE_MODEL_FUNCTIONAL);
@@ -209,8 +211,8 @@ void tu_dma_load_o(const void *host_ptr, uint32_t tu_offset, uint32_t size_bytes
     g_tu.estimated_cycles += (size_bytes + g_tu_dma.bus_width_bytes - 1u) /
                              g_tu_dma.bus_width_bytes;
     g_tu.estimated_cycles +=
-        (((uint64_t)size_bytes + g_tu_dma.max_burst_bytes - 1u) /
-         g_tu_dma.max_burst_bytes) * g_tu_dma.burst_issue_cycles;
+        (((uint64_t)size_bytes + g_tu_dma.read_max_burst_bytes - 1u) /
+         g_tu_dma.read_max_burst_bytes) * g_tu_dma.burst_issue_cycles;
 }
 
 /* ---- MMA (parameterized systolic array) ---- */

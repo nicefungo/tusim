@@ -26,14 +26,16 @@ tu_dma_engine_t g_tu_dma = {0};
  * Lifecycle
  * ================================================================ */
 
-void tu_dma_init_config_burst(bool async, uint32_t num_channels,
-                              uint32_t max_queue_depth, int bus_mode,
-                              int arb_policy, int binding_policy,
-                              uint32_t bus_width_bits,
-                              uint32_t read_latency_cycles,
-                              uint32_t write_latency_cycles,
-                              uint32_t max_burst_bytes,
-                              uint32_t burst_issue_cycles) {
+void tu_dma_init_config_directional_burst(bool async, uint32_t num_channels,
+                                          uint32_t max_queue_depth, int bus_mode,
+                                          int arb_policy, int binding_policy,
+                                          uint32_t bus_width_bits,
+                                          uint32_t read_latency_cycles,
+                                          uint32_t write_latency_cycles,
+                                          uint32_t max_burst_bytes,
+                                          uint32_t read_max_burst_bytes,
+                                          uint32_t write_max_burst_bytes,
+                                          uint32_t burst_issue_cycles) {
     memset(&g_tu_dma, 0, sizeof(g_tu_dma));
     g_tu_dma.async_mode = async;
     if (bus_mode != TU_DMA_BUS_MODE_INDEPENDENT &&
@@ -68,15 +70,26 @@ void tu_dma_init_config_burst(bool async, uint32_t num_channels,
     g_tu_dma.bus_width_bytes = bus_width_bits / 8u;
     if (max_burst_bytes == 0)
         max_burst_bytes = TU_DMA_MAX_BURST_BYTES;
+    if (read_max_burst_bytes == 0)
+        read_max_burst_bytes = max_burst_bytes;
+    if (write_max_burst_bytes == 0)
+        write_max_burst_bytes = max_burst_bytes;
     if (max_burst_bytes < 16 || max_burst_bytes > 65536 ||
         (max_burst_bytes & (max_burst_bytes - 1u)) != 0 ||
+        read_max_burst_bytes < 16 || read_max_burst_bytes > 65536 ||
+        (read_max_burst_bytes & (read_max_burst_bytes - 1u)) != 0 ||
+        write_max_burst_bytes < 16 || write_max_burst_bytes > 65536 ||
+        (write_max_burst_bytes & (write_max_burst_bytes - 1u)) != 0 ||
         burst_issue_cycles > 1024) {
-        fprintf(stderr, "DMA: burst bytes must be power of two in [16,65536] and issue cycles in [0,1024], got %u/%u\n",
-                max_burst_bytes, burst_issue_cycles);
+        fprintf(stderr, "DMA: burst bytes must be powers of two in [16,65536] and issue cycles in [0,1024], got %u/%u/%u/%u\n",
+                max_burst_bytes, read_max_burst_bytes,
+                write_max_burst_bytes, burst_issue_cycles);
         memset(&g_tu_dma, 0, sizeof(g_tu_dma));
         return;
     }
     g_tu_dma.max_burst_bytes = max_burst_bytes;
+    g_tu_dma.read_max_burst_bytes = read_max_burst_bytes;
+    g_tu_dma.write_max_burst_bytes = write_max_burst_bytes;
     g_tu_dma.burst_issue_cycles = burst_issue_cycles;
     g_tu_dma.read_latency_cycles = read_latency_cycles;
     g_tu_dma.write_latency_cycles = write_latency_cycles;
@@ -92,6 +105,21 @@ void tu_dma_init_config_burst(bool async, uint32_t num_channels,
         g_tu_dma.channels[i].channel_id = (uint8_t)i;
         g_tu_dma.channels[i].max_depth = max_queue_depth > 0 ? max_queue_depth : TU_DMA_MAX_OUTSTANDING;
     }
+}
+
+void tu_dma_init_config_burst(bool async, uint32_t num_channels,
+                              uint32_t max_queue_depth, int bus_mode,
+                              int arb_policy, int binding_policy,
+                              uint32_t bus_width_bits,
+                              uint32_t read_latency_cycles,
+                              uint32_t write_latency_cycles,
+                              uint32_t max_burst_bytes,
+                              uint32_t burst_issue_cycles) {
+    tu_dma_init_config_directional_burst(async, num_channels, max_queue_depth,
+                                         bus_mode, arb_policy, binding_policy,
+                                         bus_width_bits, read_latency_cycles,
+                                         write_latency_cycles, max_burst_bytes,
+                                         0, 0, burst_issue_cycles);
 }
 
 void tu_dma_init_config_timing(bool async, uint32_t num_channels,
@@ -530,6 +558,11 @@ static void execute_multicast(const tu_dma_descriptor_t *desc)
     }
 }
 
+static uint32_t descriptor_burst_bytes(const tu_dma_descriptor_t *desc) {
+    return desc->direction == TU_DMA_DIR_TU_TO_HOST ?
+           g_tu_dma.write_max_burst_bytes : g_tu_dma.read_max_burst_bytes;
+}
+
 void tu_dma_execute_desc(tu_dma_descriptor_t *desc) {
     if (!desc || desc->completed) return;
 
@@ -638,9 +671,9 @@ accounting:
                                g_tu_dma.read_latency_cycles;
     transfer_cycles += (desc->total_bytes + g_tu_dma.bus_width_bytes - 1u) /
                        g_tu_dma.bus_width_bytes;
-    transfer_cycles += (((uint64_t)desc->total_bytes +
-                         g_tu_dma.max_burst_bytes - 1u) /
-                        g_tu_dma.max_burst_bytes) *
+    uint32_t burst_bytes = descriptor_burst_bytes(desc);
+    transfer_cycles += (((uint64_t)desc->total_bytes + burst_bytes - 1u) /
+                        burst_bytes) *
                        g_tu_dma.burst_issue_cycles;
 
     /* M2: Account for SRAM bandwidth stalls */
@@ -703,9 +736,9 @@ static uint64_t descriptor_coarse_cycles(const tu_dma_descriptor_t *desc) {
                     g_tu_dma.read_latency_cycles;
     uint64_t payload = (desc->total_bytes + g_tu_dma.bus_width_bytes - 1u) /
                        g_tu_dma.bus_width_bytes;
-    uint64_t bursts = ((uint64_t)desc->total_bytes +
-                       g_tu_dma.max_burst_bytes - 1u) /
-                      g_tu_dma.max_burst_bytes;
+    uint32_t burst_bytes = descriptor_burst_bytes(desc);
+    uint64_t bursts = ((uint64_t)desc->total_bytes + burst_bytes - 1u) /
+                      burst_bytes;
     return base + payload + bursts * g_tu_dma.burst_issue_cycles;
 }
 
@@ -923,8 +956,8 @@ void tu_dma_load(tu_dma_channel_t ch, tu_sram_region_t *dst,
     g_tu_dma.estimated_cycles += (bytes + g_tu_dma.bus_width_bytes - 1u) /
                                  g_tu_dma.bus_width_bytes;
     g_tu_dma.estimated_cycles +=
-        (((uint64_t)bytes + g_tu_dma.max_burst_bytes - 1u) /
-         g_tu_dma.max_burst_bytes) *
+        (((uint64_t)bytes + g_tu_dma.read_max_burst_bytes - 1u) /
+         g_tu_dma.read_max_burst_bytes) *
         g_tu_dma.burst_issue_cycles;
 }
 
@@ -945,8 +978,8 @@ void tu_dma_store(tu_dma_channel_t ch, tu_sram_region_t *src,
     g_tu_dma.estimated_cycles += (bytes + g_tu_dma.bus_width_bytes - 1u) /
                                  g_tu_dma.bus_width_bytes;
     g_tu_dma.estimated_cycles +=
-        (((uint64_t)bytes + g_tu_dma.max_burst_bytes - 1u) /
-         g_tu_dma.max_burst_bytes) *
+        (((uint64_t)bytes + g_tu_dma.write_max_burst_bytes - 1u) /
+         g_tu_dma.write_max_burst_bytes) *
         g_tu_dma.burst_issue_cycles;
 }
 

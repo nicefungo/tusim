@@ -321,6 +321,8 @@ void tu_config_default(struct tu_config_t *cfg) {
 
     cfg->dma_bus_width_bits  = 256;
     cfg->dma_max_burst_bytes = 64;
+    cfg->dma_read_max_burst_bytes = 0;
+    cfg->dma_write_max_burst_bytes = 0;
     cfg->dma_burst_issue_cycles = 0;
     cfg->dma_num_channels    = 3;
     cfg->dma_bus_mode        = TU_DMA_CONFIG_BUS_INDEPENDENT;
@@ -406,6 +408,8 @@ tu_runtime_config_t tu_config_to_runtime(const struct tu_config_t *cfg) {
     rt.dma_latency_configured = true;
     rt.dma_bus_width_bits = cfg->dma_bus_width_bits;
     rt.dma_max_burst_bytes = cfg->dma_max_burst_bytes;
+    rt.dma_read_max_burst_bytes = cfg->dma_read_max_burst_bytes;
+    rt.dma_write_max_burst_bytes = cfg->dma_write_max_burst_bytes;
     rt.dma_burst_issue_cycles = cfg->dma_burst_issue_cycles;
     rt.dma_num_channels = cfg->dma_num_channels;
     rt.dma_bus_mode = cfg->dma_bus_mode;
@@ -610,6 +614,8 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
         int64_t iv;
         if (parse_opt_int64(d, "bus_width_bits", &iv)) cfg->dma_bus_width_bits = (uint32_t)iv;
         if (parse_opt_int64(d, "max_burst_bytes", &iv)) cfg->dma_max_burst_bytes = (uint32_t)iv;
+        if (parse_opt_int64(d, "read_max_burst_bytes", &iv)) cfg->dma_read_max_burst_bytes = (uint32_t)iv;
+        if (parse_opt_int64(d, "write_max_burst_bytes", &iv)) cfg->dma_write_max_burst_bytes = (uint32_t)iv;
         if (parse_opt_int64(d, "burst_issue_cycles", &iv)) cfg->dma_burst_issue_cycles = (uint32_t)iv;
         if (parse_opt_int64(d, "channels", &iv)) cfg->dma_num_channels = (uint32_t)iv;
         const tu_json_value_t *bus_mode = tu_json_get(d, "bus_topology");
@@ -871,6 +877,18 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
             snprintf(error_buf, error_size,
                      "DMA max_burst_bytes must be power of 2 [16,65536], got %u",
                      burst);
+        return -1;
+    }
+    uint32_t read_burst = cfg->dma_read_max_burst_bytes;
+    uint32_t write_burst = cfg->dma_write_max_burst_bytes;
+    if ((read_burst != 0 && (read_burst < 16 || read_burst > 65536 ||
+                            (read_burst & (read_burst - 1)) != 0)) ||
+        (write_burst != 0 && (write_burst < 16 || write_burst > 65536 ||
+                             (write_burst & (write_burst - 1)) != 0))) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DMA directional burst bytes must be zero or powers of 2 [16,65536], got %u/%u",
+                     read_burst, write_burst);
         return -1;
     }
     if (cfg->dma_burst_issue_cycles > 1024) {
@@ -1369,6 +1387,10 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             cfg->dma_bus_width_bits);
     fprintf(out, "| `dma_max_burst_bytes` | %u | uint32 | Max burst size |\n",
             cfg->dma_max_burst_bytes);
+    fprintf(out, "| `dma_read_max_burst_bytes` | %u | uint32 | Read/load burst limit; 0 inherits common maximum |\n",
+            cfg->dma_read_max_burst_bytes);
+    fprintf(out, "| `dma_write_max_burst_bytes` | %u | uint32 | Write/store burst limit; 0 inherits common maximum |\n",
+            cfg->dma_write_max_burst_bytes);
     fprintf(out, "| `dma_burst_issue_cycles` | %u | uint32 | Per-burst address/control issue cost |\n",
             cfg->dma_burst_issue_cycles);
     fprintf(out, "| `dma_num_channels` | %u | uint32 | DMA channel count |\n",
