@@ -197,6 +197,10 @@ typedef struct tu_config_t {
     uint32_t dma_read_max_burst_bytes;  /* 0 inherits common maximum */
     uint32_t dma_write_max_burst_bytes; /* 0 inherits common maximum */
     uint32_t dma_burst_issue_cycles; /* per-burst address/control issue cost */
+    uint32_t dma_read_burst_issue_cycles;  /* explicit directional override, including zero */
+    uint32_t dma_write_burst_issue_cycles; /* explicit directional override, including zero */
+    bool     dma_read_burst_issue_configured;
+    bool     dma_write_burst_issue_configured;
     uint32_t dma_num_channels;
     int      dma_bus_mode;          /* independent=0, shared_serial=1 */
     int      dma_arb_policy;        /* round_robin=0, strict_priority=1 */

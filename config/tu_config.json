@@ -76,6 +76,8 @@
       "read_max_burst_bytes": 64,
       "write_max_burst_bytes": 64,
       "burst_issue_cycles": 0,
+      "read_burst_issue_cycles": 0,
+      "write_burst_issue_cycles": 0,
       "channels": 3,
       "bus_topology": "independent",
       "arbitration": "round_robin",

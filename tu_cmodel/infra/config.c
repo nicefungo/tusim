@@ -324,6 +324,10 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->dma_read_max_burst_bytes = 0;
     cfg->dma_write_max_burst_bytes = 0;
     cfg->dma_burst_issue_cycles = 0;
+    cfg->dma_read_burst_issue_cycles = 0;
+    cfg->dma_write_burst_issue_cycles = 0;
+    cfg->dma_read_burst_issue_configured = false;
+    cfg->dma_write_burst_issue_configured = false;
     cfg->dma_num_channels    = 3;
     cfg->dma_bus_mode        = TU_DMA_CONFIG_BUS_INDEPENDENT;
     cfg->dma_arb_policy      = TU_DMA_CONFIG_ARB_ROUND_ROBIN;
@@ -411,6 +415,10 @@ tu_runtime_config_t tu_config_to_runtime(const struct tu_config_t *cfg) {
     rt.dma_read_max_burst_bytes = cfg->dma_read_max_burst_bytes;
     rt.dma_write_max_burst_bytes = cfg->dma_write_max_burst_bytes;
     rt.dma_burst_issue_cycles = cfg->dma_burst_issue_cycles;
+    rt.dma_read_burst_issue_cycles = cfg->dma_read_burst_issue_cycles;
+    rt.dma_write_burst_issue_cycles = cfg->dma_write_burst_issue_cycles;
+    rt.dma_read_burst_issue_configured = cfg->dma_read_burst_issue_configured;
+    rt.dma_write_burst_issue_configured = cfg->dma_write_burst_issue_configured;
     rt.dma_num_channels = cfg->dma_num_channels;
     rt.dma_bus_mode = cfg->dma_bus_mode;
     rt.dma_arb_policy = cfg->dma_arb_policy;
@@ -617,6 +625,14 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
         if (parse_opt_int64(d, "read_max_burst_bytes", &iv)) cfg->dma_read_max_burst_bytes = (uint32_t)iv;
         if (parse_opt_int64(d, "write_max_burst_bytes", &iv)) cfg->dma_write_max_burst_bytes = (uint32_t)iv;
         if (parse_opt_int64(d, "burst_issue_cycles", &iv)) cfg->dma_burst_issue_cycles = (uint32_t)iv;
+        if (parse_opt_int64(d, "read_burst_issue_cycles", &iv)) {
+            cfg->dma_read_burst_issue_cycles = (uint32_t)iv;
+            cfg->dma_read_burst_issue_configured = true;
+        }
+        if (parse_opt_int64(d, "write_burst_issue_cycles", &iv)) {
+            cfg->dma_write_burst_issue_cycles = (uint32_t)iv;
+            cfg->dma_write_burst_issue_configured = true;
+        }
         if (parse_opt_int64(d, "channels", &iv)) cfg->dma_num_channels = (uint32_t)iv;
         const tu_json_value_t *bus_mode = tu_json_get(d, "bus_topology");
         if (bus_mode && bus_mode->type == TU_JSON_STRING)
@@ -896,6 +912,17 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
             snprintf(error_buf, error_size,
                      "DMA burst_issue_cycles must be [0,1024], got %u",
                      cfg->dma_burst_issue_cycles);
+        return -1;
+    }
+    if ((cfg->dma_read_burst_issue_configured &&
+         cfg->dma_read_burst_issue_cycles > 1024) ||
+        (cfg->dma_write_burst_issue_configured &&
+         cfg->dma_write_burst_issue_cycles > 1024)) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DMA directional burst issue cycles must be [0,1024], got %u/%u",
+                     cfg->dma_read_burst_issue_cycles,
+                     cfg->dma_write_burst_issue_cycles);
         return -1;
     }
     if (cfg->dma_num_channels < 1 ||
@@ -1391,8 +1418,14 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             cfg->dma_read_max_burst_bytes);
     fprintf(out, "| `dma_write_max_burst_bytes` | %u | uint32 | Write/store burst limit; 0 inherits common maximum |\n",
             cfg->dma_write_max_burst_bytes);
-    fprintf(out, "| `dma_burst_issue_cycles` | %u | uint32 | Per-burst address/control issue cost |\n",
+    fprintf(out, "| `dma_burst_issue_cycles` | %u | uint32 | Common per-burst address/control issue cost |\n",
             cfg->dma_burst_issue_cycles);
+    fprintf(out, "| `dma_read_burst_issue_cycles` | %u%s | uint32 | Read/load issue override; explicit zero supported |\n",
+            cfg->dma_read_burst_issue_cycles,
+            cfg->dma_read_burst_issue_configured ? "" : " (inherit)");
+    fprintf(out, "| `dma_write_burst_issue_cycles` | %u%s | uint32 | Write/store issue override; explicit zero supported |\n",
+            cfg->dma_write_burst_issue_cycles,
+            cfg->dma_write_burst_issue_configured ? "" : " (inherit)");
     fprintf(out, "| `dma_num_channels` | %u | uint32 | DMA channel count |\n",
             cfg->dma_num_channels);
     fprintf(out, "| `dma_bus_topology` | %s | enum | Channel data paths: independent or shared_serial |\n",
