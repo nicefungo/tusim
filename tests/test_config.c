@@ -163,6 +163,8 @@ int main(void) {
         CHECK(!cfg.dma_read_burst_issue_configured &&
               !cfg.dma_write_burst_issue_configured,
               "DMA directional issue inheritance defaults");
+        CHECK(cfg.dma_burst_segmentation == TU_DMA_CONFIG_SEGMENT_AGGREGATE,
+              "DMA burst segmentation default");
         CHECK(cfg.cycle_model == 2, "cycle");
         CHECK(cfg.counters_enabled, "counters");
         CHECK(cfg.dataflow_mode == 0, "dataflow");
@@ -217,6 +219,7 @@ int main(void) {
             "    \"burst_issue_cycles\": 2,"
             "    \"read_burst_issue_cycles\": 0,"
             "    \"write_burst_issue_cycles\": 4,"
+            "    \"burst_segmentation\": \"logical_segments\","
             "    \"channels\": 2,"
             "    \"bus_topology\": \"shared_serial\","
             "    \"arbitration\": \"strict_priority\","
@@ -269,6 +272,9 @@ int main(void) {
               rt.dma_read_burst_issue_cycles == 0 &&
               rt.dma_write_burst_issue_cycles == 4,
               "DMA directional issue runtime propagation");
+        CHECK(cfg.dma_burst_segmentation == TU_DMA_CONFIG_SEGMENT_LOGICAL &&
+              rt.dma_burst_segmentation == TU_DMA_CONFIG_SEGMENT_LOGICAL,
+              "DMA burst segmentation parse/runtime propagation");
         CHECK(rt.dma_bus_mode == TU_DMA_CONFIG_BUS_SHARED_SERIAL,
               "DMA bus topology runtime propagation");
         CHECK(rt.dma_arb_policy == TU_DMA_CONFIG_ARB_STRICT_PRIORITY,
@@ -561,6 +567,10 @@ int main(void) {
               "should reject directional burst issue above 1024");
         cfg.dma_read_burst_issue_cycles = 0;
         cfg.dma_read_burst_issue_configured = false;
+        cfg.dma_burst_segmentation = 2;
+        CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
+              "should reject unsupported burst segmentation");
+        cfg.dma_burst_segmentation = TU_DMA_CONFIG_SEGMENT_AGGREGATE;
         cfg.dma_max_outstanding = 0;
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0, "should reject max_outstanding=0");
         cfg.dma_max_outstanding = 4;
@@ -588,6 +598,10 @@ int main(void) {
                   "{\"tu\":{\"dma\":{\"channel_binding\":\"least_work\"}}}",
                   &cfg, err, sizeof(err)) != 0,
               "should reject misspelled channel binding");
+        CHECK(tu_config_load_string(
+                  "{\"tu\":{\"dma\":{\"burst_segmentation\":\"magic\"}}}",
+                  &cfg, err, sizeof(err)) != 0,
+              "should reject unsupported burst segmentation name");
         PASS();
     }
 

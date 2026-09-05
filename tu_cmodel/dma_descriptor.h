@@ -62,6 +62,11 @@ typedef enum {
     TU_DMA_BIND_LEAST_PROJECTED_CYCLES = 4
 } tu_dma_binding_policy_t;
 
+typedef enum {
+    TU_DMA_SEGMENT_AGGREGATE = 0,
+    TU_DMA_SEGMENT_LOGICAL = 1
+} tu_dma_burst_segmentation_t;
+
 /* ---- Transfer direction ---- */
 typedef enum {
     TU_DMA_DIR_HOST_TO_TU   = 0,  /* Load: DRAM → SRAM */
@@ -155,6 +160,7 @@ typedef struct {
     uint32_t                burst_issue_cycles;
     uint32_t                read_burst_issue_cycles;
     uint32_t                write_burst_issue_cycles;
+    tu_dma_burst_segmentation_t burst_segmentation;
     uint32_t                read_latency_cycles;
     uint32_t                write_latency_cycles;
     bool                    async_mode;
@@ -218,6 +224,21 @@ void tu_dma_init_config_directional_issue(bool async, uint32_t num_channels,
                                           uint32_t write_burst_issue_cycles,
                                           bool read_issue_configured,
                                           bool write_issue_configured);
+void tu_dma_init_config_segmentation(bool async, uint32_t num_channels,
+                                     uint32_t max_queue_depth, int bus_mode,
+                                     int arb_policy, int binding_policy,
+                                     uint32_t bus_width_bits,
+                                     uint32_t read_latency_cycles,
+                                     uint32_t write_latency_cycles,
+                                     uint32_t max_burst_bytes,
+                                     uint32_t read_max_burst_bytes,
+                                     uint32_t write_max_burst_bytes,
+                                     uint32_t burst_issue_cycles,
+                                     uint32_t read_burst_issue_cycles,
+                                     uint32_t write_burst_issue_cycles,
+                                     bool read_issue_configured,
+                                     bool write_issue_configured,
+                                     int burst_segmentation);
 void tu_dma_init(bool async);
 void tu_dma_destroy(void);
 

@@ -174,6 +174,14 @@ static int parse_dma_binding_policy_str(const char *s) {
     return -1;
 }
 
+static int parse_dma_burst_segmentation_str(const char *s) {
+    if (!s || strcmp(s, "aggregate") == 0)
+        return TU_DMA_CONFIG_SEGMENT_AGGREGATE;
+    if (strcmp(s, "logical_segments") == 0)
+        return TU_DMA_CONFIG_SEGMENT_LOGICAL;
+    return -1;
+}
+
 static int parse_power_tech_node_str(const char *s) {
     if (!s || strcmp(s, "auto") == 0) return 0;
     if (strcmp(s, "45nm") == 0) return 1;
@@ -328,6 +336,7 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->dma_write_burst_issue_cycles = 0;
     cfg->dma_read_burst_issue_configured = false;
     cfg->dma_write_burst_issue_configured = false;
+    cfg->dma_burst_segmentation = TU_DMA_CONFIG_SEGMENT_AGGREGATE;
     cfg->dma_num_channels    = 3;
     cfg->dma_bus_mode        = TU_DMA_CONFIG_BUS_INDEPENDENT;
     cfg->dma_arb_policy      = TU_DMA_CONFIG_ARB_ROUND_ROBIN;
@@ -419,6 +428,7 @@ tu_runtime_config_t tu_config_to_runtime(const struct tu_config_t *cfg) {
     rt.dma_write_burst_issue_cycles = cfg->dma_write_burst_issue_cycles;
     rt.dma_read_burst_issue_configured = cfg->dma_read_burst_issue_configured;
     rt.dma_write_burst_issue_configured = cfg->dma_write_burst_issue_configured;
+    rt.dma_burst_segmentation = cfg->dma_burst_segmentation;
     rt.dma_num_channels = cfg->dma_num_channels;
     rt.dma_bus_mode = cfg->dma_bus_mode;
     rt.dma_arb_policy = cfg->dma_arb_policy;
@@ -633,6 +643,10 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
             cfg->dma_write_burst_issue_cycles = (uint32_t)iv;
             cfg->dma_write_burst_issue_configured = true;
         }
+        const tu_json_value_t *segmentation = tu_json_get(d, "burst_segmentation");
+        if (segmentation && segmentation->type == TU_JSON_STRING)
+            cfg->dma_burst_segmentation = parse_dma_burst_segmentation_str(
+                tu_json_as_string(segmentation, NULL));
         if (parse_opt_int64(d, "channels", &iv)) cfg->dma_num_channels = (uint32_t)iv;
         const tu_json_value_t *bus_mode = tu_json_get(d, "bus_topology");
         if (bus_mode && bus_mode->type == TU_JSON_STRING)
@@ -923,6 +937,13 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
                      "DMA directional burst issue cycles must be [0,1024], got %u/%u",
                      cfg->dma_read_burst_issue_cycles,
                      cfg->dma_write_burst_issue_cycles);
+        return -1;
+    }
+    if (cfg->dma_burst_segmentation < TU_DMA_CONFIG_SEGMENT_AGGREGATE ||
+        cfg->dma_burst_segmentation > TU_DMA_CONFIG_SEGMENT_LOGICAL) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DMA burst_segmentation must be aggregate or logical_segments");
         return -1;
     }
     if (cfg->dma_num_channels < 1 ||
@@ -1426,6 +1447,9 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
     fprintf(out, "| `dma_write_burst_issue_cycles` | %u%s | uint32 | Write/store issue override; explicit zero supported |\n",
             cfg->dma_write_burst_issue_cycles,
             cfg->dma_write_burst_issue_configured ? "" : " (inherit)");
+    fprintf(out, "| `dma_burst_segmentation` | %s | enum | Burst commands from aggregate bytes or logical strided/S-G segments |\n",
+            cfg->dma_burst_segmentation == TU_DMA_CONFIG_SEGMENT_LOGICAL ?
+                "logical_segments" : "aggregate");
     fprintf(out, "| `dma_num_channels` | %u | uint32 | DMA channel count |\n",
             cfg->dma_num_channels);
     fprintf(out, "| `dma_bus_topology` | %s | enum | Channel data paths: independent or shared_serial |\n",

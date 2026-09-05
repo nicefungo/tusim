@@ -113,6 +113,13 @@ typedef enum {
     TU_DMA_CONFIG_BIND_LEAST_PROJECTED_CYCLES = 4
 } tu_dma_config_binding_policy_t;
 
+/* Aggregate preserves historical total-byte command counting. Logical
+ * segments charge each strided row or scatter/gather element independently. */
+typedef enum {
+    TU_DMA_CONFIG_SEGMENT_AGGREGATE = 0,
+    TU_DMA_CONFIG_SEGMENT_LOGICAL = 1
+} tu_dma_config_burst_segmentation_t;
+
 /* ================================================================
  * Full Configuration Struct
  * ================================================================
@@ -201,6 +208,7 @@ typedef struct tu_config_t {
     uint32_t dma_write_burst_issue_cycles; /* explicit directional override, including zero */
     bool     dma_read_burst_issue_configured;
     bool     dma_write_burst_issue_configured;
+    int      dma_burst_segmentation; /* aggregate=0, logical_segments=1 */
     uint32_t dma_num_channels;
     int      dma_bus_mode;          /* independent=0, shared_serial=1 */
     int      dma_arb_policy;        /* round_robin=0, strict_priority=1 */

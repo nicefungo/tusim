@@ -88,6 +88,7 @@
 | `dma_burst_issue_cycles` | 0 | uint32 | Common per-burst address/control issue cost |
 | `dma_read_burst_issue_cycles` | 0 (inherit) | uint32 | Read/load issue override; explicit zero supported |
 | `dma_write_burst_issue_cycles` | 0 (inherit) | uint32 | Write/store issue override; explicit zero supported |
+| `dma_burst_segmentation` | aggregate | enum | Burst commands from aggregate bytes or logical strided/S-G segments |
 | `dma_num_channels` | 3 | uint32 | DMA channel count |
 | `dma_bus_topology` | independent | enum | Channel data paths: independent or shared_serial |
 | `dma_arbitration` | round_robin | enum | Shared-serial selection: round_robin or strict_priority |

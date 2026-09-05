@@ -78,6 +78,7 @@
       "burst_issue_cycles": 0,
       "read_burst_issue_cycles": 0,
       "write_burst_issue_cycles": 0,
+      "burst_segmentation": "aggregate",
       "channels": 3,
       "bus_topology": "independent",
       "arbitration": "round_robin",

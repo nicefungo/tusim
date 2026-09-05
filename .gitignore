@@ -16,6 +16,7 @@ test-dma-directional-latency-sweep
 test-dma-burst-issue-sweep
 test-dma-directional-burst-sweep
 test-dma-directional-issue-sweep
+test-dma-segmentation-sweep
 test-dram
 test-sram-issue-sweep
 test-dram-row-policy-sweep
