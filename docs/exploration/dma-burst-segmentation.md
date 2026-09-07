@@ -61,7 +61,7 @@ The config generator was smoke-tested to a temporary header. It emits the new ma
 
 ## Fidelity limits
 
-This is deterministic command-count accounting, not a command-queue microarchitecture. Base latency is charged once per descriptor, not once per logical segment. Payload serialization still uses aggregate useful bytes and therefore assumes no inter-segment padding, alignment overfetch, or lost bus beats. The model does not represent external addresses, burst-boundary crossing, command FIFO depth, finite credits, command/data overlap, coalescer capacity, segment ordering, DRAM row effects, shared SRAM/DRAM bandwidth, retries, physical area/power, or calibration. Scatter/gather treats each indexed element as a segment even when adjacent indices could be merged; a future coalescer model requires an explicit ordering/window contract and trace evidence.
+This is deterministic command-count accounting, not a command-queue microarchitecture. Base latency scope is now an independent runtime choice (`descriptor` compatibility or `logical_segments` restart); see `dma-base-latency-scope.md`. Payload serialization still uses aggregate useful bytes and therefore assumes no inter-segment padding, alignment overfetch, or lost bus beats. The model does not represent external addresses, burst-boundary crossing, command FIFO depth, finite credits, command/data overlap, coalescer capacity, segment ordering, DRAM row effects, shared SRAM/DRAM bandwidth, retries, physical area/power, or calibration. Scatter/gather treats each indexed element as a segment even when adjacent indices could be merged; a future coalescer model requires an explicit ordering/window contract and trace evidence.
 
 ## Verification
 

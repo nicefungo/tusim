@@ -26,7 +26,7 @@ tu_dma_engine_t g_tu_dma = {0};
  * Lifecycle
  * ================================================================ */
 
-void tu_dma_init_config_segmentation(bool async, uint32_t num_channels,
+void tu_dma_init_config_base_scope(bool async, uint32_t num_channels,
                                           uint32_t max_queue_depth, int bus_mode,
                                           int arb_policy, int binding_policy,
                                           uint32_t bus_width_bits,
@@ -40,7 +40,8 @@ void tu_dma_init_config_segmentation(bool async, uint32_t num_channels,
                                           uint32_t write_burst_issue_cycles,
                                           bool read_issue_configured,
                                           bool write_issue_configured,
-                                          int burst_segmentation) {
+                                          int burst_segmentation,
+                                          int base_latency_scope) {
     memset(&g_tu_dma, 0, sizeof(g_tu_dma));
     g_tu_dma.async_mode = async;
     if (bus_mode != TU_DMA_BUS_MODE_INDEPENDENT &&
@@ -73,6 +74,15 @@ void tu_dma_init_config_segmentation(bool async, uint32_t num_channels,
     }
     g_tu_dma.burst_segmentation =
         (tu_dma_burst_segmentation_t)burst_segmentation;
+    if (base_latency_scope != TU_DMA_BASE_PER_DESCRIPTOR &&
+        base_latency_scope != TU_DMA_BASE_PER_LOGICAL_SEGMENT) {
+        fprintf(stderr, "DMA: unsupported base latency scope %d\n",
+                base_latency_scope);
+        memset(&g_tu_dma, 0, sizeof(g_tu_dma));
+        return;
+    }
+    g_tu_dma.base_latency_scope =
+        (tu_dma_base_latency_scope_t)base_latency_scope;
     if (bus_width_bits == 0)
         bus_width_bits = TU_DMA_BUS_WIDTH_BITS; /* zero-initialized runtime compatibility */
     if (bus_width_bits < 32 || bus_width_bits > 1024 ||
@@ -126,6 +136,31 @@ void tu_dma_init_config_segmentation(bool async, uint32_t num_channels,
         g_tu_dma.channels[i].channel_id = (uint8_t)i;
         g_tu_dma.channels[i].max_depth = max_queue_depth > 0 ? max_queue_depth : TU_DMA_MAX_OUTSTANDING;
     }
+}
+
+void tu_dma_init_config_segmentation(bool async, uint32_t num_channels,
+                                     uint32_t max_queue_depth, int bus_mode,
+                                     int arb_policy, int binding_policy,
+                                     uint32_t bus_width_bits,
+                                     uint32_t read_latency_cycles,
+                                     uint32_t write_latency_cycles,
+                                     uint32_t max_burst_bytes,
+                                     uint32_t read_max_burst_bytes,
+                                     uint32_t write_max_burst_bytes,
+                                     uint32_t burst_issue_cycles,
+                                     uint32_t read_burst_issue_cycles,
+                                     uint32_t write_burst_issue_cycles,
+                                     bool read_issue_configured,
+                                     bool write_issue_configured,
+                                     int burst_segmentation) {
+    tu_dma_init_config_base_scope(
+        async, num_channels, max_queue_depth, bus_mode, arb_policy,
+        binding_policy, bus_width_bits, read_latency_cycles,
+        write_latency_cycles, max_burst_bytes, read_max_burst_bytes,
+        write_max_burst_bytes, burst_issue_cycles, read_burst_issue_cycles,
+        write_burst_issue_cycles, read_issue_configured,
+        write_issue_configured, burst_segmentation,
+        TU_DMA_BASE_PER_DESCRIPTOR);
 }
 
 void tu_dma_init_config_directional_issue(bool async, uint32_t num_channels,
@@ -628,6 +663,22 @@ static uint64_t ceil_div_u64(uint64_t value, uint64_t divisor) {
     return value / divisor + (value % divisor != 0);
 }
 
+static uint64_t descriptor_logical_segment_count(
+    const tu_dma_descriptor_t *desc) {
+    if (desc->total_bytes == 0) return 0;
+    switch (desc->type) {
+    case TU_DMA_XFER_STRIDED_2D:
+        return desc->dims[0];
+    case TU_DMA_XFER_STRIDED_3D:
+        return (uint64_t)desc->dims[0] * desc->dims[1];
+    case TU_DMA_XFER_SCATTER:
+    case TU_DMA_XFER_GATHER:
+        return desc->index_count;
+    default:
+        return 1;
+    }
+}
+
 /* Aggregate mode preserves historical timing. Logical mode prevents
  * discontiguous rows or indexed elements from sharing one burst command. */
 static uint64_t descriptor_burst_count(const tu_dma_descriptor_t *desc) {
@@ -637,26 +688,34 @@ static uint64_t descriptor_burst_count(const tu_dma_descriptor_t *desc) {
         return ceil_div_u64(desc->total_bytes, burst_bytes);
 
     uint64_t segment_bytes = desc->total_bytes;
-    uint64_t segment_count = 1;
+    uint64_t segment_count = descriptor_logical_segment_count(desc);
     switch (desc->type) {
     case TU_DMA_XFER_STRIDED_2D:
         segment_bytes = (uint64_t)desc->elem_size * desc->dims[1];
-        segment_count = desc->dims[0];
         break;
     case TU_DMA_XFER_STRIDED_3D:
         segment_bytes = (uint64_t)desc->elem_size * desc->dims[2];
-        segment_count = (uint64_t)desc->dims[0] * desc->dims[1];
         break;
     case TU_DMA_XFER_SCATTER:
     case TU_DMA_XFER_GATHER:
         segment_bytes = desc->index_elem_size;
-        segment_count = desc->index_count;
         break;
     default:
         break;
     }
     if (segment_bytes == 0 || segment_count == 0) return 0;
     return segment_count * ceil_div_u64(segment_bytes, burst_bytes);
+}
+
+static uint64_t descriptor_base_cycles(const tu_dma_descriptor_t *desc) {
+    uint64_t base = desc->direction == TU_DMA_DIR_TU_TO_HOST ?
+                    g_tu_dma.write_latency_cycles :
+                    g_tu_dma.read_latency_cycles;
+    uint64_t count = g_tu_dma.base_latency_scope ==
+                         TU_DMA_BASE_PER_LOGICAL_SEGMENT ?
+                     descriptor_logical_segment_count(desc) :
+                     1u; /* preserve historical zero-byte descriptor setup */
+    return base * count;
 }
 
 static uint32_t descriptor_burst_issue_cycles(const tu_dma_descriptor_t *desc) {
@@ -768,9 +827,7 @@ void tu_dma_execute_desc(tu_dma_descriptor_t *desc) {
     /* Update accounting */
 accounting:
     /* For multicast, account fanout cost: N× the per-destination transfer */
-    uint64_t transfer_cycles = desc->direction == TU_DMA_DIR_TU_TO_HOST ?
-                               g_tu_dma.write_latency_cycles :
-                               g_tu_dma.read_latency_cycles;
+    uint64_t transfer_cycles = descriptor_base_cycles(desc);
     transfer_cycles += (desc->total_bytes + g_tu_dma.bus_width_bytes - 1u) /
                        g_tu_dma.bus_width_bytes;
     transfer_cycles += descriptor_burst_count(desc) *
@@ -831,9 +888,7 @@ static uint64_t channel_assigned_bytes(const tu_dma_channel_state_t *ch) {
  * queued work uses base latency plus payload serialization. SRAM refill
  * penalties are stateful and intentionally excluded rather than guessed. */
 static uint64_t descriptor_coarse_cycles(const tu_dma_descriptor_t *desc) {
-    uint64_t base = desc->direction == TU_DMA_DIR_TU_TO_HOST ?
-                    g_tu_dma.write_latency_cycles :
-                    g_tu_dma.read_latency_cycles;
+    uint64_t base = descriptor_base_cycles(desc);
     uint64_t payload = (desc->total_bytes + g_tu_dma.bus_width_bytes - 1u) /
                        g_tu_dma.bus_width_bytes;
     uint64_t bursts = descriptor_burst_count(desc);

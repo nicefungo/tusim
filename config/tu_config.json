@@ -79,6 +79,7 @@
       "read_burst_issue_cycles": 0,
       "write_burst_issue_cycles": 0,
       "burst_segmentation": "aggregate",
+      "base_latency_scope": "descriptor",
       "channels": 3,
       "bus_topology": "independent",
       "arbitration": "round_robin",

@@ -182,6 +182,14 @@ static int parse_dma_burst_segmentation_str(const char *s) {
     return -1;
 }
 
+static int parse_dma_base_latency_scope_str(const char *s) {
+    if (!s || strcmp(s, "descriptor") == 0)
+        return TU_DMA_CONFIG_BASE_PER_DESCRIPTOR;
+    if (strcmp(s, "logical_segments") == 0)
+        return TU_DMA_CONFIG_BASE_PER_LOGICAL_SEGMENT;
+    return -1;
+}
+
 static int parse_power_tech_node_str(const char *s) {
     if (!s || strcmp(s, "auto") == 0) return 0;
     if (strcmp(s, "45nm") == 0) return 1;
@@ -337,6 +345,7 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->dma_read_burst_issue_configured = false;
     cfg->dma_write_burst_issue_configured = false;
     cfg->dma_burst_segmentation = TU_DMA_CONFIG_SEGMENT_AGGREGATE;
+    cfg->dma_base_latency_scope = TU_DMA_CONFIG_BASE_PER_DESCRIPTOR;
     cfg->dma_num_channels    = 3;
     cfg->dma_bus_mode        = TU_DMA_CONFIG_BUS_INDEPENDENT;
     cfg->dma_arb_policy      = TU_DMA_CONFIG_ARB_ROUND_ROBIN;
@@ -429,6 +438,7 @@ tu_runtime_config_t tu_config_to_runtime(const struct tu_config_t *cfg) {
     rt.dma_read_burst_issue_configured = cfg->dma_read_burst_issue_configured;
     rt.dma_write_burst_issue_configured = cfg->dma_write_burst_issue_configured;
     rt.dma_burst_segmentation = cfg->dma_burst_segmentation;
+    rt.dma_base_latency_scope = cfg->dma_base_latency_scope;
     rt.dma_num_channels = cfg->dma_num_channels;
     rt.dma_bus_mode = cfg->dma_bus_mode;
     rt.dma_arb_policy = cfg->dma_arb_policy;
@@ -647,6 +657,10 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
         if (segmentation && segmentation->type == TU_JSON_STRING)
             cfg->dma_burst_segmentation = parse_dma_burst_segmentation_str(
                 tu_json_as_string(segmentation, NULL));
+        const tu_json_value_t *base_scope = tu_json_get(d, "base_latency_scope");
+        if (base_scope && base_scope->type == TU_JSON_STRING)
+            cfg->dma_base_latency_scope = parse_dma_base_latency_scope_str(
+                tu_json_as_string(base_scope, NULL));
         if (parse_opt_int64(d, "channels", &iv)) cfg->dma_num_channels = (uint32_t)iv;
         const tu_json_value_t *bus_mode = tu_json_get(d, "bus_topology");
         if (bus_mode && bus_mode->type == TU_JSON_STRING)
@@ -944,6 +958,13 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
                      "DMA burst_segmentation must be aggregate or logical_segments");
+        return -1;
+    }
+    if (cfg->dma_base_latency_scope < TU_DMA_CONFIG_BASE_PER_DESCRIPTOR ||
+        cfg->dma_base_latency_scope > TU_DMA_CONFIG_BASE_PER_LOGICAL_SEGMENT) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DMA base_latency_scope must be descriptor or logical_segments");
         return -1;
     }
     if (cfg->dma_num_channels < 1 ||
@@ -1450,6 +1471,9 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
     fprintf(out, "| `dma_burst_segmentation` | %s | enum | Burst commands from aggregate bytes or logical strided/S-G segments |\n",
             cfg->dma_burst_segmentation == TU_DMA_CONFIG_SEGMENT_LOGICAL ?
                 "logical_segments" : "aggregate");
+    fprintf(out, "| `dma_base_latency_scope` | %s | enum | Base latency once per descriptor or once per logical row/index |\n",
+            cfg->dma_base_latency_scope == TU_DMA_CONFIG_BASE_PER_LOGICAL_SEGMENT ?
+                "logical_segments" : "descriptor");
     fprintf(out, "| `dma_num_channels` | %u | uint32 | DMA channel count |\n",
             cfg->dma_num_channels);
     fprintf(out, "| `dma_bus_topology` | %s | enum | Channel data paths: independent or shared_serial |\n",

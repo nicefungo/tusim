@@ -120,6 +120,13 @@ typedef enum {
     TU_DMA_CONFIG_SEGMENT_LOGICAL = 1
 } tu_dma_config_burst_segmentation_t;
 
+/* Descriptor scope models a pipelined sequencer that amortizes setup across
+ * the descriptor. Logical scope models a simpler restart per row/index. */
+typedef enum {
+    TU_DMA_CONFIG_BASE_PER_DESCRIPTOR = 0,
+    TU_DMA_CONFIG_BASE_PER_LOGICAL_SEGMENT = 1
+} tu_dma_config_base_latency_scope_t;
+
 /* ================================================================
  * Full Configuration Struct
  * ================================================================
@@ -209,6 +216,7 @@ typedef struct tu_config_t {
     bool     dma_read_burst_issue_configured;
     bool     dma_write_burst_issue_configured;
     int      dma_burst_segmentation; /* aggregate=0, logical_segments=1 */
+    int      dma_base_latency_scope; /* descriptor=0, logical_segments=1 */
     uint32_t dma_num_channels;
     int      dma_bus_mode;          /* independent=0, shared_serial=1 */
     int      dma_arb_policy;        /* round_robin=0, strict_priority=1 */
