@@ -64,7 +64,7 @@ The harness also gates a strided store, exact byte movement, malformed config re
 
 ## Limitations
 
-This is deterministic base-plus-serialization-plus-command accounting, not a queue-aware memory controller. It does not model TLB/page walks, address alignment, protocol boundaries, descriptor fetch, finite command credits, SRAM replay, DRAM bank timing, command/data overlap, physical area/power, or calibration. `logical_segments` charges the configured aggregate base term per segment; it does not decompose which physical stages actually restart. Multicast fanout remains outside this scope because the current logical-segmentation contract does not classify destinations as independent segments.
+This is deterministic base-plus-serialization-plus-command accounting, not a queue-aware memory controller. Payload beats may now be packed per descriptor or aligned per logical segment through the independent `payload_scope`; see `dma-payload-segment-alignment.md`. The model still does not include TLB/page walks, source/destination address alignment, protocol boundaries, descriptor fetch, finite command credits, SRAM replay, DRAM bank timing, command/data overlap, physical area/power, or calibration. `logical_segments` charges the configured aggregate base term per segment; it does not decompose which physical stages actually restart. Multicast fanout remains outside this scope because the current logical-segmentation contract does not classify destinations as independent segments.
 
 ## Verification
 

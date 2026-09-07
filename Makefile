@@ -276,6 +276,11 @@ test-dma-base-scope-sweep: tests/test_dma_base_scope_sweep.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
 	./test-dma-base-scope-sweep
 
+.PHONY: test-dma-payload-scope-sweep
+test-dma-payload-scope-sweep: tests/test_dma_payload_scope_sweep.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
+	./test-dma-payload-scope-sweep
+
 # ---- Test: DRAM model ----
 test-dram: tests/test_dram.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
@@ -705,7 +710,7 @@ config-docs: libtucmodel.a
 # ---- Clean ----
 clean:
 	rm -f $(TU_DIR)/*.o $(TU_DIR)/memory/*.o $(TU_DIR)/sparsity/*.o $(TU_DIR)/isa/*.o $(TU_DIR)/compute/*.o $(TU_DIR)/compute/dataflow/*.o $(TU_DIR)/infra/*.o $(TU_DIR)/perf/*.o $(TU_DIR)/bindings/*.o libtucmodel.a libtucmodel.so
-	rm -f test-cmodel test-cmdq test-dma test-dma-channel-sweep test-dma-arbitration-sweep test-dma-binding-sweep test-dma-bus-width-sweep test-dma-directional-latency-sweep test-dma-burst-issue-sweep test-dma-directional-burst-sweep test-dma-directional-issue-sweep test-dma-segmentation-sweep test-dma-base-scope-sweep test-dram test-sram-issue-sweep test-dram-row-policy-sweep test-dram-row-timeout-sweep test-dram-row-timeout-domain-sweep test-dram-turnaround-sweep test-dram-turnaround-idle-sweep test-dram-directional-burst-sweep test-dram-burst-alignment-sweep test-dram-zero-byte-sweep test-dram-address-mapping-sweep test-dram-refresh-sweep test-dram-refresh-phase-sweep test-dram-refresh-debt-sweep test-dram-core-clock-sweep test-isa test-golden test-golden-full
+	rm -f test-cmodel test-cmdq test-dma test-dma-channel-sweep test-dma-arbitration-sweep test-dma-binding-sweep test-dma-bus-width-sweep test-dma-directional-latency-sweep test-dma-burst-issue-sweep test-dma-directional-burst-sweep test-dma-directional-issue-sweep test-dma-segmentation-sweep test-dma-base-scope-sweep test-dma-payload-scope-sweep test-dram test-sram-issue-sweep test-dram-row-policy-sweep test-dram-row-timeout-sweep test-dram-row-timeout-domain-sweep test-dram-turnaround-sweep test-dram-turnaround-idle-sweep test-dram-directional-burst-sweep test-dram-burst-alignment-sweep test-dram-zero-byte-sweep test-dram-address-mapping-sweep test-dram-refresh-sweep test-dram-refresh-phase-sweep test-dram-refresh-debt-sweep test-dram-core-clock-sweep test-isa test-golden test-golden-full
 	rm -f test-dataflow test-elementwise test-bf16 test-memhier test-norm test-logging
 	rm -f test-int-quant test-conv test-random
 	rm -f test-rounding test-fp8 test-attention test-perf test-pool test-pipeline

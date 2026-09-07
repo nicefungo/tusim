@@ -284,6 +284,10 @@ def generate_header(config, output_path):
     L('#define TU_DMA_BASE_LATENCY_SCOPE_LOGICAL_SEGMENTS 1')
     base_scope_map = {'descriptor': 0, 'logical_segments': 1}
     L(f'#define TU_DMA_BASE_LATENCY_SCOPE {base_scope_map[dma.get("base_latency_scope", "descriptor")]}')
+    L('#define TU_DMA_PAYLOAD_SCOPE_DESCRIPTOR 0')
+    L('#define TU_DMA_PAYLOAD_SCOPE_LOGICAL_SEGMENTS 1')
+    payload_scope_map = {'descriptor': 0, 'logical_segments': 1}
+    L(f'#define TU_DMA_PAYLOAD_SCOPE {payload_scope_map[dma.get("payload_scope", "descriptor")]}')
     L(f'#define TU_DMA_CHANNELS         {dma["channels"]}')
     L('#define TU_DMA_ENGINE_MAX_CHANNELS 8')
     L('#define TU_DMA_BUS_INDEPENDENT  0')
@@ -439,6 +443,7 @@ def generate_header(config, output_path):
     L('    bool     dma_write_burst_issue_configured;')
     L('    int      dma_burst_segmentation;')
     L('    int      dma_base_latency_scope;')
+    L('    int      dma_payload_scope;')
     L('    uint32_t dma_num_channels;')
     L('    int      dma_bus_mode;')
     L('    int      dma_arb_policy;')
@@ -486,6 +491,7 @@ def generate_header(config, output_path):
     L(f'        .dma_write_burst_issue_configured = false,')
     L(f'        .dma_burst_segmentation = TU_DMA_BURST_SEGMENTATION,')
     L(f'        .dma_base_latency_scope = TU_DMA_BASE_LATENCY_SCOPE,')
+    L(f'        .dma_payload_scope = TU_DMA_PAYLOAD_SCOPE,')
     L(f'        .dma_num_channels   = TU_DMA_CHANNELS,')
     L(f'        .dma_bus_mode       = TU_DMA_BUS_MODE,')
     L(f'        .dma_arb_policy     = TU_DMA_ARB_POLICY,')

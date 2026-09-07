@@ -72,6 +72,11 @@ typedef enum {
     TU_DMA_BASE_PER_LOGICAL_SEGMENT = 1
 } tu_dma_base_latency_scope_t;
 
+typedef enum {
+    TU_DMA_PAYLOAD_PACKED_DESCRIPTOR = 0,
+    TU_DMA_PAYLOAD_ALIGN_LOGICAL_SEGMENT = 1
+} tu_dma_payload_scope_t;
+
 /* ---- Transfer direction ---- */
 typedef enum {
     TU_DMA_DIR_HOST_TO_TU   = 0,  /* Load: DRAM → SRAM */
@@ -144,6 +149,7 @@ typedef struct {
     uint64_t                total_submitted;
     uint64_t                total_completed;
     uint64_t                total_bytes;
+    uint64_t                total_occupied_bytes;
     uint64_t                total_cycles;
 } tu_dma_channel_state_t;
 
@@ -167,11 +173,13 @@ typedef struct {
     uint32_t                write_burst_issue_cycles;
     tu_dma_burst_segmentation_t burst_segmentation;
     tu_dma_base_latency_scope_t base_latency_scope;
+    tu_dma_payload_scope_t payload_scope;
     uint32_t                read_latency_cycles;
     uint32_t                write_latency_cycles;
     bool                    async_mode;
     uint64_t                current_cycle;
     uint64_t                total_bytes;
+    uint64_t                total_occupied_bytes;
     uint64_t                total_transfers;
     uint64_t                estimated_cycles;
 } tu_dma_engine_t;
@@ -261,6 +269,23 @@ void tu_dma_init_config_base_scope(bool async, uint32_t num_channels,
                                    bool write_issue_configured,
                                    int burst_segmentation,
                                    int base_latency_scope);
+void tu_dma_init_config_payload_scope(bool async, uint32_t num_channels,
+                                      uint32_t max_queue_depth, int bus_mode,
+                                      int arb_policy, int binding_policy,
+                                      uint32_t bus_width_bits,
+                                      uint32_t read_latency_cycles,
+                                      uint32_t write_latency_cycles,
+                                      uint32_t max_burst_bytes,
+                                      uint32_t read_max_burst_bytes,
+                                      uint32_t write_max_burst_bytes,
+                                      uint32_t burst_issue_cycles,
+                                      uint32_t read_burst_issue_cycles,
+                                      uint32_t write_burst_issue_cycles,
+                                      bool read_issue_configured,
+                                      bool write_issue_configured,
+                                      int burst_segmentation,
+                                      int base_latency_scope,
+                                      int payload_scope);
 void tu_dma_init(bool async);
 void tu_dma_destroy(void);
 
