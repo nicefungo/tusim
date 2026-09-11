@@ -53,7 +53,7 @@ void tu_core_init(tu_core_t *core) {
         tu_sram_destroy(&core->state.sram_w);
         tu_sram_destroy(&core->state.sram_a);
         tu_sram_destroy(&core->state.sram_o);
-        free(core->state.cmdq);
+        tu_cmdq_destroy(core->state.cmdq);
         free(core->icc_buffer);
     }
 
@@ -80,7 +80,7 @@ void tu_core_destroy(tu_core_t *core) {
         tu_sram_destroy(&core->state.sram_w);
         tu_sram_destroy(&core->state.sram_a);
         tu_sram_destroy(&core->state.sram_o);
-        free(core->state.cmdq);
+        tu_cmdq_destroy(core->state.cmdq);
         core->initialized = false;
     }
 

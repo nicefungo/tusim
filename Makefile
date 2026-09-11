@@ -8,7 +8,7 @@ LDFLAGS ?= -lm
 TU_DIR     = tu_cmodel
 COMPILER   = compiler/onnx_to_tu.py
 
-.PHONY: all clean test test-cmodel test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline test-agen test-multicore test-multicore-sweep test-multicore-dataflow-sweep test-multicast test-scatter-gather test-trace test-errors test-config test-dataflow test-logging test-rounding test-fp8 test-softmax test-double test-random test-full test-context test-context-switch-sweep test-compress test-weight-compression-sweep test-sparsity test-sparsity-sweep test-scheduler test-liveness test-tf32 test-bench test-power test-power-assumptions-sweep test-debug test-dataflow-sweep test-rounding-sweep test-attention-sweep test-pooling-sweep test-softmax-sweep test-conv-sweep test-norm-sweep test-norm-attention-sweep test-conv-groups-sweep test-conv-pool-cascade test-mma-activation-sweep test-softmax-attention-sweep test-dram-refresh-sweep test-dram-refresh-phase-sweep
+.PHONY: all clean test test-cmodel test-reinit test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline test-agen test-multicore test-multicore-sweep test-multicore-dataflow-sweep test-multicast test-scatter-gather test-trace test-errors test-config test-dataflow test-logging test-rounding test-fp8 test-softmax test-double test-random test-full test-context test-context-switch-sweep test-compress test-weight-compression-sweep test-sparsity test-sparsity-sweep test-scheduler test-liveness test-tf32 test-bench test-power test-power-assumptions-sweep test-debug test-dataflow-sweep test-rounding-sweep test-attention-sweep test-pooling-sweep test-softmax-sweep test-conv-sweep test-norm-sweep test-norm-attention-sweep test-conv-groups-sweep test-conv-pool-cascade test-mma-activation-sweep test-softmax-attention-sweep test-dram-refresh-sweep test-dram-refresh-phase-sweep
 
 all: libtucmodel.a libtucmodel.so
 
@@ -215,6 +215,11 @@ $(TU_DIR)/bindings/tu_dpi.o: $(TU_DIR)/bindings/tu_dpi.c $(TU_DIR)/bindings/tu_d
 test-cmodel: tests/test_cmodel.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-cmodel
+
+# ---- Test: global lifecycle / repeated re-initialization ----
+test-reinit: tests/test_reinit.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
+	./test-reinit
 
 # ---- Test: command queue ----
 test-cmdq: tests/test_command_queue.c libtucmodel.a
@@ -656,7 +661,7 @@ test-asm: libtucmodel.a
 
 # Run full test suite: build library + all unit tests + integration
 .PHONY: test test-quick test-random test-full
-test: test-cmodel test-cmdq test-dma test-dram test-isa test-golden \
+test: test-cmodel test-reinit test-cmdq test-dma test-dram test-isa test-golden \
       test-elementwise test-bf16 test-memhier test-norm test-dataflow \
       test-logging test-int-quant test-conv test-asm test-rounding test-fp8 \
       test-attention test-perf test-pool test-pipeline test-agen test-multicore \
@@ -667,7 +672,7 @@ test: test-cmodel test-cmdq test-dma test-dram test-isa test-golden \
 	@echo "═══════════════════════════════════════════"
 
 # Quick smoke test (pre-commit)
-test-quick: test-cmodel test-cmdq test-dma test-asm
+test-quick: test-cmodel test-reinit test-cmdq test-dma test-asm
 	@echo ""
 	@echo "═══ Quick smoke test passed ═══"
 
@@ -710,7 +715,7 @@ config-docs: libtucmodel.a
 # ---- Clean ----
 clean:
 	rm -f $(TU_DIR)/*.o $(TU_DIR)/memory/*.o $(TU_DIR)/sparsity/*.o $(TU_DIR)/isa/*.o $(TU_DIR)/compute/*.o $(TU_DIR)/compute/dataflow/*.o $(TU_DIR)/infra/*.o $(TU_DIR)/perf/*.o $(TU_DIR)/bindings/*.o libtucmodel.a libtucmodel.so
-	rm -f test-cmodel test-cmdq test-dma test-dma-channel-sweep test-dma-arbitration-sweep test-dma-binding-sweep test-dma-bus-width-sweep test-dma-directional-latency-sweep test-dma-burst-issue-sweep test-dma-directional-burst-sweep test-dma-directional-issue-sweep test-dma-segmentation-sweep test-dma-base-scope-sweep test-dma-payload-scope-sweep test-dram test-sram-issue-sweep test-dram-row-policy-sweep test-dram-row-timeout-sweep test-dram-row-timeout-domain-sweep test-dram-turnaround-sweep test-dram-turnaround-idle-sweep test-dram-directional-burst-sweep test-dram-burst-alignment-sweep test-dram-zero-byte-sweep test-dram-address-mapping-sweep test-dram-refresh-sweep test-dram-refresh-phase-sweep test-dram-refresh-debt-sweep test-dram-core-clock-sweep test-isa test-golden test-golden-full
+	rm -f test-cmodel test-reinit test-cmdq test-dma test-dma-channel-sweep test-dma-arbitration-sweep test-dma-binding-sweep test-dma-bus-width-sweep test-dma-directional-latency-sweep test-dma-burst-issue-sweep test-dma-directional-burst-sweep test-dma-directional-issue-sweep test-dma-segmentation-sweep test-dma-base-scope-sweep test-dma-payload-scope-sweep test-dram test-sram-issue-sweep test-dram-row-policy-sweep test-dram-row-timeout-sweep test-dram-row-timeout-domain-sweep test-dram-turnaround-sweep test-dram-turnaround-idle-sweep test-dram-directional-burst-sweep test-dram-burst-alignment-sweep test-dram-zero-byte-sweep test-dram-address-mapping-sweep test-dram-refresh-sweep test-dram-refresh-phase-sweep test-dram-refresh-debt-sweep test-dram-core-clock-sweep test-isa test-golden test-golden-full
 	rm -f test-dataflow test-elementwise test-bf16 test-memhier test-norm test-logging
 	rm -f test-int-quant test-conv test-random
 	rm -f test-rounding test-fp8 test-attention test-perf test-pool test-pipeline

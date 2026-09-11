@@ -37,6 +37,24 @@ void tu_init(void) {
     tu_init_with_config(&cfg);
 }
 
+void tu_shutdown(void) {
+    /* DMA descriptors retain pointers into the current SRAM regions.  Finish
+     * accepted work before releasing those regions.  Descriptor objects stay
+     * caller-owned after completion, matching the public DMA contract. */
+    tu_dma_flush_all();
+    tu_dma_destroy();
+
+    /* A command queue owns its command slots, dependency arrays, and signal
+     * registry even after synchronous commands have completed. */
+    tu_cmdq_destroy(g_tu.cmdq);
+    g_tu.cmdq = NULL;
+
+    tu_sram_destroy(&g_tu.sram_w);
+    tu_sram_destroy(&g_tu.sram_a);
+    tu_sram_destroy(&g_tu.sram_o);
+    memset(&g_tu, 0, sizeof(g_tu));
+}
+
 /* ---- A1: JSON config loading ---- */
 
 int tu_init_from_file(const char *config_path,
@@ -70,14 +88,10 @@ void tu_init_with_config(const tu_runtime_config_t *cfg) {
     tu_log_init();
     TU_LOG_INFO(TU_COMP_CORE, "TinyTU CModel initializing...");
 
-    /* Tear down previous state if re-initializing */
-    if (g_tu.initialized) {
-        tu_sram_destroy(&g_tu.sram_w);
-        tu_sram_destroy(&g_tu.sram_a);
-        tu_sram_destroy(&g_tu.sram_o);
-    }
-
-    memset(&g_tu, 0, sizeof(g_tu));
+    /* Tear down previous state if re-initializing.  This must happen before
+     * DMA initialization clears its singleton and before SRAM pointers used
+     * by accepted descriptors become invalid. */
+    tu_shutdown();
 
     /* Store runtime config */
     g_tu.rt_cfg = *cfg;

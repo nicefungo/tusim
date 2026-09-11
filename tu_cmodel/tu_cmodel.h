@@ -113,6 +113,10 @@ void tu_init_with_config(const tu_runtime_config_t *cfg);
 /* Initialize TU — reset SRAM, clear stats. Call once at startup. */
 void tu_init(void);
 
+/* Drain accepted DMA descriptors and release global TU resources.
+ * Safe to call repeatedly.  Re-initialization performs this teardown first. */
+void tu_shutdown(void);
+
 /* Initialize TU from a JSON config file (Gap A1).
  * Reads config at the given path, validates, and initializes the TU.
  * Returns 0 on success, non-zero on failure. On failure, error_buf

@@ -5,6 +5,7 @@ build/
 
 # Test binaries
 test-cmodel
+test-reinit
 test-cmdq
 test-cmdq-dbg
 test-dma
