@@ -13,8 +13,10 @@ tu:
     pe_array:
       rows: 16            # PE rows (output dimension)
       cols: 16            # PE columns (input dimension)
-      dataflow: "weight_stationary"   # weight_stationary | output_stationary | row_stationary
+      dataflow: "weight_stationary"   # weight_stationary | output_stationary | row_stationary | no_local_reuse
       pipeline_depth: 2   # pipeline stages per PE (fetch → multiply → accumulate)
+
+    dispatch_via_plugin: true  # false retains the legacy inline MMA fallback
 
     mac_units_per_pe: 1   # MAC units per PE (for multi-issue PEs)
 
@@ -28,6 +30,12 @@ tu:
 
   # ---- Memory System ----
   memory:
+    hierarchy:
+      regfile_bytes_per_pe: 256
+      gbuf_size_kb: 1024
+      gbuf_banks: 16
+      gbuf_bank_width_bytes: 8
+
     sram:
       # Buffer sizes in KB
       w_buffer_kb: 128    # Weight buffer
@@ -126,6 +134,13 @@ tu:
       enabled: false
       format: "none"            # none | vcd | fst
       output_file: ""
+      max_events: 65536
+      export_vcd: true
+    logging:
+      level: 3                   # ERROR=1, WARN=2, INFO=3, DEBUG=4, TRACE=5
+      use_color: true
+      show_timestamps: true
+      show_file_line: false
 
   # ---- Power Model ----
   power:
@@ -143,15 +158,19 @@ tu:
     fp32:
       rounding: "round_nearest_even"
     int8:
+      enabled: true
+      accumulator_bits: 32
       quantization: "symmetric"
       per_channel: false
+    int4:
+      enabled: true
     bf16:
       rounding: "round_nearest_even"
 
   # ---- Sparsity ----
   sparsity:
-    enabled: false
-    structured_2of4: false
+    enabled: true            # module availability; dense remains the runtime default
+    structured_2of4: true    # module availability; selection is runtime-configured
     unstructured: false
     metadata_format: "bitmask"   # bitmask | csf | coordinate_list
     decoder_groups_per_cycle: 1  # packed 2:4 groups decoded per cycle

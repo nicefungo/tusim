@@ -28,24 +28,22 @@ extern "C" {
 #define TU_DATAFLOW_MODE_RS            2
 #define TU_DATAFLOW_MODE_NLR           3
 #define TU_DATAFLOW_MODE               TU_DATAFLOW_MODE_WS
-#define TU_DATAFLOW_DISPATCH_VIA_PLUGIN 1  /* A4: use pluggable dataflow (1) or legacy inline (0) */
+#define TU_DATAFLOW_DISPATCH_VIA_PLUGIN 1
 
 #define TU_PRECISION_FP16       (1 << 0)
 #define TU_PRECISION_FP32       (1 << 1)
 #define TU_PRECISION_BF16       (1 << 2)
 #define TU_PRECISION_FP8        (1 << 3)
-#define TU_PRECISION_FP8_E4M3   (1 << 3)  /* D4: Forward pass format */
-#define TU_PRECISION_FP8_E5M2   (1 << 4)  /* D4: Backward pass format */
+#define TU_PRECISION_FP8_E4M3   (1 << 3)
+#define TU_PRECISION_FP8_E5M2   (1 << 4)
 #define TU_PRECISION_INT8       (1 << 5)
 #define TU_PRECISION_INT4       (1 << 6)
 #define TU_PRECISION_MASK       3
 #define TU_ACCUMULATOR_PRECISION_FP32  1
 
-/* INT8 quantization: enable integer quantization path (D2) */
 #define TU_INT8_ENABLED              1
 #define TU_INT8_ACCUM_BITS           32
 #define TU_INT8_SYMMETRIC_DEFAULT    1
-/* INT4 quantization: packed UINT4 storage */
 #define TU_INT4_ENABLED              1
 
 /* ================================================================
@@ -64,17 +62,17 @@ extern "C" {
 #define TU_SRAM_BANKS           32
 #define TU_SRAM_BANK_WIDTH      4
 
-/* ================================================================
- * Memory Hierarchy (A3)
- * ================================================================ */
-
-/* Register File (Level 0) — per-PE */
-#define TU_MEM_REGFILE_PER_PE       256      /* Bytes per PE */
-
-/* Global Buffer (Level 2) — shared L2 */
-#define TU_MEM_GBUF_SIZE            (1 * 1024 * 1024)  /* 1 MB */
+#define TU_MEM_REGFILE_PER_PE       256
+#define TU_MEM_GBUF_SIZE            (1024 * 1024)
 #define TU_MEM_GBUF_BANKS           16
-#define TU_MEM_GBUF_BANK_WIDTH      8        /* 64-bit words */
+#define TU_MEM_GBUF_BANK_WIDTH      8
+#define TU_SRAM_WORDS_PER_CYCLE 1
+#define TU_SRAM_BW_WINDOW_CYCLES 4
+#define TU_SRAM_BW_STALL_PENALTY 2
+#define TU_SRAM_ARB_NONE          0
+#define TU_SRAM_ARB_ROUND_ROBIN   1
+#define TU_SRAM_ARB_PRIORITY      2
+#define TU_SRAM_ARB_MODE          TU_SRAM_ARB_ROUND_ROBIN
 
 #define TU_CONFLICT_NONE        0
 #define TU_CONFLICT_DETECT      1
@@ -132,30 +130,6 @@ extern "C" {
 #define TU_DRAM_TRFC_PB_NS            90
 #define TU_DRAM_REFRESH_MAX_DEFERRAL_NS 7800
 
-/* ================================================================
- * SRAM Bandwidth Model (M2)
- * ================================================================ */
-
-/* Words granted per bank per refill window. This equals a physical per-cycle
- * issue rate only when TU_SRAM_BW_WINDOW_CYCLES is one. */
-#define TU_SRAM_WORDS_PER_CYCLE 1
-
-/* Arbitration policy when multiple accesses hit the same bank */
-#define TU_SRAM_ARB_NONE          0  /* No arbitration — all pass (unrealistic) */
-#define TU_SRAM_ARB_ROUND_ROBIN   1  /* Round-robin between contending ports */
-#define TU_SRAM_ARB_PRIORITY      2  /* Fixed priority (read > write) */
-#define TU_SRAM_ARB_MODE          TU_SRAM_ARB_ROUND_ROBIN
-
-/* Bandwidth metering: refill-based budget (words per cycle window) */
-#define TU_SRAM_BW_WINDOW_CYCLES  4  /* Refill window in cycles */
-
-/* Stall penalty when bandwidth is exhausted (in cycles) */
-#define TU_SRAM_BW_STALL_PENALTY  2
-
-/* ================================================================
- * DRAM Model
- * ================================================================ */
-
 #define TU_DRAM_IDEAL             0
 #define TU_DRAM_HBM2              1
 #define TU_DRAM_HBM2E             2
@@ -183,27 +157,27 @@ extern "C" {
 #define TU_DMA_WRITE_BURST_ISSUE_CYCLES 0
 #define TU_DMA_BURST_SEGMENTATION_AGGREGATE 0
 #define TU_DMA_BURST_SEGMENTATION_LOGICAL_SEGMENTS 1
-#define TU_DMA_BURST_SEGMENTATION TU_DMA_BURST_SEGMENTATION_AGGREGATE
+#define TU_DMA_BURST_SEGMENTATION 0
 #define TU_DMA_BASE_LATENCY_SCOPE_DESCRIPTOR 0
 #define TU_DMA_BASE_LATENCY_SCOPE_LOGICAL_SEGMENTS 1
-#define TU_DMA_BASE_LATENCY_SCOPE TU_DMA_BASE_LATENCY_SCOPE_DESCRIPTOR
+#define TU_DMA_BASE_LATENCY_SCOPE 0
 #define TU_DMA_PAYLOAD_SCOPE_DESCRIPTOR 0
 #define TU_DMA_PAYLOAD_SCOPE_LOGICAL_SEGMENTS 1
-#define TU_DMA_PAYLOAD_SCOPE TU_DMA_PAYLOAD_SCOPE_DESCRIPTOR
+#define TU_DMA_PAYLOAD_SCOPE 0
 #define TU_DMA_CHANNELS         3
 #define TU_DMA_ENGINE_MAX_CHANNELS 8
 #define TU_DMA_BUS_INDEPENDENT  0
 #define TU_DMA_BUS_SHARED_SERIAL 1
-#define TU_DMA_BUS_MODE         TU_DMA_BUS_INDEPENDENT
+#define TU_DMA_BUS_MODE         0
 #define TU_DMA_ARB_DEFAULT_ROUND_ROBIN  0
 #define TU_DMA_ARB_DEFAULT_STRICT_PRIORITY 1
-#define TU_DMA_ARB_POLICY       TU_DMA_ARB_DEFAULT_ROUND_ROBIN
+#define TU_DMA_ARB_POLICY       0
 #define TU_DMA_BIND_DEFAULT_EXPLICIT 0
 #define TU_DMA_BIND_DEFAULT_ROUND_ROBIN 1
 #define TU_DMA_BIND_DEFAULT_LEAST_OUTSTANDING 2
 #define TU_DMA_BIND_DEFAULT_LEAST_BYTES 3
 #define TU_DMA_BIND_DEFAULT_LEAST_PROJECTED_CYCLES 4
-#define TU_DMA_BIND_POLICY      TU_DMA_BIND_DEFAULT_EXPLICIT
+#define TU_DMA_BIND_POLICY      0
 #define TU_DMA_MAX_OUTSTANDING  4
 #define TU_DMA_ASYNC_MODE       0
 
@@ -229,15 +203,15 @@ extern "C" {
 #define TU_ICC_SWITCH_LEGACY_HOP_ONLY  0
 #define TU_ICC_SWITCH_CUT_THROUGH      1
 #define TU_ICC_SWITCH_STORE_FORWARD    2
-#define TU_ICC_SWITCHING_MODE          TU_ICC_SWITCH_LEGACY_HOP_ONLY
+#define TU_ICC_SWITCHING_MODE          0
 #define TU_ICC_LINK_BYTES_PER_CYCLE    16
 #define TU_ICC_ROUTER_LATENCY_CYCLES   5
 #define TU_ICC_CONTENTION_IDEAL_PARALLEL 0
 #define TU_ICC_CONTENTION_SHARED_LINK    1
-#define TU_ICC_CONTENTION_MODE           TU_ICC_CONTENTION_IDEAL_PARALLEL
+#define TU_ICC_CONTENTION_MODE           0
 #define TU_ICC_MESH_ROUTE_XY             0
 #define TU_ICC_MESH_ROUTE_YX             1
-#define TU_ICC_MESH_ROUTING_MODE         TU_ICC_MESH_ROUTE_XY
+#define TU_ICC_MESH_ROUTING_MODE         0
 
 /* ================================================================
  * Performance Model
@@ -246,35 +220,21 @@ extern "C" {
 #define TU_CYCLE_MODEL_FUNCTIONAL    0
 #define TU_CYCLE_MODEL_ESTIMATED     1
 #define TU_CYCLE_MODEL_CYCLE_ACCURATE 2
-#define TU_CYCLE_MODEL               0  /* 0=FUNCTIONAL (default), 1=ESTIMATED, 2=CYCLE_ACCURATE */
+#define TU_CYCLE_MODEL               0
 
 #define TU_COUNTERS_ENABLED           1
 #define TU_COUNTERS_DETAILED_STALLS   0
 #define TU_TRACE_ENABLED              0
 
-/* Power-model architecture assumptions: AUTO preserves legacy heuristics. */
+#define TU_LOG_LEVEL_DEFAULT          3
+#define TU_LOG_USE_COLOR              1
+#define TU_LOG_SHOW_TIMESTAMPS        1
+#define TU_LOG_SHOW_FILE_LINE         0
+#define TU_TRACE_MAX_EVENTS           65536
+#define TU_TRACE_EXPORT_VCD           1
+
 #define TU_POWER_TECH_NODE            0
 #define TU_POWER_CLOCK_FREQ_MHZ       0.0
-
-/* ================================================================
- * Logging & Trace (Q2)
- * ================================================================ */
-
-/* Default minimum log level: ERROR=1, WARN=2, INFO=3, DEBUG=4, TRACE=5 */
-#define TU_LOG_LEVEL_DEFAULT         TU_LOG_INFO
-
-/* Enable colored output (ANSI escape codes) */
-#define TU_LOG_USE_COLOR             1
-
-/* Show timestamps in log output [cycles] */
-#define TU_LOG_SHOW_TIMESTAMPS       1
-
-/* Show source file:line (useful for DEBUG and TRACE) */
-#define TU_LOG_SHOW_FILE_LINE        0
-
-/* Trace buffer: record execution events for VCD export */
-#define TU_TRACE_MAX_EVENTS          65536
-#define TU_TRACE_EXPORT_VCD          1
 
 /* ================================================================
  * Precision Parameters

@@ -8,7 +8,7 @@ LDFLAGS ?= -lm
 TU_DIR     = tu_cmodel
 COMPILER   = compiler/onnx_to_tu.py
 
-.PHONY: all clean test test-cmodel test-reinit test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline test-agen test-multicore test-multicore-sweep test-multicore-dataflow-sweep test-multicast test-scatter-gather test-trace test-errors test-config test-dataflow test-logging test-rounding test-fp8 test-softmax test-double test-random test-full test-context test-context-switch-sweep test-compress test-weight-compression-sweep test-sparsity test-sparsity-sweep test-scheduler test-liveness test-tf32 test-bench test-power test-power-assumptions-sweep test-debug test-dataflow-sweep test-rounding-sweep test-attention-sweep test-pooling-sweep test-softmax-sweep test-conv-sweep test-norm-sweep test-norm-attention-sweep test-conv-groups-sweep test-conv-pool-cascade test-mma-activation-sweep test-softmax-attention-sweep test-dram-refresh-sweep test-dram-refresh-phase-sweep
+.PHONY: all clean test test-cmodel test-reinit test-cmdq test-dma test-dram test-isa test-golden test-compiler test-asm test-memhier test-norm test-elementwise test-bf16 test-int-quant test-conv test-attention test-perf test-pool test-pipeline test-agen test-multicore test-multicore-sweep test-multicore-dataflow-sweep test-multicast test-scatter-gather test-trace test-errors test-config test-config-generation test-dataflow test-logging test-rounding test-fp8 test-softmax test-double test-random test-full test-context test-context-switch-sweep test-compress test-weight-compression-sweep test-sparsity test-sparsity-sweep test-scheduler test-liveness test-tf32 test-bench test-power test-power-assumptions-sweep test-debug test-dataflow-sweep test-rounding-sweep test-attention-sweep test-pooling-sweep test-softmax-sweep test-conv-sweep test-norm-sweep test-norm-attention-sweep test-conv-groups-sweep test-conv-pool-cascade test-mma-activation-sweep test-softmax-attention-sweep test-dram-refresh-sweep test-dram-refresh-phase-sweep
 
 all: libtucmodel.a libtucmodel.so
 
@@ -636,6 +636,10 @@ test-config: tests/test_config.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< ./libtucmodel.a $(LDFLAGS)
 	./test-config
 
+# ---- Test: YAML-generated header coherence ----
+test-config-generation: tests/test_generated_config.py scripts/gen_config.py config/tu_config.yaml $(TU_DIR)/tu_config.h
+	python3 tests/test_generated_config.py
+
 test-golden-full: tests/test_golden.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-golden
@@ -661,7 +665,7 @@ test-asm: libtucmodel.a
 
 # Run full test suite: build library + all unit tests + integration
 .PHONY: test test-quick test-random test-full
-test: test-cmodel test-reinit test-cmdq test-dma test-dram test-isa test-golden \
+test: test-config-generation test-cmodel test-reinit test-cmdq test-dma test-dram test-isa test-golden \
       test-elementwise test-bf16 test-memhier test-norm test-dataflow \
       test-logging test-int-quant test-conv test-asm test-rounding test-fp8 \
       test-attention test-perf test-pool test-pipeline test-agen test-multicore \
@@ -672,7 +676,7 @@ test: test-cmodel test-reinit test-cmdq test-dma test-dram test-isa test-golden 
 	@echo "═══════════════════════════════════════════"
 
 # Quick smoke test (pre-commit)
-test-quick: test-cmodel test-reinit test-cmdq test-dma test-asm
+test-quick: test-config-generation test-cmodel test-reinit test-cmdq test-dma test-asm
 	@echo ""
 	@echo "═══ Quick smoke test passed ═══"
 

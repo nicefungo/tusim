@@ -137,29 +137,41 @@ def generate_header(config, output_path):
     L(f'#define TU_MAC_UNITS_PER_PE     {comp["mac_units_per_pe"]}')
     L('')
 
-    df_map = {'weight_stationary': 0, 'output_stationary': 1, 'row_stationary': 2}
-    L(f'#define TU_DATAFLOW_WEIGHT_STATIONARY  0')
-    L(f'#define TU_DATAFLOW_OUTPUT_STATIONARY  1')
-    L(f'#define TU_DATAFLOW_ROW_STATIONARY     2')
-    L(f'#define TU_DATAFLOW_MODE              {df_map[pe["dataflow"]]}')
+    df_map = {'weight_stationary': 'TU_DATAFLOW_MODE_WS',
+              'output_stationary': 'TU_DATAFLOW_MODE_OS',
+              'row_stationary': 'TU_DATAFLOW_MODE_RS',
+              'no_local_reuse': 'TU_DATAFLOW_MODE_NLR'}
+    L('#define TU_DATAFLOW_MODE_WS            0')
+    L('#define TU_DATAFLOW_MODE_OS            1')
+    L('#define TU_DATAFLOW_MODE_RS            2')
+    L('#define TU_DATAFLOW_MODE_NLR           3')
+    L(f'#define TU_DATAFLOW_MODE               {df_map[pe["dataflow"]]}')
+    L(f'#define TU_DATAFLOW_DISPATCH_VIA_PLUGIN {1 if comp["dispatch_via_plugin"] else 0}')
     L('')
 
+    precision_bits = {
+        'fp16': 1 << 0, 'fp32': 1 << 1, 'bf16': 1 << 2,
+        'fp8': 1 << 3, 'fp8_e4m3': 1 << 3, 'fp8_e5m2': 1 << 4,
+        'int8': 1 << 5, 'int4': 1 << 6,
+    }
     prec_mask = 0
     for p in comp['supported_precisions']:
-        if p == 'fp16': prec_mask |= 1
-        elif p == 'fp32': prec_mask |= 2
-        elif p == 'bf16': prec_mask |= 4
-        elif p == 'fp8': prec_mask |= 8
-        elif p == 'int8': prec_mask |= 16
-        elif p == 'int4': prec_mask |= 32
+        prec_mask |= precision_bits[p]
     L(f'#define TU_PRECISION_FP16       (1 << 0)')
     L(f'#define TU_PRECISION_FP32       (1 << 1)')
     L(f'#define TU_PRECISION_BF16       (1 << 2)')
     L(f'#define TU_PRECISION_FP8        (1 << 3)')
-    L(f'#define TU_PRECISION_INT8       (1 << 4)')
-    L(f'#define TU_PRECISION_INT4       (1 << 5)')
+    L(f'#define TU_PRECISION_FP8_E4M3   (1 << 3)')
+    L(f'#define TU_PRECISION_FP8_E5M2   (1 << 4)')
+    L(f'#define TU_PRECISION_INT8       (1 << 5)')
+    L(f'#define TU_PRECISION_INT4       (1 << 6)')
     L(f'#define TU_PRECISION_MASK       {prec_mask}')
     L(f'#define TU_ACCUMULATOR_PRECISION_{comp["accumulator_precision"].upper()}  1')
+    L('')
+    L(f'#define TU_INT8_ENABLED              {1 if prec["int8"]["enabled"] else 0}')
+    L(f'#define TU_INT8_ACCUM_BITS           {prec["int8"]["accumulator_bits"]}')
+    L(f'#define TU_INT8_SYMMETRIC_DEFAULT    {1 if prec["int8"]["quantization"] == "symmetric" else 0}')
+    L(f'#define TU_INT4_ENABLED              {1 if prec["int4"]["enabled"] else 0}')
     L('')
 
     # Memory
@@ -181,6 +193,13 @@ def generate_header(config, output_path):
     bank = mem['banking']
     L(f'#define TU_SRAM_BANKS           {bank["banks"]}')
     L(f'#define TU_SRAM_BANK_WIDTH      {bank["bank_width_bytes"]}')
+
+    hierarchy = mem['hierarchy']
+    L('')
+    L(f'#define TU_MEM_REGFILE_PER_PE       {hierarchy["regfile_bytes_per_pe"]}')
+    L(f'#define TU_MEM_GBUF_SIZE            ({hierarchy["gbuf_size_kb"]} * 1024)')
+    L(f'#define TU_MEM_GBUF_BANKS           {hierarchy["gbuf_banks"]}')
+    L(f'#define TU_MEM_GBUF_BANK_WIDTH      {hierarchy["gbuf_bank_width_bytes"]}')
     L(f'#define TU_SRAM_WORDS_PER_CYCLE {bank["words_per_refill"]}')
     L(f'#define TU_SRAM_BW_WINDOW_CYCLES {bank["refill_window_cycles"]}')
     L(f'#define TU_SRAM_BW_STALL_PENALTY {bank["stall_penalty_cycles"]}')
@@ -261,6 +280,23 @@ def generate_header(config, output_path):
     L(f'#define TU_DRAM_TRFC_NS               {refresh["trfc_ns"]}')
     L(f'#define TU_DRAM_TRFC_PB_NS            {refresh["trfc_pb_ns"]}')
     L(f'#define TU_DRAM_REFRESH_MAX_DEFERRAL_NS {refresh["max_deferral_ns"]}')
+    dram_type_map = {'ideal': 'TU_DRAM_IDEAL', 'hbm2': 'TU_DRAM_HBM2',
+                     'hbm2e': 'TU_DRAM_HBM2E', 'hbm3': 'TU_DRAM_HBM3',
+                     'ddr4': 'TU_DRAM_DDR4', 'ddr5': 'TU_DRAM_DDR5',
+                     'lpddr5': 'TU_DRAM_LPDDR5', 'custom': 'TU_DRAM_CUSTOM'}
+    L('')
+    L('#define TU_DRAM_IDEAL             0')
+    L('#define TU_DRAM_HBM2              1')
+    L('#define TU_DRAM_HBM2E             2')
+    L('#define TU_DRAM_HBM3              3')
+    L('#define TU_DRAM_DDR4              4')
+    L('#define TU_DRAM_DDR5              5')
+    L('#define TU_DRAM_LPDDR5            6')
+    L('#define TU_DRAM_CUSTOM            7')
+    L(f'#define TU_DRAM_TYPE              {dram_type_map[dram["type"]]}')
+    L(f'#define TU_DRAM_BANDWIDTH_GBPS    {dram["bandwidth_gbps"]}')
+    L(f'#define TU_DRAM_CHANNELS          {dram["channels"]}')
+    L(f'#define TU_DRAM_MODEL_ROW_HIT     {1 if dram["model_row_conflicts"] else 0}')
     L('')
 
     # DMA
@@ -366,6 +402,15 @@ def generate_header(config, output_path):
     L(f'#define TU_TRACE_ENABLED              {1 if tr["enabled"] else 0}')
     L('')
 
+    logging = perf['logging']
+    L(f'#define TU_LOG_LEVEL_DEFAULT          {logging["level"]}')
+    L(f'#define TU_LOG_USE_COLOR              {1 if logging["use_color"] else 0}')
+    L(f'#define TU_LOG_SHOW_TIMESTAMPS        {1 if logging["show_timestamps"] else 0}')
+    L(f'#define TU_LOG_SHOW_FILE_LINE         {1 if logging["show_file_line"] else 0}')
+    L(f'#define TU_TRACE_MAX_EVENTS           {tr["max_events"]}')
+    L(f'#define TU_TRACE_EXPORT_VCD           {1 if tr["export_vcd"] else 0}')
+    L('')
+
     # Power-model architecture assumptions
     tech_map = {'auto': 0, '45nm': 1, '28nm': 2, '16nm': 3, '7nm': 4, '5nm': 5, '3nm': 6}
     L(f'#define TU_POWER_TECH_NODE            {tech_map[power["tech_node"]]}')
@@ -378,9 +423,11 @@ def generate_header(config, output_path):
     L(' * ================================================================ */')
     L('')
     fp16 = prec['fp16']
-    rmap = {'round_nearest_even': 0, 'round_toward_zero': 1}
+    rmap = {'round_nearest_even': 0, 'round_toward_zero': 1,
+            'stochastic': 2}
     L(f'#define TU_FP16_ROUNDING_RNE          0')
     L(f'#define TU_FP16_ROUNDING_RTZ          1')
+    L(f'#define TU_FP16_ROUNDING_STOCHASTIC   2')
     L(f'#define TU_FP16_ROUNDING_MODE         {rmap[fp16["rounding"]]}')
     L(f'#define TU_FP16_SUBNORMAL_FLUSH       {1 if fp16["subnormal"] == "flush_to_zero" else 0}')
     L(f'#define TU_FP16_SATURATE              {1 if fp16["saturate"] else 0}')
