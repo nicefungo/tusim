@@ -54,7 +54,7 @@ Legacy `tu_dma_load()` and `tu_dma_store()` select their corresponding direction
 
 ## Fidelity limits
 
-Functional movement remains aggregate `memcpy`; burst segmentation affects timing accounting only. The model does not represent command FIFO depth, command/data overlap explicitly, finite credits, address alignment or protocol boundaries, retries, write combining, masks, queue backpressure, shared SRAM/DRAM limits, producer issue timing, or calibration. A zero visible issue cost is an overlap/lower-bound abstraction, not proof that physical command generation consumes no area, energy, or time.
+Functional movement remains aggregate `memcpy`; burst segmentation affects timing accounting only. Serialized versus ideal issue/payload overlap is now an independent runtime choice; see `dma-issue-payload-overlap.md`. The model still does not represent command FIFO depth, finite credits, overlap bubbles, address alignment or protocol boundaries, retries, write combining, masks, queue backpressure, shared SRAM/DRAM limits, producer issue timing, or calibration. A zero visible issue cost remains a lower-bound abstraction, not proof that physical command generation consumes no area, energy, or time.
 
 ## Verification
 

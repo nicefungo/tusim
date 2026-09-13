@@ -81,6 +81,7 @@
       "burst_segmentation": "aggregate",
       "base_latency_scope": "descriptor",
       "payload_scope": "descriptor",
+      "issue_payload_mode": "serialized",
       "channels": 3,
       "bus_topology": "independent",
       "arbitration": "round_robin",

@@ -26,23 +26,24 @@ tu_dma_engine_t g_tu_dma = {0};
  * Lifecycle
  * ================================================================ */
 
-void tu_dma_init_config_payload_scope(bool async, uint32_t num_channels,
-                                      uint32_t max_queue_depth, int bus_mode,
-                                      int arb_policy, int binding_policy,
-                                      uint32_t bus_width_bits,
-                                      uint32_t read_latency_cycles,
-                                      uint32_t write_latency_cycles,
-                                      uint32_t max_burst_bytes,
-                                      uint32_t read_max_burst_bytes,
-                                      uint32_t write_max_burst_bytes,
-                                      uint32_t burst_issue_cycles,
-                                      uint32_t read_burst_issue_cycles,
-                                      uint32_t write_burst_issue_cycles,
-                                      bool read_issue_configured,
-                                      bool write_issue_configured,
-                                      int burst_segmentation,
-                                      int base_latency_scope,
-                                      int payload_scope) {
+void tu_dma_init_config_overlap(bool async, uint32_t num_channels,
+                                uint32_t max_queue_depth, int bus_mode,
+                                int arb_policy, int binding_policy,
+                                uint32_t bus_width_bits,
+                                uint32_t read_latency_cycles,
+                                uint32_t write_latency_cycles,
+                                uint32_t max_burst_bytes,
+                                uint32_t read_max_burst_bytes,
+                                uint32_t write_max_burst_bytes,
+                                uint32_t burst_issue_cycles,
+                                uint32_t read_burst_issue_cycles,
+                                uint32_t write_burst_issue_cycles,
+                                bool read_issue_configured,
+                                bool write_issue_configured,
+                                int burst_segmentation,
+                                int base_latency_scope,
+                                int payload_scope,
+                                int issue_payload_mode) {
     memset(&g_tu_dma, 0, sizeof(g_tu_dma));
     g_tu_dma.async_mode = async;
     if (bus_mode != TU_DMA_BUS_MODE_INDEPENDENT &&
@@ -91,6 +92,15 @@ void tu_dma_init_config_payload_scope(bool async, uint32_t num_channels,
         return;
     }
     g_tu_dma.payload_scope = (tu_dma_payload_scope_t)payload_scope;
+    if (issue_payload_mode != TU_DMA_ISSUE_PAYLOAD_SERIALIZED &&
+        issue_payload_mode != TU_DMA_ISSUE_PAYLOAD_OVERLAPPED) {
+        fprintf(stderr, "DMA: unsupported issue/payload mode %d\n",
+                issue_payload_mode);
+        memset(&g_tu_dma, 0, sizeof(g_tu_dma));
+        return;
+    }
+    g_tu_dma.issue_payload_mode =
+        (tu_dma_issue_payload_mode_t)issue_payload_mode;
     if (bus_width_bits == 0)
         bus_width_bits = TU_DMA_BUS_WIDTH_BITS; /* zero-initialized runtime compatibility */
     if (bus_width_bits < 32 || bus_width_bits > 1024 ||
@@ -144,6 +154,33 @@ void tu_dma_init_config_payload_scope(bool async, uint32_t num_channels,
         g_tu_dma.channels[i].channel_id = (uint8_t)i;
         g_tu_dma.channels[i].max_depth = max_queue_depth > 0 ? max_queue_depth : TU_DMA_MAX_OUTSTANDING;
     }
+}
+
+void tu_dma_init_config_payload_scope(bool async, uint32_t num_channels,
+                                      uint32_t max_queue_depth, int bus_mode,
+                                      int arb_policy, int binding_policy,
+                                      uint32_t bus_width_bits,
+                                      uint32_t read_latency_cycles,
+                                      uint32_t write_latency_cycles,
+                                      uint32_t max_burst_bytes,
+                                      uint32_t read_max_burst_bytes,
+                                      uint32_t write_max_burst_bytes,
+                                      uint32_t burst_issue_cycles,
+                                      uint32_t read_burst_issue_cycles,
+                                      uint32_t write_burst_issue_cycles,
+                                      bool read_issue_configured,
+                                      bool write_issue_configured,
+                                      int burst_segmentation,
+                                      int base_latency_scope,
+                                      int payload_scope) {
+    tu_dma_init_config_overlap(
+        async, num_channels, max_queue_depth, bus_mode, arb_policy,
+        binding_policy, bus_width_bits, read_latency_cycles,
+        write_latency_cycles, max_burst_bytes, read_max_burst_bytes,
+        write_max_burst_bytes, burst_issue_cycles, read_burst_issue_cycles,
+        write_burst_issue_cycles, read_issue_configured,
+        write_issue_configured, burst_segmentation, base_latency_scope,
+        payload_scope, TU_DMA_ISSUE_PAYLOAD_SERIALIZED);
 }
 
 void tu_dma_init_config_base_scope(bool async, uint32_t num_channels,
@@ -769,6 +806,30 @@ static uint32_t descriptor_burst_issue_cycles(const tu_dma_descriptor_t *desc) {
            g_tu_dma.read_burst_issue_cycles;
 }
 
+static uint64_t combine_payload_issue_cycles(uint64_t payload_cycles,
+                                             uint64_t burst_count,
+                                             uint32_t issue_per_burst) {
+    uint64_t issue_cycles = burst_count * issue_per_burst;
+    if (g_tu_dma.issue_payload_mode == TU_DMA_ISSUE_PAYLOAD_OVERLAPPED &&
+        burst_count > 0 && issue_per_burst > 0) {
+        /* The first command must be issued before any payload can move.  Once
+         * it has started the data stage, later commands may overlap it. */
+        uint64_t remaining_issue = issue_cycles - issue_per_burst;
+        return issue_per_burst +
+               (payload_cycles > remaining_issue ?
+                    payload_cycles : remaining_issue);
+    }
+    return payload_cycles + issue_cycles;
+}
+
+static uint64_t descriptor_transfer_cycles(const tu_dma_descriptor_t *desc) {
+    uint64_t payload = descriptor_payload_cycles(desc);
+    uint64_t bursts = descriptor_burst_count(desc);
+    uint32_t issue = descriptor_burst_issue_cycles(desc);
+    return descriptor_base_cycles(desc) +
+           combine_payload_issue_cycles(payload, bursts, issue);
+}
+
 void tu_dma_execute_desc(tu_dma_descriptor_t *desc) {
     if (!desc || desc->completed) return;
 
@@ -872,11 +933,8 @@ void tu_dma_execute_desc(tu_dma_descriptor_t *desc) {
     /* Update accounting */
 accounting:
     /* For multicast, account fanout cost: N× the per-destination transfer */
-    uint64_t transfer_cycles = descriptor_base_cycles(desc);
     uint64_t payload_cycles = descriptor_payload_cycles(desc);
-    transfer_cycles += payload_cycles;
-    transfer_cycles += descriptor_burst_count(desc) *
-                       descriptor_burst_issue_cycles(desc);
+    uint64_t transfer_cycles = descriptor_transfer_cycles(desc);
 
     /* M2: Account for SRAM bandwidth stalls */
     uint64_t sram_stall_cycles = 0;
@@ -932,13 +990,10 @@ static uint64_t channel_assigned_bytes(const tu_dma_channel_state_t *ch) {
 
 /* Side-effect-free queue estimate in the descriptor engine's coarse service
  * domain. The live active descriptor uses its exact scheduled completion;
- * queued work uses base latency plus payload serialization. SRAM refill
- * penalties are stateful and intentionally excluded rather than guessed. */
+ * queued work uses the configured base, payload, issue, and overlap model.
+ * SRAM refill penalties are stateful and intentionally excluded. */
 static uint64_t descriptor_coarse_cycles(const tu_dma_descriptor_t *desc) {
-    uint64_t base = descriptor_base_cycles(desc);
-    uint64_t payload = descriptor_payload_cycles(desc);
-    uint64_t bursts = descriptor_burst_count(desc);
-    return base + payload + bursts * descriptor_burst_issue_cycles(desc);
+    return descriptor_transfer_cycles(desc);
 }
 
 static uint64_t channel_projected_cycles(const tu_dma_channel_state_t *ch) {
@@ -1152,12 +1207,10 @@ void tu_dma_load(tu_dma_channel_t ch, tu_sram_region_t *dst,
     g_tu_dma.total_bytes += bytes;
     g_tu_dma.total_transfers++;
     g_tu_dma.estimated_cycles += g_tu_dma.read_latency_cycles;
-    g_tu_dma.estimated_cycles += (bytes + g_tu_dma.bus_width_bytes - 1u) /
-                                 g_tu_dma.bus_width_bytes;
-    g_tu_dma.estimated_cycles +=
-        (((uint64_t)bytes + g_tu_dma.read_max_burst_bytes - 1u) /
-         g_tu_dma.read_max_burst_bytes) *
-        g_tu_dma.read_burst_issue_cycles;
+    uint64_t payload = ceil_div_u64(bytes, g_tu_dma.bus_width_bytes);
+    uint64_t bursts = ceil_div_u64(bytes, g_tu_dma.read_max_burst_bytes);
+    g_tu_dma.estimated_cycles += combine_payload_issue_cycles(
+        payload, bursts, g_tu_dma.read_burst_issue_cycles);
 }
 
 void tu_dma_store(tu_dma_channel_t ch, tu_sram_region_t *src,
@@ -1174,12 +1227,10 @@ void tu_dma_store(tu_dma_channel_t ch, tu_sram_region_t *src,
     g_tu_dma.total_bytes += bytes;
     g_tu_dma.total_transfers++;
     g_tu_dma.estimated_cycles += g_tu_dma.write_latency_cycles;
-    g_tu_dma.estimated_cycles += (bytes + g_tu_dma.bus_width_bytes - 1u) /
-                                 g_tu_dma.bus_width_bytes;
-    g_tu_dma.estimated_cycles +=
-        (((uint64_t)bytes + g_tu_dma.write_max_burst_bytes - 1u) /
-         g_tu_dma.write_max_burst_bytes) *
-        g_tu_dma.write_burst_issue_cycles;
+    uint64_t payload = ceil_div_u64(bytes, g_tu_dma.bus_width_bytes);
+    uint64_t bursts = ceil_div_u64(bytes, g_tu_dma.write_max_burst_bytes);
+    g_tu_dma.estimated_cycles += combine_payload_issue_cycles(
+        payload, bursts, g_tu_dma.write_burst_issue_cycles);
 }
 
 void tu_dma_sync(void) {

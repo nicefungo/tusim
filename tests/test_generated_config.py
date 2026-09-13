@@ -50,6 +50,8 @@ def main() -> int:
             "bandwidth_gbps: 256.0": "bandwidth_gbps: 128.0",
             "channels: 8          # power": "channels: 4          # power",
             "level: 3                   #": "level: 4                   #",
+            'issue_payload_mode: "serialized"':
+                'issue_payload_mode: "overlapped"',
             '    fp16:\n      rounding: "round_nearest_even"':
                 '    fp16:\n      rounding: "stochastic"',
         }
@@ -78,9 +80,11 @@ def main() -> int:
             '_Static_assert(TU_DRAM_TYPE == TU_DRAM_HBM3, "dram type");\n'
             '_Static_assert(TU_DRAM_CHANNELS == 4, "dram channels");\n'
             '_Static_assert(TU_LOG_LEVEL_DEFAULT == 4, "log level");\n'
+            '_Static_assert(TU_DMA_ISSUE_PAYLOAD_MODE == TU_DMA_ISSUE_PAYLOAD_DEFAULT_OVERLAPPED, "DMA issue/payload overlap");\n'
             '_Static_assert(TU_FP16_ROUNDING_MODE == TU_FP16_ROUNDING_STOCHASTIC, "rounding");\n'
             'int main(void) { tu_runtime_config_t c = tu_runtime_config_default(); '
-            'return c.dataflow_mode != TU_DATAFLOW_MODE_OS; }\n'
+            'return c.dataflow_mode != TU_DATAFLOW_MODE_OS || '
+            'c.dma_issue_payload_mode != TU_DMA_ISSUE_PAYLOAD_DEFAULT_OVERLAPPED; }\n'
         )
         subprocess.run(
             [

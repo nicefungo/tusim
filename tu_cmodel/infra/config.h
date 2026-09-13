@@ -132,6 +132,11 @@ typedef enum {
     TU_DMA_CONFIG_PAYLOAD_ALIGN_LOGICAL_SEGMENT = 1
 } tu_dma_config_payload_scope_t;
 
+typedef enum {
+    TU_DMA_CONFIG_ISSUE_PAYLOAD_SERIALIZED = 0,
+    TU_DMA_CONFIG_ISSUE_PAYLOAD_OVERLAPPED = 1
+} tu_dma_config_issue_payload_mode_t;
+
 /* ================================================================
  * Full Configuration Struct
  * ================================================================
@@ -223,6 +228,7 @@ typedef struct tu_config_t {
     int      dma_burst_segmentation; /* aggregate=0, logical_segments=1 */
     int      dma_base_latency_scope; /* descriptor=0, logical_segments=1 */
     int      dma_payload_scope; /* descriptor=0, logical_segments=1 */
+    int      dma_issue_payload_mode; /* serialized=0, overlapped=1 */
     uint32_t dma_num_channels;
     int      dma_bus_mode;          /* independent=0, shared_serial=1 */
     int      dma_arb_policy;        /* round_robin=0, strict_priority=1 */

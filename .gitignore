@@ -20,6 +20,7 @@ test-dma-directional-issue-sweep
 test-dma-segmentation-sweep
 test-dma-base-scope-sweep
 test-dma-payload-scope-sweep
+test-dma-issue-payload-overlap-sweep
 test-dram
 test-sram-issue-sweep
 test-dram-row-policy-sweep

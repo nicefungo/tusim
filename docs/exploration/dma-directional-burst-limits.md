@@ -56,7 +56,7 @@ The checked-in generated header was updated additively after a temporary generat
 
 ## Fidelity limits
 
-Functional copies remain aggregate `memcpy` operations. Burst segmentation affects timing accounting only. The model does not include address alignment, 4 KiB boundaries, per-row segmentation for strided descriptors, masks, write combining, explicit command/data overlap, finite credits, retries, queue backpressure, shared SRAM/DRAM bandwidth, protocol legality, or calibration. Directional issue costs now exist as a separate additive abstraction, but do not close those physical gaps. Area, power, and energy directions above are qualitative expectations, not cmodel measurements.
+Functional copies remain aggregate `memcpy` operations. Burst segmentation affects timing accounting only. The model does not include address alignment, 4 KiB boundaries, masks, write combining, finite credits, overlap bubbles, retries, queue backpressure, shared SRAM/DRAM bandwidth, protocol legality, or calibration. Logical per-row/index segmentation and serialized versus ideal command/payload overlap now exist as independent runtime alternatives, but do not close those physical gaps. Area, power, and energy are unquantified.
 
 ## Verification
 
