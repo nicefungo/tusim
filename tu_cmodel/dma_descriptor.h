@@ -74,7 +74,8 @@ typedef enum {
 
 typedef enum {
     TU_DMA_PAYLOAD_PACKED_DESCRIPTOR = 0,
-    TU_DMA_PAYLOAD_ALIGN_LOGICAL_SEGMENT = 1
+    TU_DMA_PAYLOAD_ALIGN_LOGICAL_SEGMENT = 1,
+    TU_DMA_PAYLOAD_ALIGN_BURST_COMMAND = 2
 } tu_dma_payload_scope_t;
 
 /* Command issue and payload serialization may occupy distinct pipeline

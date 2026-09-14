@@ -1,4 +1,4 @@
-/* DMA descriptor-packed vs logical-segment-aligned payload exploration. */
+/* DMA descriptor-, logical-segment-, and burst-command payload exploration. */
 #include "tu_cmodel/tu_cmodel.h"
 #include "tu_cmodel/dma_descriptor.h"
 #include "tu_cmodel/infra/config.h"
@@ -24,16 +24,16 @@ static int propagation_gate(void) {
     tu_config_t cfg;
     char err[192] = {0};
     if (tu_config_load_string(
-            "{\"tu\":{\"dma\":{\"payload_scope\":\"logical_segments\"}}}",
+            "{\"tu\":{\"dma\":{\"payload_scope\":\"burst_commands\"}}}",
             &cfg, err, sizeof(err)) != 0) return -1;
     if (cfg.dma_payload_scope !=
-        TU_DMA_CONFIG_PAYLOAD_ALIGN_LOGICAL_SEGMENT) return -2;
+        TU_DMA_CONFIG_PAYLOAD_ALIGN_BURST_COMMAND) return -2;
     tu_runtime_config_t rt = tu_config_to_runtime(&cfg);
     if (rt.dma_payload_scope !=
-        TU_DMA_CONFIG_PAYLOAD_ALIGN_LOGICAL_SEGMENT) return -3;
+        TU_DMA_CONFIG_PAYLOAD_ALIGN_BURST_COMMAND) return -3;
     tu_init_with_config(&rt);
     if (g_tu_dma.payload_scope !=
-        TU_DMA_PAYLOAD_ALIGN_LOGICAL_SEGMENT) return -4;
+        TU_DMA_PAYLOAD_ALIGN_BURST_COMMAND) return -4;
 
     if (tu_config_load_string(
             "{\"tu\":{\"dma\":{\"payload_scope\":\"packet_magic\"}}}",
@@ -103,8 +103,8 @@ static int run_case(case_t which, int scope, tu_dma_direction_t direction,
     tu_dma_init_config_payload_scope(
         true, 1, 4, TU_DMA_BUS_MODE_INDEPENDENT,
         TU_DMA_ARB_ROUND_ROBIN, TU_DMA_BIND_EXPLICIT,
-        256u, BASE, BASE, 64u, 64u, 64u, 0u,
-        0u, 0u, false, false, TU_DMA_SEGMENT_AGGREGATE,
+        256u, BASE, BASE, 16u, 16u, 16u, 0u,
+        0u, 0u, false, false, TU_DMA_SEGMENT_LOGICAL,
         TU_DMA_BASE_PER_DESCRIPTOR, scope);
     if (g_tu_dma.num_channels != 1 ||
         g_tu_dma.payload_scope != (tu_dma_payload_scope_t)scope) return -1;
@@ -139,14 +139,14 @@ static int projected_binding_gate(int scope, uint8_t expected_channel) {
     tu_dma_init_config_payload_scope(
         true, 2, 4, TU_DMA_BUS_MODE_INDEPENDENT,
         TU_DMA_ARB_ROUND_ROBIN, TU_DMA_BIND_EXPLICIT,
-        256u, BASE, BASE, 64u, 64u, 64u, 0u,
-        0u, 0u, false, false, TU_DMA_SEGMENT_AGGREGATE,
+        256u, BASE, BASE, 16u, 16u, 16u, 0u,
+        0u, 0u, false, false, TU_DMA_SEGMENT_LOGICAL,
         TU_DMA_BASE_PER_DESCRIPTOR, scope);
 
     tu_dma_descriptor_t *segmented = tu_dma_desc_create_strided_2d(
-        0, TU_DMA_DIR_HOST_TO_TU, &sram, 0, input, 16, 16, 1, 8, 5);
+        0, TU_DMA_DIR_HOST_TO_TU, &sram, 0, input, 32, 32, 1, 4, 20);
     tu_dma_descriptor_t *linear = tu_dma_desc_create_linear(
-        1, TU_DMA_DIR_HOST_TO_TU, &sram, 256, input, 1, 128);
+        1, TU_DMA_DIR_HOST_TO_TU, &sram, 256, input, 1, 112);
     tu_dma_descriptor_t *probe = tu_dma_desc_create_linear(
         0, TU_DMA_DIR_HOST_TO_TU, &sram, 800, input, 1, 16);
     if (!segmented || !linear || !probe ||
@@ -184,7 +184,7 @@ static int compatibility_and_rejection_gate(void) {
         TU_DMA_ARB_ROUND_ROBIN, TU_DMA_BIND_EXPLICIT,
         256u, BASE, BASE, 64u, 64u, 64u, 0u,
         0u, 0u, false, false, TU_DMA_SEGMENT_AGGREGATE,
-        TU_DMA_BASE_PER_DESCRIPTOR, 2);
+        TU_DMA_BASE_PER_DESCRIPTOR, 3);
     return g_tu_dma.num_channels == 0 ? 0 : -2;
 }
 
@@ -196,28 +196,44 @@ int main(void) {
     }
 
     static const char *names[] = {"linear", "strided_2d", "strided_3d", "gather"};
-    static const uint64_t packed_done[] = {54u, 54u, 55u, 52u};
-    static const uint64_t aligned_done[] = {54u, 55u, 57u, 56u};
-    static const uint64_t packed_bytes[] = {96u, 96u, 128u, 32u};
-    static const uint64_t aligned_bytes[] = {96u, 128u, 192u, 160u};
-    printf("DMA payload-scope sweep (32-byte interface beat, 50-cycle descriptor base)\n");
-    printf("case packed_done aligned_done packed_occupied aligned_occupied\n");
+    static const int scopes[] = {
+        TU_DMA_PAYLOAD_PACKED_DESCRIPTOR,
+        TU_DMA_PAYLOAD_ALIGN_LOGICAL_SEGMENT,
+        TU_DMA_PAYLOAD_ALIGN_BURST_COMMAND,
+    };
+    static const char *scope_names[] = {"descriptor", "logical", "bursts"};
+    static const uint32_t useful_bytes[] = {80u, 80u, 120u, 20u};
+    static const uint64_t expected_done[][3] = {
+        {54u, 54u, 56u},
+        {54u, 55u, 59u},
+        {55u, 57u, 63u},
+        {52u, 56u, 56u},
+    };
+    static const uint64_t expected_occupied[][3] = {
+        {96u, 96u, 160u},
+        {96u, 128u, 256u},
+        {128u, 192u, 384u},
+        {32u, 160u, 160u},
+    };
+    printf("DMA payload-scope sweep (32-byte interface beat, 16-byte bursts, 50-cycle descriptor base)\n");
+    printf("case scope completion useful occupied\n");
     for (int i = 0; i < 4; i++) {
-        uint64_t packed = 0, aligned = 0;
         tu_dma_direction_t dir = i == CASE_GATHER ?
                                  TU_DMA_DIR_TU_TO_HOST : TU_DMA_DIR_HOST_TO_TU;
-        int rc = run_case((case_t)i, TU_DMA_PAYLOAD_PACKED_DESCRIPTOR, dir,
-                          packed_done[i], packed_bytes[i], &packed);
-        if (rc == 0)
-            rc = run_case((case_t)i, TU_DMA_PAYLOAD_ALIGN_LOGICAL_SEGMENT, dir,
-                          aligned_done[i], aligned_bytes[i], &aligned);
-        if (rc != 0) {
-            fprintf(stderr, "FAIL: %s rc=%d\n", names[i], rc);
-            return 2;
+        for (int s = 0; s < 3; s++) {
+            uint64_t completion = 0;
+            int rc = run_case((case_t)i, scopes[s], dir,
+                              expected_done[i][s], expected_occupied[i][s],
+                              &completion);
+            if (rc != 0) {
+                fprintf(stderr, "FAIL: %s/%s rc=%d\n",
+                        names[i], scope_names[s], rc);
+                return 2;
+            }
+            printf("%-12s %-10s %10lu %6u %8lu\n", names[i], scope_names[s],
+                   (unsigned long)completion, useful_bytes[i],
+                   (unsigned long)expected_occupied[i][s]);
         }
-        printf("%-12s %11lu %12lu %15lu %16lu\n", names[i],
-               (unsigned long)packed, (unsigned long)aligned,
-               (unsigned long)packed_bytes[i], (unsigned long)aligned_bytes[i]);
     }
 
     uint64_t store_done = 0;
@@ -227,7 +243,8 @@ int main(void) {
         return 3;
     }
     if (projected_binding_gate(TU_DMA_PAYLOAD_PACKED_DESCRIPTOR, 0) != 0 ||
-        projected_binding_gate(TU_DMA_PAYLOAD_ALIGN_LOGICAL_SEGMENT, 1) != 0) {
+        projected_binding_gate(TU_DMA_PAYLOAD_ALIGN_LOGICAL_SEGMENT, 0) != 0 ||
+        projected_binding_gate(TU_DMA_PAYLOAD_ALIGN_BURST_COMMAND, 1) != 0) {
         fprintf(stderr, "FAIL: queued projected-cycle payload scope\n");
         return 4;
     }
@@ -235,6 +252,6 @@ int main(void) {
         fprintf(stderr, "FAIL: compatibility or invalid-mode gate\n");
         return 5;
     }
-    printf("PASS: packed/aligned payload scopes, useful/occupied bytes, read/write movement, live/queued cycles, config/default/rejection\n");
+    printf("PASS: descriptor/logical/burst payload scopes, useful/occupied bytes, read/write movement, live/queued cycles, config/default/rejection\n");
     return 0;
 }

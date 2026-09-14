@@ -90,7 +90,7 @@
 | `dma_write_burst_issue_cycles` | 0 (inherit) | uint32 | Write/store issue override; explicit zero supported |
 | `dma_burst_segmentation` | aggregate | enum | Burst commands from aggregate bytes or logical strided/S-G segments |
 | `dma_base_latency_scope` | descriptor | enum | Base latency once per descriptor or once per logical row/index |
-| `dma_payload_scope` | descriptor | enum | Payload beats packed per descriptor or aligned per logical row/index |
+| `dma_payload_scope` | descriptor | enum | Payload beats packed per descriptor, aligned per logical row/index, or aligned per burst command |
 | `dma_issue_payload_mode` | serialized | enum | Burst-command issue serialized with or overlapped by payload movement |
 | `dma_num_channels` | 3 | uint32 | DMA channel count |
 | `dma_bus_topology` | independent | enum | Channel data paths: independent or shared_serial |

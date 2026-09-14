@@ -98,7 +98,7 @@ tu:
     write_burst_issue_cycles: 0 # Write/store issue override; explicit 0 may differ from common
     burst_segmentation: "aggregate" # aggregate (compat) | logical_segments (strided/S-G commands)
     base_latency_scope: "descriptor" # descriptor (compat) | logical_segments (base cost per row/index)
-    payload_scope: "descriptor" # descriptor (packed beats, compat) | logical_segments (fresh beat per row/index)
+    payload_scope: "descriptor" # descriptor (packed beats, compat) | logical_segments (fresh beat per row/index) | burst_commands (fresh beat per burst)
     issue_payload_mode: "serialized" # serialized (compat) | overlapped (command issue concurrent with payload)
     channels: 3           # Number of DMA scheduling channels
     bus_topology: "independent"  # independent (compat) | shared_serial

@@ -195,6 +195,8 @@ static int parse_dma_payload_scope_str(const char *s) {
         return TU_DMA_CONFIG_PAYLOAD_PACKED_DESCRIPTOR;
     if (strcmp(s, "logical_segments") == 0)
         return TU_DMA_CONFIG_PAYLOAD_ALIGN_LOGICAL_SEGMENT;
+    if (strcmp(s, "burst_commands") == 0)
+        return TU_DMA_CONFIG_PAYLOAD_ALIGN_BURST_COMMAND;
     return -1;
 }
 
@@ -997,10 +999,10 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
         return -1;
     }
     if (cfg->dma_payload_scope < TU_DMA_CONFIG_PAYLOAD_PACKED_DESCRIPTOR ||
-        cfg->dma_payload_scope > TU_DMA_CONFIG_PAYLOAD_ALIGN_LOGICAL_SEGMENT) {
+        cfg->dma_payload_scope > TU_DMA_CONFIG_PAYLOAD_ALIGN_BURST_COMMAND) {
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
-                     "DMA payload_scope must be descriptor or logical_segments");
+                     "DMA payload_scope must be descriptor, logical_segments, or burst_commands");
         return -1;
     }
     if (cfg->dma_issue_payload_mode < TU_DMA_CONFIG_ISSUE_PAYLOAD_SERIALIZED ||
@@ -1517,9 +1519,13 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
     fprintf(out, "| `dma_base_latency_scope` | %s | enum | Base latency once per descriptor or once per logical row/index |\n",
             cfg->dma_base_latency_scope == TU_DMA_CONFIG_BASE_PER_LOGICAL_SEGMENT ?
                 "logical_segments" : "descriptor");
-    fprintf(out, "| `dma_payload_scope` | %s | enum | Payload beats packed per descriptor or aligned per logical row/index |\n",
-            cfg->dma_payload_scope == TU_DMA_CONFIG_PAYLOAD_ALIGN_LOGICAL_SEGMENT ?
-                "logical_segments" : "descriptor");
+    const char *dma_payload_scope = "descriptor";
+    if (cfg->dma_payload_scope == TU_DMA_CONFIG_PAYLOAD_ALIGN_LOGICAL_SEGMENT)
+        dma_payload_scope = "logical_segments";
+    else if (cfg->dma_payload_scope == TU_DMA_CONFIG_PAYLOAD_ALIGN_BURST_COMMAND)
+        dma_payload_scope = "burst_commands";
+    fprintf(out, "| `dma_payload_scope` | %s | enum | Payload beats packed per descriptor, aligned per logical row/index, or aligned per burst command |\n",
+            dma_payload_scope);
     fprintf(out, "| `dma_issue_payload_mode` | %s | enum | Burst-command issue serialized with or overlapped by payload movement |\n",
             cfg->dma_issue_payload_mode == TU_DMA_CONFIG_ISSUE_PAYLOAD_OVERLAPPED ?
                 "overlapped" : "serialized");

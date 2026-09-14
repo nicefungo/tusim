@@ -593,7 +593,7 @@ int main(void) {
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
               "should reject unsupported base latency scope");
         cfg.dma_base_latency_scope = TU_DMA_CONFIG_BASE_PER_DESCRIPTOR;
-        cfg.dma_payload_scope = 2;
+        cfg.dma_payload_scope = 3;
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
               "should reject unsupported payload scope");
         cfg.dma_payload_scope = TU_DMA_CONFIG_PAYLOAD_PACKED_DESCRIPTOR;

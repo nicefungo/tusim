@@ -322,7 +322,9 @@ def generate_header(config, output_path):
     L(f'#define TU_DMA_BASE_LATENCY_SCOPE {base_scope_map[dma.get("base_latency_scope", "descriptor")]}')
     L('#define TU_DMA_PAYLOAD_SCOPE_DESCRIPTOR 0')
     L('#define TU_DMA_PAYLOAD_SCOPE_LOGICAL_SEGMENTS 1')
-    payload_scope_map = {'descriptor': 0, 'logical_segments': 1}
+    L('#define TU_DMA_PAYLOAD_SCOPE_BURST_COMMANDS 2')
+    payload_scope_map = {'descriptor': 0, 'logical_segments': 1,
+                         'burst_commands': 2}
     L(f'#define TU_DMA_PAYLOAD_SCOPE {payload_scope_map[dma.get("payload_scope", "descriptor")]}')
     L('#define TU_DMA_ISSUE_PAYLOAD_DEFAULT_SERIALIZED 0')
     L('#define TU_DMA_ISSUE_PAYLOAD_DEFAULT_OVERLAPPED 1')

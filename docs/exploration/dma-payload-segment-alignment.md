@@ -1,37 +1,47 @@
-# DMA Logical-Segment Payload Alignment
+# DMA Payload Packing Boundaries
 
-**Date:** 2026-09-07
+**Date:** 2026-09-14
+**Mode:** pre-spec exploration
+**Evidence:** `tests/test_dma_payload_scope_sweep.c`
 
-**Question:** May discontiguous rows or scatter/gather elements share interface beats, or must every logical segment begin a fresh beat?
+## Architecture question
 
-## Hypothesis and realistic alternatives
+Across which boundaries may a DMA width adapter retain a partial interface beat: an entire descriptor, only one logical row/index, or only one issued burst command?
 
-The descriptor engine historically serialized payload as `ceil(total_bytes / bus_width)`. That is a valid model for a buffered byte-stream packer, but it can combine the tail of one strided row or indexed element with the beginning of the next despite an address discontinuity.
+The previous model distinguished descriptor-wide packing from logical-segment alignment but still allowed two burst commands within one row to share a beat. That is optimistic for a protocol engine that independently frames every burst, especially when the configured maximum burst is narrower than the DMA data path.
 
-- **`descriptor` (compatibility default):** all useful bytes in one descriptor are packed into a continuous interface stream. Hardware may realize this with gather/coalescing buffers, byte steering, and enough credits to retain partial beats across logical boundaries. It minimizes exposed beat occupancy for fragmented descriptors, at the cost of datapath/control state and verification.
-- **`logical_segments`:** each 2D row, 3D row, or scatter/gather element starts a fresh interface beat. This represents a simpler sequencer or an interface where discontinuities terminate a transaction. It can waste tail lanes and dynamic interface energy but avoids cross-segment packing assumptions.
+## Realistic alternatives
 
-Linear and multicast descriptors have one modeled logical segment, so the modes are identical for them. Payload alignment is independent of burst-command segmentation and base-latency scope: hardware may restart commands, setup, payload beats, any combination of the three, or none.
+- **`descriptor` (zero/default):** pack all useful bytes in one descriptor into a continuous beat stream. A buffered gather/coalescing front end can justify this mode. It minimizes lane waste but needs partial-beat storage, byte steering, address state, and enough credits to retain data across command and address discontinuities.
+- **`logical_segments`:** start a fresh beat for every 2D/3D row or scatter/gather index. A simpler strided sequencer may terminate payload occupancy at logical discontinuities while still packing adjacent burst commands inside a row.
+- **`burst_commands`:** start a fresh beat for every burst command. This represents a narrow-burst protocol engine or width converter whose framing state drains at each command boundary. It is the most conservative of these three occupancy contracts and can waste lanes when `max_burst_bytes < bus_width_bytes`.
 
-## Configuration and cycle model
+No mode is universally preferred. A physical TU would normally hard-wire one policy; the pre-spec cmodel retains all three because each corresponds to plausible buffering and protocol choices.
 
-Runtime JSON/YAML field:
+## Executable model
 
-```json
-{"tu":{"dma":{"payload_scope":"logical_segments"}}}
+For interface width `W`, useful descriptor bytes `N`, logical segment count `S`, segment bytes `B`, and directional maximum burst bytes `G`:
+
+```text
+descriptor cycles = ceil(N / W)
+logical cycles    = S * ceil(B / W)
+burst cycles      = sum over issued bursts j of ceil(bytes_j / W)
+occupied bytes    = payload cycles * W
 ```
 
-Accepted values are `descriptor` and `logical_segments`. Zero/default is `descriptor`, preserving generated defaults, canonical defaults, older initializer APIs, and zero-initialized runtime callers.
+Burst mode uses the same aggregate-versus-logical burst-segmentation contract as command counting. In aggregate segmentation, `N` is split into `G`-byte commands. In logical segmentation, every segment is independently split into `G`-byte commands. The common helper feeds live completion, useful/occupied counters, legacy accounting, and queued least-projected-cycle binding.
 
-For bus width `W`, useful descriptor bytes `N`, logical segment count `S`, and equal logical segment size `B`:
+Compatibility is preserved: `descriptor` remains enum value zero in generated defaults, canonical defaults, the shipped JSON/YAML, old initializer wrappers, and zero-initialized runtime callers.
 
-- descriptor-packed payload cycles: `ceil(N / W)`
-- logical-segment-aligned payload cycles: `S × ceil(B / W)`
-- occupied interface bytes: `payload_cycles × W`
+Runtime configuration:
 
-`S` is one for linear/multicast, rows for 2D, depth×rows for 3D, and index count for scatter/gather. The model keeps useful-byte counters unchanged and adds separate occupied-byte counters at engine and channel scope. The same payload-cycle helper feeds live service and queued least-projected-cycle binding.
+```json
+{"tu":{"dma":{"payload_scope":"burst_commands"}}}
+```
 
-## Executable matrix
+Accepted values are `descriptor`, `logical_segments`, and `burst_commands`.
+
+## Measured matrix
 
 Command:
 
@@ -39,40 +49,60 @@ Command:
 make test-dma-payload-scope-sweep
 ```
 
-Configuration: 256-bit/32-byte interface, 50-cycle descriptor base latency, zero burst-issue cost, SRAM bandwidth metering disabled. Completion includes the initial asynchronous issue tick.
+Controls: one independent channel, 256-bit/32-byte interface, 16-byte directional burst limit, logical burst segmentation, 50-cycle descriptor base latency, zero burst-issue cost, and disabled SRAM bandwidth metering. Completion includes the asynchronous start tick.
 
-| Descriptor | Useful bytes | Descriptor-packed completion | Segment-aligned completion | Packed occupied bytes | Aligned occupied bytes | Payload efficiency, packed / aligned |
-|---|---:|---:|---:|---:|---:|---:|
-| Linear, 80 B | 80 | 54 | 54 | 96 | 96 | 83.3% / 83.3% |
-| Strided 2D, 4×20 B | 80 | 54 | 55 | 96 | 128 | 83.3% / 62.5% |
-| Strided 3D, 2×3×20 B | 120 | 55 | 57 | 128 | 192 | 93.8% / 62.5% |
-| Gather, 5×4 B | 20 | 52 | 56 | 32 | 160 | 62.5% / 12.5% |
+| Descriptor | Useful B | Scope | Completion cycles | Occupied B | Payload efficiency |
+|---|---:|---|---:|---:|---:|
+| Linear 80 B | 80 | descriptor | 54 | 96 | 83.3% |
+| Linear 80 B | 80 | logical_segments | 54 | 96 | 83.3% |
+| Linear 80 B | 80 | burst_commands | 56 | 160 | 50.0% |
+| Strided 2D, 4×20 B | 80 | descriptor | 54 | 96 | 83.3% |
+| Strided 2D, 4×20 B | 80 | logical_segments | 55 | 128 | 62.5% |
+| Strided 2D, 4×20 B | 80 | burst_commands | 59 | 256 | 31.3% |
+| Strided 3D, 2×3×20 B | 120 | descriptor | 55 | 128 | 93.8% |
+| Strided 3D, 2×3×20 B | 120 | logical_segments | 57 | 192 | 62.5% |
+| Strided 3D, 2×3×20 B | 120 | burst_commands | 63 | 384 | 31.3% |
+| Gather, 5×4 B | 20 | descriptor | 52 | 32 | 62.5% |
+| Gather, 5×4 B | 20 | logical_segments | 56 | 160 | 12.5% |
+| Gather, 5×4 B | 20 | burst_commands | 56 | 160 | 12.5% |
 
-The harness also gates the store direction, exact useful-byte movement, separate useful/occupied counters, malformed config rejection, default compatibility, and queued projected-binding behavior. In a discriminating two-channel case, an 8×5 B strided descriptor is cheaper than a 128 B linear descriptor when packed (2 versus 4 payload cycles), but more expensive when each row starts a beat (8 versus 4); least-projected binding therefore reverses channels.
+Burst framing adds no cost over logical alignment for the gather because each 4-byte index is already one logical segment and one burst. It adds two cycles and 64 occupied bytes for the linear case, and doubles logical-aligned occupied bytes for the measured 2D/3D rows because each 20-byte row becomes a 16-byte command plus a 4-byte tail command, each occupying a 32-byte beat.
 
-## Multi-objective interpretation
+A queued-policy gate also distinguishes runtime planning. A four-row 20-byte strided descriptor is cheaper than a 112-byte linear descriptor under descriptor and logical scopes, so least-projected binding selects its channel. Burst framing changes them to eight versus seven payload cycles and reverses the selected channel. This proves the setting reaches queued projections rather than only report counters.
 
-- **Throughput/latency:** descriptor packing saves one to four cycles in this small isolated matrix and can preserve interface utilization for fragmented requests. The benefit scales with short segments relative to bus width; aligned/full-beat rows are unchanged. This is service sensitivity, not sustained memory throughput.
-- **Area/resources:** packing is expected to require partial-beat storage, byte steering, address tracking, and possibly wider credit state. Segment alignment can use a simpler lane-mask/restart path. The cmodel has no physical area model for these resources, so magnitudes are unquantified.
-- **Power/energy:** aligned segments occupy 1.33×, 1.50×, and 5.00× the interface bytes of the measured 2D, 3D, and gather cases, which qualitatively increases data-path switching if inactive lanes are physically driven. Packing spends buffer/search/steering energy instead. Neither effect is calibrated.
-- **SRAM/DRAM traffic:** useful bytes and copied values are unchanged. Occupied interface bytes are now observable, but DRAM cache-line/burst overfetch, address alignment, and row/channel placement remain separate and unmodeled here.
-- **Numerical accuracy:** unchanged; this mode only affects timing and occupied-interface accounting, and byte-exact data movement is gated.
-- **Control complexity:** descriptor packing needs continuity state across discontinuities; logical alignment makes segment boundaries explicit and local.
-- **Verification burden:** packing must prove lane ordering and partial-beat retention across every descriptor type. Alignment requires per-segment beat rounding and tail-mask corner cases. Both need zero-byte, overflow, and direction coverage; this sweep gates the nonempty uniform-segment contract.
-- **Compiler/runtime:** compilers can coalesce or pad rows, choose wider contiguous descriptors, or avoid tiny gathers when segment alignment is selected. Descriptor packing gives software more freedom but only if hardware actually supports cross-boundary byte packing.
+## Gain versus sacrifice
 
-No mode is universally selected. A bandwidth-oriented TU may justify packing logic; a low-area mover may intentionally expose segment tails. A physical TU would commonly hard-wire one policy, while the pre-spec cmodel preserves both.
+| Dimension | Descriptor packing | Logical-segment alignment | Burst-command alignment |
+|---|---|---|---|
+| Throughput / latency | Lowest isolated payload service for fragmented work; sustained throughput unmodeled | Pays row/index tails | Pays every command tail; measured completion is up to 14.5% above descriptor packing (63 vs 55 cycles) |
+| Area / resources | Expected largest partial-beat/coalescing buffers and steering | Less cross-address state; row-local packing remains | Expected simplest command-local framing, but may need more downstream transactions; magnitudes unquantified |
+| Power / energy | Less interface occupancy but more packing/search activity | Intermediate lane waste and control | Up to 3× occupied bytes versus descriptor packing in this matrix; expected higher interface switching if inactive lanes are physically driven, but no calibrated energy model |
+| SRAM / DRAM traffic | Useful bytes unchanged; occupied-interface bytes minimized | Useful bytes unchanged; row/index tails exposed | Useful bytes unchanged; command tails exposed. Off-chip overfetch and cache-line traffic remain separate |
+| Numerical accuracy | Byte-exact and unchanged | Byte-exact and unchanged | Byte-exact and unchanged |
+| Control complexity | Cross-command and cross-segment continuity | Segment-local reset plus intra-segment packing | Command-local reset; simplest continuity contract, but more command/payload bookkeeping |
+| Verification burden | Must prove ordering across discontinuities and partial-beat retention | Must gate every descriptor shape and segment tail | Must additionally gate directional burst limits, full/tail commands, burst narrower/equal/wider than interface, and interactions with segmentation |
+| Compiler / runtime | Software can issue fragmented descriptors without exposing lane waste | Compiler benefits from row padding/coalescing | Compiler should avoid narrow bursts on wide movers or combine commands when legal; projected channel binding can change |
+
+The measured 14.5% completion increase is restricted to small transfers dominated by the fixed 50-cycle base. The occupancy amplification is the stronger signal: burst framing can double or triple modeled interface occupancy without changing useful bytes. Conversely, choosing descriptor packing because it is locally faster would silently assume buffering, credits, and byte steering that a low-area implementation may not contain.
+
+## Implementation paths
+
+- `config/tu_config.yaml`, `config/tu_config.json`: `tu.dma.payload_scope`
+- `scripts/gen_config.py`, `tu_cmodel/tu_config.h`: generated constants and runtime default
+- `tu_cmodel/infra/config.{h,c}`: canonical enum, parse, validation, runtime propagation, generated docs
+- `tu_cmodel/dma_descriptor.{h,c}`: executable enum and common burst-aligned payload helper
+- `tests/test_dma_payload_scope_sweep.c`: 12-row live matrix, read/write movement, occupied bytes, projection reversal, defaults, parse, and rejection
+- `tests/test_generated_config.py`, `tests/test_config.c`: generated/nondefault and canonical gates
 
 ## Fidelity limits
 
-This is deterministic beat occupancy, not AXI/NoC/DRAM protocol simulation. It does not inspect source or destination alignment, split segments at maximum-burst or page boundaries, model byte enables, merge adjacent indices, distinguish command and data channels, apply occupied bytes to SRAM/DRAM contention, or estimate physical area/power. Segment sizes are uniform under the current descriptor formats. Occupied counters represent `payload_cycles × bus_width`, not necessarily off-chip DRAM bytes. Calibration, finite FIFOs/credits, retries, queue backpressure, and command/data overlap remain unmodeled.
+This is deterministic payload-beat occupancy, not AXI/NoC/DRAM protocol simulation. Burst boundaries come from configured byte counts, not source/destination alignment, 4 KiB boundaries, cache lines, pages, or response reordering. The model does not represent byte enables, actual inactive-lane switching, adjacent-index merge, command FIFO depth, finite credits, backpressure, arbitration, memory latency per burst, shared SRAM/DRAM bandwidth, or calibrated area/power. Occupied bytes mean `payload_cycles × DMA bus width`; they are not automatically physical DRAM bytes. The existing ideal issue/payload-overlap mode remains aggregate and does not simulate per-burst pipeline bubbles.
 
 ## Verification
 
 ```sh
-make test-dma-payload-scope-sweep test-dma-base-scope-sweep test-dma-segmentation-sweep
-make test-config test-dma
-python3 scripts/gen_config.py config/tu_config.yaml -o /tmp/tu_config.payload-scope.h
+make test-dma-payload-scope-sweep
+make test-config-generation test-config test-dma
 make config-docs
 make clean && make
 make test-quick

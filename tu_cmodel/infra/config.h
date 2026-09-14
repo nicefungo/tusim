@@ -129,7 +129,8 @@ typedef enum {
 
 typedef enum {
     TU_DMA_CONFIG_PAYLOAD_PACKED_DESCRIPTOR = 0,
-    TU_DMA_CONFIG_PAYLOAD_ALIGN_LOGICAL_SEGMENT = 1
+    TU_DMA_CONFIG_PAYLOAD_ALIGN_LOGICAL_SEGMENT = 1,
+    TU_DMA_CONFIG_PAYLOAD_ALIGN_BURST_COMMAND = 2
 } tu_dma_config_payload_scope_t;
 
 typedef enum {
@@ -227,7 +228,7 @@ typedef struct tu_config_t {
     bool     dma_write_burst_issue_configured;
     int      dma_burst_segmentation; /* aggregate=0, logical_segments=1 */
     int      dma_base_latency_scope; /* descriptor=0, logical_segments=1 */
-    int      dma_payload_scope; /* descriptor=0, logical_segments=1 */
+    int      dma_payload_scope; /* descriptor=0, logical_segments=1, burst_commands=2 */
     int      dma_issue_payload_mode; /* serialized=0, overlapped=1 */
     uint32_t dma_num_channels;
     int      dma_bus_mode;          /* independent=0, shared_serial=1 */

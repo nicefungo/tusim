@@ -86,7 +86,8 @@ void tu_dma_init_config_overlap(bool async, uint32_t num_channels,
     g_tu_dma.base_latency_scope =
         (tu_dma_base_latency_scope_t)base_latency_scope;
     if (payload_scope != TU_DMA_PAYLOAD_PACKED_DESCRIPTOR &&
-        payload_scope != TU_DMA_PAYLOAD_ALIGN_LOGICAL_SEGMENT) {
+        payload_scope != TU_DMA_PAYLOAD_ALIGN_LOGICAL_SEGMENT &&
+        payload_scope != TU_DMA_PAYLOAD_ALIGN_BURST_COMMAND) {
         fprintf(stderr, "DMA: unsupported payload scope %d\n", payload_scope);
         memset(&g_tu_dma, 0, sizeof(g_tu_dma));
         return;
@@ -779,14 +780,31 @@ static uint64_t descriptor_burst_count(const tu_dma_descriptor_t *desc) {
     return segment_count * ceil_div_u64(segment_bytes, burst_bytes);
 }
 
+static uint64_t burst_aligned_payload_cycles(uint64_t bytes,
+                                             uint64_t burst_bytes) {
+    uint64_t full_bursts = bytes / burst_bytes;
+    uint64_t tail_bytes = bytes % burst_bytes;
+    uint64_t cycles = full_bursts *
+                      ceil_div_u64(burst_bytes, g_tu_dma.bus_width_bytes);
+    if (tail_bytes > 0)
+        cycles += ceil_div_u64(tail_bytes, g_tu_dma.bus_width_bytes);
+    return cycles;
+}
+
 static uint64_t descriptor_payload_cycles(const tu_dma_descriptor_t *desc) {
     if (desc->total_bytes == 0) return 0;
-    if (g_tu_dma.payload_scope != TU_DMA_PAYLOAD_ALIGN_LOGICAL_SEGMENT)
+    if (g_tu_dma.payload_scope == TU_DMA_PAYLOAD_PACKED_DESCRIPTOR)
         return ceil_div_u64(desc->total_bytes, g_tu_dma.bus_width_bytes);
     uint64_t count = descriptor_logical_segment_count(desc);
     uint64_t bytes = descriptor_logical_segment_bytes(desc);
     if (count == 0 || bytes == 0) return 0;
-    return count * ceil_div_u64(bytes, g_tu_dma.bus_width_bytes);
+    if (g_tu_dma.payload_scope == TU_DMA_PAYLOAD_ALIGN_LOGICAL_SEGMENT)
+        return count * ceil_div_u64(bytes, g_tu_dma.bus_width_bytes);
+
+    uint64_t burst_bytes = descriptor_burst_bytes(desc);
+    if (g_tu_dma.burst_segmentation == TU_DMA_SEGMENT_LOGICAL)
+        return count * burst_aligned_payload_cycles(bytes, burst_bytes);
+    return burst_aligned_payload_cycles(desc->total_bytes, burst_bytes);
 }
 
 static uint64_t descriptor_base_cycles(const tu_dma_descriptor_t *desc) {
