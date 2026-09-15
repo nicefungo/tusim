@@ -86,6 +86,11 @@ typedef enum {
     TU_DMA_ISSUE_PAYLOAD_OVERLAPPED = 1
 } tu_dma_issue_payload_mode_t;
 
+typedef enum {
+    TU_DMA_BOUNDARY_SIZE_ONLY = 0,
+    TU_DMA_BOUNDARY_SRAM_ADDRESS = 1
+} tu_dma_burst_boundary_mode_t;
+
 /* ---- Transfer direction ---- */
 typedef enum {
     TU_DMA_DIR_HOST_TO_TU   = 0,  /* Load: DRAM → SRAM */
@@ -184,6 +189,7 @@ typedef struct {
     tu_dma_base_latency_scope_t base_latency_scope;
     tu_dma_payload_scope_t payload_scope;
     tu_dma_issue_payload_mode_t issue_payload_mode;
+    tu_dma_burst_boundary_mode_t burst_boundary_mode;
     uint32_t                read_latency_cycles;
     uint32_t                write_latency_cycles;
     bool                    async_mode;
@@ -314,6 +320,25 @@ void tu_dma_init_config_overlap(bool async, uint32_t num_channels,
                                 int base_latency_scope,
                                 int payload_scope,
                                 int issue_payload_mode);
+void tu_dma_init_config_boundary(bool async, uint32_t num_channels,
+                                 uint32_t max_queue_depth, int bus_mode,
+                                 int arb_policy, int binding_policy,
+                                 uint32_t bus_width_bits,
+                                 uint32_t read_latency_cycles,
+                                 uint32_t write_latency_cycles,
+                                 uint32_t max_burst_bytes,
+                                 uint32_t read_max_burst_bytes,
+                                 uint32_t write_max_burst_bytes,
+                                 uint32_t burst_issue_cycles,
+                                 uint32_t read_burst_issue_cycles,
+                                 uint32_t write_burst_issue_cycles,
+                                 bool read_issue_configured,
+                                 bool write_issue_configured,
+                                 int burst_segmentation,
+                                 int base_latency_scope,
+                                 int payload_scope,
+                                 int issue_payload_mode,
+                                 int burst_boundary_mode);
 void tu_dma_init(bool async);
 void tu_dma_destroy(void);
 

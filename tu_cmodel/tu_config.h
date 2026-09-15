@@ -168,6 +168,9 @@ extern "C" {
 #define TU_DMA_ISSUE_PAYLOAD_DEFAULT_SERIALIZED 0
 #define TU_DMA_ISSUE_PAYLOAD_DEFAULT_OVERLAPPED 1
 #define TU_DMA_ISSUE_PAYLOAD_MODE 0
+#define TU_DMA_BURST_BOUNDARY_SIZE_ONLY 0
+#define TU_DMA_BURST_BOUNDARY_SRAM_ADDRESS 1
+#define TU_DMA_BURST_BOUNDARY_MODE 0
 #define TU_DMA_CHANNELS         3
 #define TU_DMA_ENGINE_MAX_CHANNELS 8
 #define TU_DMA_BUS_INDEPENDENT  0
@@ -304,6 +307,7 @@ typedef struct {
     int      dma_base_latency_scope;
     int      dma_payload_scope;
     int      dma_issue_payload_mode;
+    int      dma_burst_boundary_mode;
     uint32_t dma_num_channels;
     int      dma_bus_mode;
     int      dma_arb_policy;
@@ -353,6 +357,7 @@ static inline tu_runtime_config_t tu_runtime_config_default(void) {
         .dma_base_latency_scope = TU_DMA_BASE_LATENCY_SCOPE,
         .dma_payload_scope = TU_DMA_PAYLOAD_SCOPE,
         .dma_issue_payload_mode = TU_DMA_ISSUE_PAYLOAD_MODE,
+        .dma_burst_boundary_mode = TU_DMA_BURST_BOUNDARY_MODE,
         .dma_num_channels   = TU_DMA_CHANNELS,
         .dma_bus_mode       = TU_DMA_BUS_MODE,
         .dma_arb_policy     = TU_DMA_ARB_POLICY,

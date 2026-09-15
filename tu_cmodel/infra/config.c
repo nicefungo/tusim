@@ -208,6 +208,14 @@ static int parse_dma_issue_payload_mode_str(const char *s) {
     return -1;
 }
 
+static int parse_dma_burst_boundary_mode_str(const char *s) {
+    if (!s || strcmp(s, "size_only") == 0)
+        return TU_DMA_CONFIG_BURST_BOUNDARY_SIZE_ONLY;
+    if (strcmp(s, "sram_address") == 0)
+        return TU_DMA_CONFIG_BURST_BOUNDARY_SRAM_ADDRESS;
+    return -1;
+}
+
 static int parse_power_tech_node_str(const char *s) {
     if (!s || strcmp(s, "auto") == 0) return 0;
     if (strcmp(s, "45nm") == 0) return 1;
@@ -366,6 +374,7 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->dma_base_latency_scope = TU_DMA_CONFIG_BASE_PER_DESCRIPTOR;
     cfg->dma_payload_scope = TU_DMA_CONFIG_PAYLOAD_PACKED_DESCRIPTOR;
     cfg->dma_issue_payload_mode = TU_DMA_CONFIG_ISSUE_PAYLOAD_SERIALIZED;
+    cfg->dma_burst_boundary_mode = TU_DMA_CONFIG_BURST_BOUNDARY_SIZE_ONLY;
     cfg->dma_num_channels    = 3;
     cfg->dma_bus_mode        = TU_DMA_CONFIG_BUS_INDEPENDENT;
     cfg->dma_arb_policy      = TU_DMA_CONFIG_ARB_ROUND_ROBIN;
@@ -461,6 +470,7 @@ tu_runtime_config_t tu_config_to_runtime(const struct tu_config_t *cfg) {
     rt.dma_base_latency_scope = cfg->dma_base_latency_scope;
     rt.dma_payload_scope = cfg->dma_payload_scope;
     rt.dma_issue_payload_mode = cfg->dma_issue_payload_mode;
+    rt.dma_burst_boundary_mode = cfg->dma_burst_boundary_mode;
     rt.dma_num_channels = cfg->dma_num_channels;
     rt.dma_bus_mode = cfg->dma_bus_mode;
     rt.dma_arb_policy = cfg->dma_arb_policy;
@@ -692,6 +702,11 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
         if (issue_payload && issue_payload->type == TU_JSON_STRING)
             cfg->dma_issue_payload_mode = parse_dma_issue_payload_mode_str(
                 tu_json_as_string(issue_payload, NULL));
+        const tu_json_value_t *burst_boundary =
+            tu_json_get(d, "burst_boundary_mode");
+        if (burst_boundary && burst_boundary->type == TU_JSON_STRING)
+            cfg->dma_burst_boundary_mode = parse_dma_burst_boundary_mode_str(
+                tu_json_as_string(burst_boundary, NULL));
         if (parse_opt_int64(d, "channels", &iv)) cfg->dma_num_channels = (uint32_t)iv;
         const tu_json_value_t *bus_mode = tu_json_get(d, "bus_topology");
         if (bus_mode && bus_mode->type == TU_JSON_STRING)
@@ -1010,6 +1025,13 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
                      "DMA issue_payload_mode must be serialized or overlapped");
+        return -1;
+    }
+    if (cfg->dma_burst_boundary_mode < TU_DMA_CONFIG_BURST_BOUNDARY_SIZE_ONLY ||
+        cfg->dma_burst_boundary_mode > TU_DMA_CONFIG_BURST_BOUNDARY_SRAM_ADDRESS) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DMA burst_boundary_mode must be size_only or sram_address");
         return -1;
     }
     if (cfg->dma_num_channels < 1 ||
@@ -1529,6 +1551,9 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
     fprintf(out, "| `dma_issue_payload_mode` | %s | enum | Burst-command issue serialized with or overlapped by payload movement |\n",
             cfg->dma_issue_payload_mode == TU_DMA_CONFIG_ISSUE_PAYLOAD_OVERLAPPED ?
                 "overlapped" : "serialized");
+    fprintf(out, "| `dma_burst_boundary_mode` | %s | enum | Burst splitting by size only or modeled SRAM-side aligned address boundaries |\n",
+            cfg->dma_burst_boundary_mode == TU_DMA_CONFIG_BURST_BOUNDARY_SRAM_ADDRESS ?
+                "sram_address" : "size_only");
     fprintf(out, "| `dma_num_channels` | %u | uint32 | DMA channel count |\n",
             cfg->dma_num_channels);
     fprintf(out, "| `dma_bus_topology` | %s | enum | Channel data paths: independent or shared_serial |\n",

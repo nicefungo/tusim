@@ -171,6 +171,8 @@ int main(void) {
               "DMA descriptor payload packing default");
         CHECK(cfg.dma_issue_payload_mode == TU_DMA_CONFIG_ISSUE_PAYLOAD_SERIALIZED,
               "DMA serialized issue/payload default");
+        CHECK(cfg.dma_burst_boundary_mode == TU_DMA_CONFIG_BURST_BOUNDARY_SIZE_ONLY,
+              "DMA size-only burst boundary default");
         CHECK(cfg.cycle_model == 2, "cycle");
         CHECK(cfg.counters_enabled, "counters");
         CHECK(cfg.dataflow_mode == 0, "dataflow");
@@ -229,6 +231,7 @@ int main(void) {
             "    \"base_latency_scope\": \"logical_segments\","
             "    \"payload_scope\": \"logical_segments\","
             "    \"issue_payload_mode\": \"overlapped\","
+            "    \"burst_boundary_mode\": \"sram_address\","
             "    \"channels\": 2,"
             "    \"bus_topology\": \"shared_serial\","
             "    \"arbitration\": \"strict_priority\","
@@ -293,6 +296,9 @@ int main(void) {
         CHECK(cfg.dma_issue_payload_mode == TU_DMA_CONFIG_ISSUE_PAYLOAD_OVERLAPPED &&
               rt.dma_issue_payload_mode == TU_DMA_CONFIG_ISSUE_PAYLOAD_OVERLAPPED,
               "DMA issue/payload overlap parse/runtime propagation");
+        CHECK(cfg.dma_burst_boundary_mode == TU_DMA_CONFIG_BURST_BOUNDARY_SRAM_ADDRESS &&
+              rt.dma_burst_boundary_mode == TU_DMA_CONFIG_BURST_BOUNDARY_SRAM_ADDRESS,
+              "DMA burst boundary parse/runtime propagation");
         CHECK(rt.dma_bus_mode == TU_DMA_CONFIG_BUS_SHARED_SERIAL,
               "DMA bus topology runtime propagation");
         CHECK(rt.dma_arb_policy == TU_DMA_CONFIG_ARB_STRICT_PRIORITY,
@@ -601,6 +607,10 @@ int main(void) {
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
               "should reject unsupported issue/payload mode");
         cfg.dma_issue_payload_mode = TU_DMA_CONFIG_ISSUE_PAYLOAD_SERIALIZED;
+        cfg.dma_burst_boundary_mode = 2;
+        CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
+              "should reject unsupported burst boundary mode");
+        cfg.dma_burst_boundary_mode = TU_DMA_CONFIG_BURST_BOUNDARY_SIZE_ONLY;
         cfg.dma_max_outstanding = 0;
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0, "should reject max_outstanding=0");
         cfg.dma_max_outstanding = 4;
@@ -640,6 +650,10 @@ int main(void) {
                   "{\"tu\":{\"dma\":{\"issue_payload_mode\":\"magic\"}}}",
                   &cfg, err, sizeof(err)) != 0,
               "should reject unsupported issue/payload mode name");
+        CHECK(tu_config_load_string(
+                  "{\"tu\":{\"dma\":{\"burst_boundary_mode\":\"magic\"}}}",
+                  &cfg, err, sizeof(err)) != 0,
+              "should reject unsupported burst boundary mode name");
         PASS();
     }
 

@@ -100,6 +100,7 @@ tu:
     base_latency_scope: "descriptor" # descriptor (compat) | logical_segments (base cost per row/index)
     payload_scope: "descriptor" # descriptor (packed beats, compat) | logical_segments (fresh beat per row/index) | burst_commands (fresh beat per burst)
     issue_payload_mode: "serialized" # serialized (compat) | overlapped (command issue concurrent with payload)
+    burst_boundary_mode: "size_only" # size_only (compat) | sram_address (split at aligned SRAM-side burst boundaries)
     channels: 3           # Number of DMA scheduling channels
     bus_topology: "independent"  # independent (compat) | shared_serial
     arbitration: "round_robin"   # round_robin (compat) | strict_priority

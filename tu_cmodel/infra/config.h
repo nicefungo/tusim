@@ -138,6 +138,11 @@ typedef enum {
     TU_DMA_CONFIG_ISSUE_PAYLOAD_OVERLAPPED = 1
 } tu_dma_config_issue_payload_mode_t;
 
+typedef enum {
+    TU_DMA_CONFIG_BURST_BOUNDARY_SIZE_ONLY = 0,
+    TU_DMA_CONFIG_BURST_BOUNDARY_SRAM_ADDRESS = 1
+} tu_dma_config_burst_boundary_mode_t;
+
 /* ================================================================
  * Full Configuration Struct
  * ================================================================
@@ -230,6 +235,7 @@ typedef struct tu_config_t {
     int      dma_base_latency_scope; /* descriptor=0, logical_segments=1 */
     int      dma_payload_scope; /* descriptor=0, logical_segments=1, burst_commands=2 */
     int      dma_issue_payload_mode; /* serialized=0, overlapped=1 */
+    int      dma_burst_boundary_mode; /* size_only=0, sram_address=1 */
     uint32_t dma_num_channels;
     int      dma_bus_mode;          /* independent=0, shared_serial=1 */
     int      dma_arb_policy;        /* round_robin=0, strict_priority=1 */

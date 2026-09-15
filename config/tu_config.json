@@ -82,6 +82,7 @@
       "base_latency_scope": "descriptor",
       "payload_scope": "descriptor",
       "issue_payload_mode": "serialized",
+      "burst_boundary_mode": "size_only",
       "channels": 3,
       "bus_topology": "independent",
       "arbitration": "round_robin",

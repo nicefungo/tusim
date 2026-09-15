@@ -111,7 +111,7 @@ void tu_init_with_config(const tu_runtime_config_t *cfg) {
                          cfg->sram_bw_window_cycles);
 
     /* Initialize DMA engine from the executable runtime configuration. */
-    tu_dma_init_config_overlap(cfg->dma_async_mode,
+    tu_dma_init_config_boundary(cfg->dma_async_mode,
                                cfg->dma_num_channels,
                                cfg->dma_max_outstanding,
                                cfg->dma_bus_mode,
@@ -133,7 +133,8 @@ void tu_init_with_config(const tu_runtime_config_t *cfg) {
                                cfg->dma_burst_segmentation,
                                cfg->dma_base_latency_scope,
                                cfg->dma_payload_scope,
-                               cfg->dma_issue_payload_mode);
+                               cfg->dma_issue_payload_mode,
+                               cfg->dma_burst_boundary_mode);
 
     /* Initialize command queue */
     g_tu.cmdq = tu_cmdq_create(TU_ISA_QUEUE_DEPTH, TU_CYCLE_MODEL == TU_CYCLE_MODEL_FUNCTIONAL);

@@ -26,7 +26,7 @@ tu_dma_engine_t g_tu_dma = {0};
  * Lifecycle
  * ================================================================ */
 
-void tu_dma_init_config_overlap(bool async, uint32_t num_channels,
+void tu_dma_init_config_boundary(bool async, uint32_t num_channels,
                                 uint32_t max_queue_depth, int bus_mode,
                                 int arb_policy, int binding_policy,
                                 uint32_t bus_width_bits,
@@ -43,7 +43,8 @@ void tu_dma_init_config_overlap(bool async, uint32_t num_channels,
                                 int burst_segmentation,
                                 int base_latency_scope,
                                 int payload_scope,
-                                int issue_payload_mode) {
+                                int issue_payload_mode,
+                                int burst_boundary_mode) {
     memset(&g_tu_dma, 0, sizeof(g_tu_dma));
     g_tu_dma.async_mode = async;
     if (bus_mode != TU_DMA_BUS_MODE_INDEPENDENT &&
@@ -102,6 +103,15 @@ void tu_dma_init_config_overlap(bool async, uint32_t num_channels,
     }
     g_tu_dma.issue_payload_mode =
         (tu_dma_issue_payload_mode_t)issue_payload_mode;
+    if (burst_boundary_mode != TU_DMA_BOUNDARY_SIZE_ONLY &&
+        burst_boundary_mode != TU_DMA_BOUNDARY_SRAM_ADDRESS) {
+        fprintf(stderr, "DMA: unsupported burst boundary mode %d\n",
+                burst_boundary_mode);
+        memset(&g_tu_dma, 0, sizeof(g_tu_dma));
+        return;
+    }
+    g_tu_dma.burst_boundary_mode =
+        (tu_dma_burst_boundary_mode_t)burst_boundary_mode;
     if (bus_width_bits == 0)
         bus_width_bits = TU_DMA_BUS_WIDTH_BITS; /* zero-initialized runtime compatibility */
     if (bus_width_bits < 32 || bus_width_bits > 1024 ||
@@ -155,6 +165,34 @@ void tu_dma_init_config_overlap(bool async, uint32_t num_channels,
         g_tu_dma.channels[i].channel_id = (uint8_t)i;
         g_tu_dma.channels[i].max_depth = max_queue_depth > 0 ? max_queue_depth : TU_DMA_MAX_OUTSTANDING;
     }
+}
+
+void tu_dma_init_config_overlap(bool async, uint32_t num_channels,
+                                uint32_t max_queue_depth, int bus_mode,
+                                int arb_policy, int binding_policy,
+                                uint32_t bus_width_bits,
+                                uint32_t read_latency_cycles,
+                                uint32_t write_latency_cycles,
+                                uint32_t max_burst_bytes,
+                                uint32_t read_max_burst_bytes,
+                                uint32_t write_max_burst_bytes,
+                                uint32_t burst_issue_cycles,
+                                uint32_t read_burst_issue_cycles,
+                                uint32_t write_burst_issue_cycles,
+                                bool read_issue_configured,
+                                bool write_issue_configured,
+                                int burst_segmentation,
+                                int base_latency_scope,
+                                int payload_scope,
+                                int issue_payload_mode) {
+    tu_dma_init_config_boundary(
+        async, num_channels, max_queue_depth, bus_mode, arb_policy,
+        binding_policy, bus_width_bits, read_latency_cycles,
+        write_latency_cycles, max_burst_bytes, read_max_burst_bytes,
+        write_max_burst_bytes, burst_issue_cycles, read_burst_issue_cycles,
+        write_burst_issue_cycles, read_issue_configured,
+        write_issue_configured, burst_segmentation, base_latency_scope,
+        payload_scope, issue_payload_mode, TU_DMA_BOUNDARY_SIZE_ONLY);
 }
 
 void tu_dma_init_config_payload_scope(bool async, uint32_t num_channels,
@@ -766,11 +804,90 @@ static uint64_t descriptor_logical_segment_bytes(
     }
 }
 
+static uint64_t descriptor_sram_base(const tu_dma_descriptor_t *desc) {
+    return desc->direction == TU_DMA_DIR_TU_TO_HOST ? desc->src_base :
+                                                      desc->dst_base;
+}
+
+static const uint32_t *descriptor_sram_strides(
+    const tu_dma_descriptor_t *desc) {
+    return desc->direction == TU_DMA_DIR_TU_TO_HOST ? desc->src_strides :
+                                                      desc->dst_strides;
+}
+
+static void add_address_bounded_segment(uint64_t address, uint64_t bytes,
+                                        uint64_t burst_bytes,
+                                        uint64_t *burst_count,
+                                        uint64_t *payload_cycles) {
+    while (bytes > 0) {
+        uint64_t room = burst_bytes - address % burst_bytes;
+        uint64_t chunk = bytes < room ? bytes : room;
+        (*burst_count)++;
+        *payload_cycles += ceil_div_u64(chunk, g_tu_dma.bus_width_bytes);
+        address += chunk;
+        bytes -= chunk;
+    }
+}
+
+/* SRAM-address mode deliberately ignores host virtual-pointer alignment: the
+ * descriptor has no physical DRAM address. It also retains every logical SRAM
+ * discontinuity because one address-bounded command cannot span two rows or
+ * indexed elements. */
+static void descriptor_address_bounded_totals(
+    const tu_dma_descriptor_t *desc, uint64_t *burst_count,
+    uint64_t *payload_cycles) {
+    uint64_t burst_bytes = descriptor_burst_bytes(desc);
+    uint64_t segment_bytes = descriptor_logical_segment_bytes(desc);
+    uint64_t base = descriptor_sram_base(desc);
+    const uint32_t *strides = descriptor_sram_strides(desc);
+    *burst_count = 0;
+    *payload_cycles = 0;
+    if (desc->total_bytes == 0 || segment_bytes == 0) return;
+
+    switch (desc->type) {
+    case TU_DMA_XFER_STRIDED_2D:
+        for (uint64_t r = 0; r < desc->dims[0]; r++)
+            add_address_bounded_segment(base + r * strides[0], segment_bytes,
+                                        burst_bytes, burst_count, payload_cycles);
+        break;
+    case TU_DMA_XFER_STRIDED_3D:
+        for (uint64_t d = 0; d < desc->dims[0]; d++)
+            for (uint64_t r = 0; r < desc->dims[1]; r++)
+                add_address_bounded_segment(base + d * strides[1] + r * strides[0],
+                                            segment_bytes, burst_bytes,
+                                            burst_count, payload_cycles);
+        break;
+    case TU_DMA_XFER_SCATTER:
+    case TU_DMA_XFER_GATHER:
+        for (uint64_t i = 0; i < desc->index_count; i++)
+            add_address_bounded_segment(desc->index_list[i], segment_bytes,
+                                        burst_bytes, burst_count, payload_cycles);
+        break;
+    case TU_DMA_XFER_MULTICAST: {
+        uint64_t chunk = (uint64_t)desc->dims[0] * desc->elem_size;
+        for (uint64_t i = 0; i < desc->multicast.count; i++)
+            add_address_bounded_segment(desc->multicast.offsets[i], chunk,
+                                        burst_bytes, burst_count, payload_cycles);
+        break;
+    }
+    default:
+        add_address_bounded_segment(base, desc->total_bytes, burst_bytes,
+                                    burst_count, payload_cycles);
+        break;
+    }
+}
+
 /* Aggregate mode preserves historical timing. Logical mode prevents
  * discontiguous rows or indexed elements from sharing one burst command. */
 static uint64_t descriptor_burst_count(const tu_dma_descriptor_t *desc) {
     uint64_t burst_bytes = descriptor_burst_bytes(desc);
     if (desc->total_bytes == 0) return 0;
+    if (g_tu_dma.burst_boundary_mode ==
+        TU_DMA_BOUNDARY_SRAM_ADDRESS) {
+        uint64_t bursts, payload;
+        descriptor_address_bounded_totals(desc, &bursts, &payload);
+        return bursts;
+    }
     if (g_tu_dma.burst_segmentation != TU_DMA_SEGMENT_LOGICAL)
         return ceil_div_u64(desc->total_bytes, burst_bytes);
 
@@ -802,6 +919,12 @@ static uint64_t descriptor_payload_cycles(const tu_dma_descriptor_t *desc) {
         return count * ceil_div_u64(bytes, g_tu_dma.bus_width_bytes);
 
     uint64_t burst_bytes = descriptor_burst_bytes(desc);
+    if (g_tu_dma.burst_boundary_mode ==
+        TU_DMA_BOUNDARY_SRAM_ADDRESS) {
+        uint64_t bursts, payload;
+        descriptor_address_bounded_totals(desc, &bursts, &payload);
+        return payload;
+    }
     if (g_tu_dma.burst_segmentation == TU_DMA_SEGMENT_LOGICAL)
         return count * burst_aligned_payload_cycles(bytes, burst_bytes);
     return burst_aligned_payload_cycles(desc->total_bytes, burst_bytes);
@@ -1225,8 +1348,13 @@ void tu_dma_load(tu_dma_channel_t ch, tu_sram_region_t *dst,
     g_tu_dma.total_bytes += bytes;
     g_tu_dma.total_transfers++;
     g_tu_dma.estimated_cycles += g_tu_dma.read_latency_cycles;
-    uint64_t payload = ceil_div_u64(bytes, g_tu_dma.bus_width_bytes);
-    uint64_t bursts = ceil_div_u64(bytes, g_tu_dma.read_max_burst_bytes);
+    tu_dma_descriptor_t timing = {0};
+    timing.type = TU_DMA_XFER_LINEAR;
+    timing.direction = TU_DMA_DIR_HOST_TO_TU;
+    timing.dst_base = offset;
+    timing.total_bytes = bytes;
+    uint64_t payload = descriptor_payload_cycles(&timing);
+    uint64_t bursts = descriptor_burst_count(&timing);
     g_tu_dma.estimated_cycles += combine_payload_issue_cycles(
         payload, bursts, g_tu_dma.read_burst_issue_cycles);
 }
@@ -1245,8 +1373,13 @@ void tu_dma_store(tu_dma_channel_t ch, tu_sram_region_t *src,
     g_tu_dma.total_bytes += bytes;
     g_tu_dma.total_transfers++;
     g_tu_dma.estimated_cycles += g_tu_dma.write_latency_cycles;
-    uint64_t payload = ceil_div_u64(bytes, g_tu_dma.bus_width_bytes);
-    uint64_t bursts = ceil_div_u64(bytes, g_tu_dma.write_max_burst_bytes);
+    tu_dma_descriptor_t timing = {0};
+    timing.type = TU_DMA_XFER_LINEAR;
+    timing.direction = TU_DMA_DIR_TU_TO_HOST;
+    timing.src_base = offset;
+    timing.total_bytes = bytes;
+    uint64_t payload = descriptor_payload_cycles(&timing);
+    uint64_t bursts = descriptor_burst_count(&timing);
     g_tu_dma.estimated_cycles += combine_payload_issue_cycles(
         payload, bursts, g_tu_dma.write_burst_issue_cycles);
 }
