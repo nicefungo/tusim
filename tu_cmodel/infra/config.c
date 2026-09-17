@@ -213,6 +213,8 @@ static int parse_dma_burst_boundary_mode_str(const char *s) {
         return TU_DMA_CONFIG_BURST_BOUNDARY_SIZE_ONLY;
     if (strcmp(s, "sram_address") == 0)
         return TU_DMA_CONFIG_BURST_BOUNDARY_SRAM_ADDRESS;
+    if (strcmp(s, "sram_4k") == 0)
+        return TU_DMA_CONFIG_BURST_BOUNDARY_SRAM_4K;
     return -1;
 }
 
@@ -1028,10 +1030,10 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
         return -1;
     }
     if (cfg->dma_burst_boundary_mode < TU_DMA_CONFIG_BURST_BOUNDARY_SIZE_ONLY ||
-        cfg->dma_burst_boundary_mode > TU_DMA_CONFIG_BURST_BOUNDARY_SRAM_ADDRESS) {
+        cfg->dma_burst_boundary_mode > TU_DMA_CONFIG_BURST_BOUNDARY_SRAM_4K) {
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
-                     "DMA burst_boundary_mode must be size_only or sram_address");
+                     "DMA burst_boundary_mode must be size_only, sram_address, or sram_4k");
         return -1;
     }
     if (cfg->dma_num_channels < 1 ||
@@ -1551,9 +1553,13 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
     fprintf(out, "| `dma_issue_payload_mode` | %s | enum | Burst-command issue serialized with or overlapped by payload movement |\n",
             cfg->dma_issue_payload_mode == TU_DMA_CONFIG_ISSUE_PAYLOAD_OVERLAPPED ?
                 "overlapped" : "serialized");
-    fprintf(out, "| `dma_burst_boundary_mode` | %s | enum | Burst splitting by size only or modeled SRAM-side aligned address boundaries |\n",
-            cfg->dma_burst_boundary_mode == TU_DMA_CONFIG_BURST_BOUNDARY_SRAM_ADDRESS ?
-                "sram_address" : "size_only");
+    const char *dma_boundary_mode = "size_only";
+    if (cfg->dma_burst_boundary_mode == TU_DMA_CONFIG_BURST_BOUNDARY_SRAM_ADDRESS)
+        dma_boundary_mode = "sram_address";
+    else if (cfg->dma_burst_boundary_mode == TU_DMA_CONFIG_BURST_BOUNDARY_SRAM_4K)
+        dma_boundary_mode = "sram_4k";
+    fprintf(out, "| `dma_burst_boundary_mode` | %s | enum | Burst splitting by size, aligned SRAM burst boundaries, or SRAM-side 4 KiB protocol boundaries |\n",
+            dma_boundary_mode);
     fprintf(out, "| `dma_num_channels` | %u | uint32 | DMA channel count |\n",
             cfg->dma_num_channels);
     fprintf(out, "| `dma_bus_topology` | %s | enum | Channel data paths: independent or shared_serial |\n",

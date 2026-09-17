@@ -88,7 +88,8 @@ typedef enum {
 
 typedef enum {
     TU_DMA_BOUNDARY_SIZE_ONLY = 0,
-    TU_DMA_BOUNDARY_SRAM_ADDRESS = 1
+    TU_DMA_BOUNDARY_SRAM_ADDRESS = 1,
+    TU_DMA_BOUNDARY_SRAM_4K = 2
 } tu_dma_burst_boundary_mode_t;
 
 /* ---- Transfer direction ---- */

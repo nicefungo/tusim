@@ -1,38 +1,39 @@
-# DMA SRAM-Side Burst Boundary Accounting
+# DMA SRAM-Side Burst and 4 KiB Boundary Accounting
 
-**Date:** 2026-09-15
+**Date:** 2026-09-17
 **Mode:** pre-spec exploration
 **Evidence:** `tests/test_dma_burst_boundary_sweep.c`
 
 ## Architecture question
 
-Should a DMA command stream split transfers only by maximum payload size, or must each command also stop at an aligned maximum-burst boundary in the modeled SRAM address space?
+Should the DMA command generator constrain a transfer only by maximum payload length, split it at every aligned maximum-burst boundary, or independently enforce a 4 KiB protocol boundary?
 
-The prior command model used `ceil(bytes / max_burst_bytes)`. That is a useful compatibility abstraction for a bridge that accepts arbitrary unaligned command spans or internally realigns them, but it undercounts commands when a protocol or SRAM-side width adapter prohibits crossing an aligned burst boundary.
+These are distinct hardware contracts. A maximum burst is a length limit. It does not by itself forbid crossing an address boundary. A local width adapter may require every command to stay inside an aligned maximum-burst region. An AXI-like bridge may instead permit that crossing but prohibit crossing 4 KiB.
 
 ## Realistic alternatives
 
-- **`size_only` (zero/default):** split commands only by byte count. This represents an abstract/coalescing bridge, preserves all historical timing, and minimizes exposed commands. Hardware may need realignment buffers, byte steering, or a downstream interface that accepts unaligned spans.
-- **`sram_address`:** split every modeled SRAM-side logical segment at aligned directional `max_burst_bytes` boundaries. This represents a simpler boundary-constrained command generator. It exposes extra commands and partial interface beats for unlucky placement.
+- **`size_only` (zero/default):** split only when the command reaches the directional maximum byte count. This represents a permissive or internally realigning bridge and preserves historical timing. It may require steering/buffering or a downstream protocol that accepts the span.
+- **`sram_address`:** split at each aligned directional maximum-burst boundary. This represents a strict local SRAM width adapter or boundary-constrained command generator. Misalignment can increase command count at every burst boundary.
+- **`sram_4k`:** enforce the directional maximum length and independently stop at each aligned 4 KiB SRAM-side boundary. This represents an AXI-like no-crossing rule without imposing maximum-burst alignment on every command.
 
-No mode is universally preferred. A physical TU would usually hard-wire the protocol contract; the pre-spec cmodel retains both so compiler placement and controller complexity can be compared.
+No mode is universally preferred. A physical implementation would normally hard-wire one protocol contract; the pre-spec cmodel retains all three for controller and compiler-placement studies.
 
 ## Executable contract
 
-For SRAM address `A`, segment length `N`, and directional burst limit `G`, address-aware mode repeatedly emits:
+For segment address `A`, remaining bytes `N`, directional maximum `G`, and selected boundary `B`, address-bounded modes repeatedly emit:
 
 ```text
-room  = G - (A mod G)
-chunk = min(N, room)
+room  = B - (A mod B)
+chunk = min(N, G, room)
 A    += chunk
 N    -= chunk
 ```
 
-Each emitted chunk is one command. Under `payload_scope=burst_commands`, each chunk occupies `ceil(chunk / bus_width_bytes)` interface cycles. One shared 64-bit helper produces command and payload totals for live descriptor completion and queued least-projected-cycle binding. It handles linear, strided 2D/3D, scatter/gather, and multicast SRAM offsets; load and store select destination and source SRAM addresses respectively. The focused matrix gates both scatter and gather as distinct indexed directions. Public constructors still store several products in 32-bit descriptor fields, so malformed descriptors outside validated SRAM/configuration bounds are not an overflow-hardening claim of this work.
+`B=G` for `sram_address`; `B=4096` for `sram_4k`. `size_only` retains the historical `ceil(N/G)` command count. Under `payload_scope=burst_commands`, each emitted chunk occupies `ceil(chunk / bus_width_bytes)` interface cycles.
 
-Address-aware mode necessarily preserves logical SRAM discontinuities even if `burst_segmentation=aggregate`: one address-bounded command cannot span unrelated rows or indexed elements. Base-latency scope and issue/payload overlap remain independent settings.
+One helper supplies command and payload totals to live completion and queued least-projected-cycle binding. It handles linear, strided 2D/3D, scatter/gather, and multicast SRAM offsets. Loads use destination SRAM addresses; stores use source SRAM addresses. Logical discontinuities remain separate in both address-bounded modes.
 
-Crucially, host pointers are not used as addresses. They are process virtual pointers, not a physical DRAM-address contract. This mode therefore models only the SRAM-side command boundary.
+Host pointers are deliberately excluded: process virtual pointers are not physical DRAM addresses. The 4 KiB rule is therefore an SRAM-side protocol abstraction, not proof of IOMMU or external AXI address behavior.
 
 ## Measured matrix
 
@@ -42,50 +43,66 @@ Command:
 make test-dma-burst-boundary-sweep
 ```
 
-Controls: one independent channel, 256-bit/32-byte interface, 64-byte directional burst limits, three issue cycles per command, 50-cycle descriptor base, logical segmentation, burst-command payload alignment, serialized issue/payload, and disabled SRAM bandwidth metering. Completion includes the asynchronous start tick.
+Controls: one independent channel, 256-bit/32-byte interface, 64-byte directional maximum bursts, three issue cycles per command, 50-cycle descriptor base, logical segmentation, burst-command payload alignment, serialized issue/payload, and disabled SRAM bandwidth metering. Completion includes the asynchronous start tick.
 
-| Descriptor / SRAM placement | Useful B | Mode | Completion cycles | Occupied B | Relative latency |
-|---|---:|---|---:|---:|---:|
-| Linear 64 B at 0 | 64 | size_only | 56 | 64 | 1.00x |
-| Linear 64 B at 0 | 64 | sram_address | 56 | 64 | 1.00x |
-| Linear 64 B at 1 | 64 | size_only | 56 | 64 | 1.00x |
-| Linear 64 B at 1 | 64 | sram_address | 60 | 96 | 1.071x |
-| Linear 80 B at 49 | 80 | size_only | 60 | 96 | 1.00x |
-| Linear 80 B at 49 | 80 | sram_address | 64 | 128 | 1.067x |
-| 2D, 4 x 20 B, base 48, stride 64 | 80 | size_only | 67 | 128 | 1.00x |
-| 2D, 4 x 20 B, base 48, stride 64 | 80 | sram_address | 83 | 256 | 1.239x |
-| 3D, 2 x 3 x 20 B, base 48, row 64 | 120 | size_only | 75 | 192 | 1.00x |
-| 3D, 2 x 3 x 20 B, base 48, row 64 | 120 | sram_address | 99 | 384 | 1.320x |
-| Scatter, five 4 B elements at offset 62 mod 64 | 20 | size_only | 71 | 160 | 1.00x |
-| Scatter, five 4 B elements at offset 62 mod 64 | 20 | sram_address | 91 | 320 | 1.282x |
-| Gather, five 4 B elements at offset 62 mod 64 | 20 | size_only | 71 | 160 | 1.00x |
-| Gather, five 4 B elements at offset 62 mod 64 | 20 | sram_address | 91 | 320 | 1.282x |
+| Descriptor / SRAM placement | Useful B | Mode | Completion cycles | Occupied B |
+|---|---:|---|---:|---:|
+| Linear 64 B at 0 | 64 | `size_only` | 56 | 64 |
+|  |  | `sram_address` | 56 | 64 |
+|  |  | `sram_4k` | 56 | 64 |
+| Linear 64 B at 1 | 64 | `size_only` | 56 | 64 |
+|  |  | `sram_address` | 60 | 96 |
+|  |  | `sram_4k` | 56 | 64 |
+| Linear 80 B at 49 | 80 | `size_only` | 60 | 96 |
+|  |  | `sram_address` | 64 | 128 |
+|  |  | `sram_4k` | 60 | 96 |
+| Linear 64 B at 4090 | 64 | `size_only` | 56 | 64 |
+|  |  | `sram_address` | 60 | 96 |
+|  |  | `sram_4k` | 60 | 96 |
+| 2D, 4 x 20 B, base 48, stride 64 | 80 | `size_only` | 67 | 128 |
+|  |  | `sram_address` | 83 | 256 |
+|  |  | `sram_4k` | 67 | 128 |
+| 3D, 2 x 3 x 20 B, base 48, row 64 | 120 | `size_only` | 75 | 192 |
+|  |  | `sram_address` | 99 | 384 |
+|  |  | `sram_4k` | 75 | 192 |
+| Scatter, five 4 B elements at offset 62 mod 64 | 20 | `size_only` | 71 | 160 |
+|  |  | `sram_address` | 91 | 320 |
+|  |  | `sram_4k` | 71 | 160 |
+| Gather, same placement | 20 | `size_only` | 71 | 160 |
+|  |  | `sram_address` | 91 | 320 |
+|  |  | `sram_4k` | 71 | 160 |
 
-Aligned traffic is identical. A 64-byte transfer starting at byte 1 becomes 63+1-byte commands, adding one issue and one partial interface beat. Every measured strided/gather element crosses a boundary, doubling command-local occupied bytes and increasing completion by 23.9-32.0% despite unchanged useful bytes.
+The 64-byte matrix distinguishes the alternatives:
 
-A queued gate distinguishes planning behavior: a misaligned 64-byte linear queue costs 55 cycles in `size_only` and 59 in `sram_address`, while an aligned two-row 2D queue costs 58 in both. Least-projected binding therefore reverses from the linear queue to the 2D queue. This proves configuration reaches queue estimates; it is not queue-aware memory throughput evidence.
+- `sram_address` pays for ordinary max-burst misalignment and fragmentation: affected completion rises 6.7-32.0%, and fragmented occupied bytes rise as much as 2x.
+- `sram_4k` matches `size_only` away from a 4 KiB crossing but raises the 4090+64 B case from 56 to 60 cycles and from 64 to 96 occupied bytes.
+- An independent gate uses an 8192-byte maximum burst. At address 4090, `size_only` and `sram_address` both remain 56 cycles/64 B, while `sram_4k` remains 60 cycles/96 B. This proves the page rule is not an alias for maximum-burst alignment.
+
+Queued gates also distinguish runtime consumption. A misaligned max-burst case reverses least-projected binding only in `sram_address`; a 4 KiB-crossing case reverses it in `sram_4k`. These are deterministic planning inputs, not queue-aware memory throughput.
 
 ## Gain versus sacrifice
 
-| Dimension | Size only | SRAM address bounded |
-|---|---|---|
-| Throughput | Optimistic for misaligned/fragmented transfers; may represent a coalescing bridge | Exposes command and lane pressure; sustained throughput remains unmodeled |
-| Latency | Lower in affected rows; measured equality for aligned 64 B | +6.7% to +32.0% in affected matrix rows under stated costs |
-| Area/resources | Expected realignment/coalescing buffers and steering, or a permissive downstream contract | Simpler boundary checks/counters, but more command queue/credit demand; magnitudes unquantified |
-| Power/energy | Fewer command events and occupied beats, but buffer/search activity | Up to 2x occupied interface bytes in fragmented rows; expected higher control/interface activity; no calibrated energy |
-| SRAM/DRAM traffic | Useful bytes unchanged; command-local occupancy can be optimistic | Useful bytes unchanged; SRAM-interface occupancy exposed. Physical DRAM traffic is not modeled |
-| Numerical accuracy | Byte-exact, unchanged | Byte-exact, unchanged |
-| Control complexity | More capable unaligned-span handling is assumed | Modulo/remaining-boundary tracking; simpler protocol legality, more events |
-| Verification burden | Must prove hidden realignment/coalescing contract in hardware | Must gate aligned, misaligned, tails, strides, indices, both directions, and directional burst limits |
-| Compiler/runtime | Placement appears insensitive within a burst | Alignment/padding and descriptor splitting become actionable; projected channel selection can change |
+| Dimension | `size_only` | `sram_address` | `sram_4k` |
+|---|---|---|---|
+| Throughput | Optimistic for constrained bridges; can represent hidden realignment | Exposes recurring misalignment/fragment pressure | Exposes sparse page-crossing pressure; sustained throughput remains unmodeled |
+| Latency | Lowest in affected rows | +6.7-32.0% in this matrix | +7.1% only for the measured page crossing |
+| Area/resources | Expected realignment/coalescing buffers and steering, or permissive protocol | Modulo/boundary tracking plus more command credits | 12-bit low-address check/comparator plus split/merge state; magnitudes unquantified |
+| Power/energy | Fewer visible commands/beats but hidden steering activity | Up to 2x occupied interface bytes in fragmented rows | +50% occupied bytes in the measured crossing; physical energy uncalibrated |
+| SRAM/DRAM traffic | Useful bytes unchanged | Useful bytes unchanged; local interface occupancy exposed | Useful bytes unchanged; local interface occupancy exposed; external traffic not modeled |
+| Numerical accuracy | Byte-exact, unchanged | Byte-exact, unchanged | Byte-exact, unchanged |
+| Control complexity | Most capable span handling is assumed | Boundary counter at every max-burst region | Independent 4 KiB legality and response merge across split commands |
+| Verification burden | Must prove hidden realignment behavior | Must gate alignment, tails, strides, indices, and directional limits | Must gate just-below/at/across 4 KiB plus maximum lengths and both directions |
+| Compiler/runtime | Placement appears insensitive | Burst alignment/padding can reduce command pressure | Page-aware allocation/descriptor splitting can avoid rare penalties |
+
+Area, power, energy, and sustained throughput are not quantified by the current cmodel. The expected directions above are qualitative hardware rationale, not measured silicon costs.
 
 ## Configuration and implementation
 
-`tu.dma.burst_boundary_mode` accepts `size_only` and `sram_address` through YAML/JSON, generated constants/runtime defaults, canonical parsing/validation/conversion, top-level initialization, and live DMA state. Unsupported names and runtime IDs fail closed. Existing initializer wrappers and zero-initialized runtime callers remain `size_only`.
+`tu.dma.burst_boundary_mode` accepts `size_only`, `sram_address`, and `sram_4k` through YAML/JSON, generated constants/runtime defaults, canonical parsing/validation/conversion, top-level initialization, and live DMA state. Unsupported names and runtime IDs fail closed. Existing initializer wrappers and zero-initialized runtime callers remain `size_only`.
 
 Relevant paths:
 
-- `config/tu_config.{yaml,json}`
+- `config/tu_config.yaml`
 - `scripts/gen_config.py`, `tu_cmodel/tu_config.h`
 - `tu_cmodel/infra/config.{h,c}`
 - `tu_cmodel/dma_descriptor.{h,c}`
@@ -94,7 +111,7 @@ Relevant paths:
 
 ## Fidelity limits
 
-This is deterministic SRAM-side command geometry, not AXI, NoC, IOMMU, cache-line, page, or DRAM simulation. It has no physical host/DRAM address, 4 KiB rule, byte enables, read-modify-write, adjacent-index merge, finite FIFO/credits, backpressure, response reordering, shared SRAM/DRAM contention, or calibrated area/power. Occupied bytes are DMA-interface lane occupancy, not automatically off-chip bytes. Address arithmetic uses descriptor SRAM offsets and strides; descriptor constructors still own bounds validity. These limits must remain explicit before using the matrix for system throughput or energy claims.
+This is deterministic SRAM-side command geometry, not AXI, NoC, IOMMU, cache-line, virtual-memory, or DRAM simulation. The fixed 4 KiB boundary is intentionally protocol-specific; alternate page sizes are not modeled because no current producer exposes a physical-address/page contract. The model omits byte enables, read-modify-write, adjacent-index merging, finite FIFO/credits, backpressure, response reordering, shared SRAM/DRAM contention, and calibrated area/power. Occupied bytes are DMA-interface lane occupancy, not automatically off-chip bytes.
 
 ## Verification
 

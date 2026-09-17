@@ -332,7 +332,8 @@ def generate_header(config, output_path):
     L(f'#define TU_DMA_ISSUE_PAYLOAD_MODE {issue_payload_map[dma.get("issue_payload_mode", "serialized")]}')
     L('#define TU_DMA_BURST_BOUNDARY_SIZE_ONLY 0')
     L('#define TU_DMA_BURST_BOUNDARY_SRAM_ADDRESS 1')
-    boundary_map = {'size_only': 0, 'sram_address': 1}
+    L('#define TU_DMA_BURST_BOUNDARY_SRAM_4K 2')
+    boundary_map = {'size_only': 0, 'sram_address': 1, 'sram_4k': 2}
     L(f'#define TU_DMA_BURST_BOUNDARY_MODE {boundary_map[dma.get("burst_boundary_mode", "size_only")]}')
     L(f'#define TU_DMA_CHANNELS         {dma["channels"]}')
     L('#define TU_DMA_ENGINE_MAX_CHANNELS 8')

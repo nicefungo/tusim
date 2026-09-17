@@ -104,7 +104,8 @@ void tu_dma_init_config_boundary(bool async, uint32_t num_channels,
     g_tu_dma.issue_payload_mode =
         (tu_dma_issue_payload_mode_t)issue_payload_mode;
     if (burst_boundary_mode != TU_DMA_BOUNDARY_SIZE_ONLY &&
-        burst_boundary_mode != TU_DMA_BOUNDARY_SRAM_ADDRESS) {
+        burst_boundary_mode != TU_DMA_BOUNDARY_SRAM_ADDRESS &&
+        burst_boundary_mode != TU_DMA_BOUNDARY_SRAM_4K) {
         fprintf(stderr, "DMA: unsupported burst boundary mode %d\n",
                 burst_boundary_mode);
         memset(&g_tu_dma, 0, sizeof(g_tu_dma));
@@ -817,11 +818,13 @@ static const uint32_t *descriptor_sram_strides(
 
 static void add_address_bounded_segment(uint64_t address, uint64_t bytes,
                                         uint64_t burst_bytes,
+                                        uint64_t boundary_bytes,
                                         uint64_t *burst_count,
                                         uint64_t *payload_cycles) {
     while (bytes > 0) {
-        uint64_t room = burst_bytes - address % burst_bytes;
-        uint64_t chunk = bytes < room ? bytes : room;
+        uint64_t room = boundary_bytes - address % boundary_bytes;
+        uint64_t chunk = bytes < burst_bytes ? bytes : burst_bytes;
+        if (chunk > room) chunk = room;
         (*burst_count)++;
         *payload_cycles += ceil_div_u64(chunk, g_tu_dma.bus_width_bytes);
         address += chunk;
@@ -829,14 +832,18 @@ static void add_address_bounded_segment(uint64_t address, uint64_t bytes,
     }
 }
 
-/* SRAM-address mode deliberately ignores host virtual-pointer alignment: the
- * descriptor has no physical DRAM address. It also retains every logical SRAM
- * discontinuity because one address-bounded command cannot span two rows or
- * indexed elements. */
+/* Address-bounded modes deliberately ignore host virtual-pointer alignment:
+ * the descriptor has no physical DRAM address. They retain every logical SRAM
+ * discontinuity because one bounded command cannot span two rows or indexed
+ * elements. SRAM_ADDRESS uses max-burst-aligned boundaries; SRAM_4K uses the
+ * independent 4 KiB protocol boundary while still enforcing maximum length. */
 static void descriptor_address_bounded_totals(
     const tu_dma_descriptor_t *desc, uint64_t *burst_count,
     uint64_t *payload_cycles) {
     uint64_t burst_bytes = descriptor_burst_bytes(desc);
+    uint64_t boundary_bytes =
+        g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_SRAM_4K ?
+            4096u : burst_bytes;
     uint64_t segment_bytes = descriptor_logical_segment_bytes(desc);
     uint64_t base = descriptor_sram_base(desc);
     const uint32_t *strides = descriptor_sram_strides(desc);
@@ -848,31 +855,35 @@ static void descriptor_address_bounded_totals(
     case TU_DMA_XFER_STRIDED_2D:
         for (uint64_t r = 0; r < desc->dims[0]; r++)
             add_address_bounded_segment(base + r * strides[0], segment_bytes,
-                                        burst_bytes, burst_count, payload_cycles);
+                                        burst_bytes, boundary_bytes,
+                                        burst_count, payload_cycles);
         break;
     case TU_DMA_XFER_STRIDED_3D:
         for (uint64_t d = 0; d < desc->dims[0]; d++)
             for (uint64_t r = 0; r < desc->dims[1]; r++)
                 add_address_bounded_segment(base + d * strides[1] + r * strides[0],
                                             segment_bytes, burst_bytes,
-                                            burst_count, payload_cycles);
+                                            boundary_bytes, burst_count,
+                                            payload_cycles);
         break;
     case TU_DMA_XFER_SCATTER:
     case TU_DMA_XFER_GATHER:
         for (uint64_t i = 0; i < desc->index_count; i++)
             add_address_bounded_segment(desc->index_list[i], segment_bytes,
-                                        burst_bytes, burst_count, payload_cycles);
+                                        burst_bytes, boundary_bytes,
+                                        burst_count, payload_cycles);
         break;
     case TU_DMA_XFER_MULTICAST: {
         uint64_t chunk = (uint64_t)desc->dims[0] * desc->elem_size;
         for (uint64_t i = 0; i < desc->multicast.count; i++)
             add_address_bounded_segment(desc->multicast.offsets[i], chunk,
-                                        burst_bytes, burst_count, payload_cycles);
+                                        burst_bytes, boundary_bytes,
+                                        burst_count, payload_cycles);
         break;
     }
     default:
         add_address_bounded_segment(base, desc->total_bytes, burst_bytes,
-                                    burst_count, payload_cycles);
+                                    boundary_bytes, burst_count, payload_cycles);
         break;
     }
 }
@@ -882,8 +893,7 @@ static void descriptor_address_bounded_totals(
 static uint64_t descriptor_burst_count(const tu_dma_descriptor_t *desc) {
     uint64_t burst_bytes = descriptor_burst_bytes(desc);
     if (desc->total_bytes == 0) return 0;
-    if (g_tu_dma.burst_boundary_mode ==
-        TU_DMA_BOUNDARY_SRAM_ADDRESS) {
+    if (g_tu_dma.burst_boundary_mode != TU_DMA_BOUNDARY_SIZE_ONLY) {
         uint64_t bursts, payload;
         descriptor_address_bounded_totals(desc, &bursts, &payload);
         return bursts;
@@ -919,8 +929,7 @@ static uint64_t descriptor_payload_cycles(const tu_dma_descriptor_t *desc) {
         return count * ceil_div_u64(bytes, g_tu_dma.bus_width_bytes);
 
     uint64_t burst_bytes = descriptor_burst_bytes(desc);
-    if (g_tu_dma.burst_boundary_mode ==
-        TU_DMA_BOUNDARY_SRAM_ADDRESS) {
+    if (g_tu_dma.burst_boundary_mode != TU_DMA_BOUNDARY_SIZE_ONLY) {
         uint64_t bursts, payload;
         descriptor_address_bounded_totals(desc, &bursts, &payload);
         return payload;
