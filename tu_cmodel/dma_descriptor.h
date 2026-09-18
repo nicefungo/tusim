@@ -89,7 +89,9 @@ typedef enum {
 typedef enum {
     TU_DMA_BOUNDARY_SIZE_ONLY = 0,
     TU_DMA_BOUNDARY_SRAM_ADDRESS = 1,
-    TU_DMA_BOUNDARY_SRAM_4K = 2
+    TU_DMA_BOUNDARY_SRAM_4K = 2,
+    TU_DMA_BOUNDARY_EXTERNAL_4K = 3,
+    TU_DMA_BOUNDARY_BOTH_4K = 4
 } tu_dma_burst_boundary_mode_t;
 
 /* ---- Transfer direction ---- */
@@ -120,6 +122,11 @@ typedef struct tu_dma_descriptor_t {
     uint32_t                dst_base;       /* Base byte offset in destination memory */
     uint32_t                dst_strides[3]; /* Strides: [row_stride, depth_stride, 0] */
     void                   *dst_host;       /* Host-side pointer */
+
+    /* Optional modeled external/bus address. Host pointers are process
+     * virtual addresses and must never be used as physical placement. */
+    uint64_t                external_address;
+    bool                    external_address_valid;
 
     /* Transfer geometry */
     uint32_t                dims[3];        /* [rows, cols, depth] */
@@ -382,6 +389,7 @@ tu_dma_descriptor_t *tu_dma_desc_create_multicast(
 
 void tu_dma_desc_destroy(tu_dma_descriptor_t *desc);
 tu_dma_descriptor_t *tu_dma_desc_chain(tu_dma_descriptor_t *head, tu_dma_descriptor_t *tail);
+bool tu_dma_desc_set_external_address(tu_dma_descriptor_t *desc, uint64_t address);
 
 /* ---- Submission & Execution ---- */
 uint32_t tu_dma_submit_desc(tu_dma_descriptor_t *desc);

@@ -607,7 +607,7 @@ int main(void) {
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
               "should reject unsupported issue/payload mode");
         cfg.dma_issue_payload_mode = TU_DMA_CONFIG_ISSUE_PAYLOAD_SERIALIZED;
-        cfg.dma_burst_boundary_mode = 3;
+        cfg.dma_burst_boundary_mode = 5;
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
               "should reject unsupported burst boundary mode");
         cfg.dma_burst_boundary_mode = TU_DMA_CONFIG_BURST_BOUNDARY_SIZE_ONLY;

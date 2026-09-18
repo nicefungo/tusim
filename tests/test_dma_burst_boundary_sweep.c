@@ -146,7 +146,7 @@ static int propagation_rejection_gate(void) {
     if (tu_config_load_string("{\"tu\":{\"dma\":{\"burst_boundary_mode\":\"magic\"}}}",
                               &cfg, err, sizeof(err)) == 0) return -5;
     if (!strstr(err, "burst_boundary_mode")) return -6;
-    init_engine(3, 1, TU_DMA_BIND_EXPLICIT);
+    init_engine(5, 1, TU_DMA_BIND_EXPLICIT);
     return g_tu_dma.num_channels == 0 ? 0 : -7;
 }
 

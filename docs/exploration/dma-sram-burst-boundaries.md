@@ -33,7 +33,7 @@ N    -= chunk
 
 One helper supplies command and payload totals to live completion and queued least-projected-cycle binding. It handles linear, strided 2D/3D, scatter/gather, and multicast SRAM offsets. Loads use destination SRAM addresses; stores use source SRAM addresses. Logical discontinuities remain separate in both address-bounded modes.
 
-Host pointers are deliberately excluded: process virtual pointers are not physical DRAM addresses. The 4 KiB rule is therefore an SRAM-side protocol abstraction, not proof of IOMMU or external AXI address behavior.
+Host pointers are deliberately excluded: process virtual pointers are not physical DRAM addresses. The 4 KiB rule is therefore an SRAM-side protocol abstraction, not proof of IOMMU or external AXI address behavior. The 2026-09-18 follow-up, [`dma-external-burst-boundaries.md`](dma-external-burst-boundaries.md), adds explicit descriptor bus-address metadata plus external-only and dual-endpoint alternatives without reinterpreting host pointers.
 
 ## Measured matrix
 
@@ -111,7 +111,7 @@ Relevant paths:
 
 ## Fidelity limits
 
-This is deterministic SRAM-side command geometry, not AXI, NoC, IOMMU, cache-line, virtual-memory, or DRAM simulation. The fixed 4 KiB boundary is intentionally protocol-specific; alternate page sizes are not modeled because no current producer exposes a physical-address/page contract. The model omits byte enables, read-modify-write, adjacent-index merging, finite FIFO/credits, backpressure, response reordering, shared SRAM/DRAM contention, and calibrated area/power. Occupied bytes are DMA-interface lane occupancy, not automatically off-chip bytes.
+This is deterministic SRAM-side command geometry, not AXI, NoC, IOMMU, cache-line, virtual-memory, or DRAM simulation. The fixed 4 KiB boundary is intentionally protocol-specific; alternate page sizes are not modeled. Explicit external placement is covered separately by [`dma-external-burst-boundaries.md`](dma-external-burst-boundaries.md). The model omits byte enables, read-modify-write, adjacent-index merging, finite FIFO/credits, backpressure, response reordering, shared SRAM/DRAM contention, and calibrated area/power. Occupied bytes are DMA-interface lane occupancy, not automatically off-chip bytes.
 
 ## Verification
 
