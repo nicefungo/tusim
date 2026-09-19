@@ -107,7 +107,9 @@ void tu_dma_init_config_boundary(bool async, uint32_t num_channels,
         burst_boundary_mode != TU_DMA_BOUNDARY_SRAM_ADDRESS &&
         burst_boundary_mode != TU_DMA_BOUNDARY_SRAM_4K &&
         burst_boundary_mode != TU_DMA_BOUNDARY_EXTERNAL_4K &&
-        burst_boundary_mode != TU_DMA_BOUNDARY_BOTH_4K) {
+        burst_boundary_mode != TU_DMA_BOUNDARY_BOTH_4K &&
+        burst_boundary_mode != TU_DMA_BOUNDARY_EXTERNAL_ADDRESS &&
+        burst_boundary_mode != TU_DMA_BOUNDARY_BOTH_ADDRESS) {
         fprintf(stderr, "DMA: unsupported burst boundary mode %d\n",
                 burst_boundary_mode);
         memset(&g_tu_dma, 0, sizeof(g_tu_dma));
@@ -833,6 +835,7 @@ static void add_address_bounded_segment(uint64_t sram_address,
                                         bool bound_sram,
                                         uint64_t sram_boundary_bytes,
                                         bool bound_external,
+                                        uint64_t external_boundary_bytes,
                                         uint64_t *burst_count,
                                         uint64_t *payload_cycles) {
     while (bytes > 0) {
@@ -843,7 +846,8 @@ static void add_address_bounded_segment(uint64_t sram_address,
             if (chunk > room) chunk = room;
         }
         if (bound_external) {
-            uint64_t room = 4096u - external_address % 4096u;
+            uint64_t room = external_boundary_bytes -
+                            external_address % external_boundary_bytes;
             if (chunk > room) chunk = room;
         }
         (*burst_count)++;
@@ -865,12 +869,20 @@ static void descriptor_address_bounded_totals(
     bool bound_sram =
         g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_SRAM_ADDRESS ||
         g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_SRAM_4K ||
-        g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_BOTH_4K;
+        g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_BOTH_4K ||
+        g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_BOTH_ADDRESS;
     bool bound_external =
         g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_EXTERNAL_4K ||
-        g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_BOTH_4K;
+        g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_BOTH_4K ||
+        g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_EXTERNAL_ADDRESS ||
+        g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_BOTH_ADDRESS;
     uint64_t sram_boundary_bytes =
-        g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_SRAM_ADDRESS ?
+        (g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_SRAM_ADDRESS ||
+         g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_BOTH_ADDRESS) ?
+            burst_bytes : 4096u;
+    uint64_t external_boundary_bytes =
+        (g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_EXTERNAL_ADDRESS ||
+         g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_BOTH_ADDRESS) ?
             burst_bytes : 4096u;
     uint64_t segment_bytes = descriptor_logical_segment_bytes(desc);
     uint64_t base = descriptor_sram_base(desc);
@@ -890,6 +902,7 @@ static void descriptor_address_bounded_totals(
                                         external_base + r * external_strides[0],
                                         segment_bytes, burst_bytes, bound_sram,
                                         sram_boundary_bytes, bound_external,
+                                        external_boundary_bytes,
                                         burst_count, payload_cycles);
         break;
     case TU_DMA_XFER_STRIDED_3D:
@@ -900,7 +913,7 @@ static void descriptor_address_bounded_totals(
                                                 r * external_strides[0],
                                             segment_bytes, burst_bytes, bound_sram,
                                             sram_boundary_bytes, bound_external,
-                                            burst_count,
+                                            external_boundary_bytes, burst_count,
                                             payload_cycles);
         break;
     case TU_DMA_XFER_SCATTER:
@@ -910,6 +923,7 @@ static void descriptor_address_bounded_totals(
                                         external_base + i * segment_bytes,
                                         segment_bytes, burst_bytes, bound_sram,
                                         sram_boundary_bytes, bound_external,
+                                        external_boundary_bytes,
                                         burst_count, payload_cycles);
         break;
     case TU_DMA_XFER_MULTICAST: {
@@ -918,7 +932,7 @@ static void descriptor_address_bounded_totals(
             add_address_bounded_segment(desc->multicast.offsets[i],
                                         external_base, chunk, burst_bytes,
                                         bound_sram, sram_boundary_bytes,
-                                        bound_external,
+                                        bound_external, external_boundary_bytes,
                                         burst_count, payload_cycles);
         break;
     }
@@ -926,6 +940,7 @@ static void descriptor_address_bounded_totals(
         add_address_bounded_segment(base, external_base, desc->total_bytes,
                                     burst_bytes, bound_sram,
                                     sram_boundary_bytes, bound_external,
+                                    external_boundary_bytes,
                                     burst_count, payload_cycles);
         break;
     }
@@ -1026,9 +1041,11 @@ static uint64_t descriptor_transfer_cycles(const tu_dma_descriptor_t *desc) {
 void tu_dma_execute_desc(tu_dma_descriptor_t *desc) {
     if (!desc || desc->completed) return;
     if ((g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_EXTERNAL_4K ||
-         g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_BOTH_4K) &&
+         g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_BOTH_4K ||
+         g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_EXTERNAL_ADDRESS ||
+         g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_BOTH_ADDRESS) &&
         !desc->external_address_valid) {
-        fprintf(stderr, "DMA: external 4 KiB boundary mode requires an explicit descriptor bus address\n");
+        fprintf(stderr, "DMA: external boundary mode requires an explicit descriptor bus address\n");
         return;
     }
 
@@ -1208,10 +1225,12 @@ uint32_t tu_dma_submit_desc(tu_dma_descriptor_t *desc) {
     if (!desc) return 0;
 
     if (g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_EXTERNAL_4K ||
-        g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_BOTH_4K) {
+        g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_BOTH_4K ||
+        g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_EXTERNAL_ADDRESS ||
+        g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_BOTH_ADDRESS) {
         for (const tu_dma_descriptor_t *item = desc; item; item = item->next) {
             if (!item->external_address_valid) {
-                fprintf(stderr, "DMA: external 4 KiB boundary mode requires an explicit descriptor bus address\n");
+                fprintf(stderr, "DMA: external boundary mode requires an explicit descriptor bus address\n");
                 tu_dma_desc_destroy(desc);
                 return 0;
             }

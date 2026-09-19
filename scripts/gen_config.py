@@ -335,8 +335,11 @@ def generate_header(config, output_path):
     L('#define TU_DMA_BURST_BOUNDARY_SRAM_4K 2')
     L('#define TU_DMA_BURST_BOUNDARY_EXTERNAL_4K 3')
     L('#define TU_DMA_BURST_BOUNDARY_BOTH_4K 4')
+    L('#define TU_DMA_BURST_BOUNDARY_EXTERNAL_ADDRESS 5')
+    L('#define TU_DMA_BURST_BOUNDARY_BOTH_ADDRESS 6')
     boundary_map = {'size_only': 0, 'sram_address': 1, 'sram_4k': 2,
-                    'external_4k': 3, 'both_4k': 4}
+                    'external_4k': 3, 'both_4k': 4,
+                    'external_address': 5, 'both_address': 6}
     L(f'#define TU_DMA_BURST_BOUNDARY_MODE {boundary_map[dma.get("burst_boundary_mode", "size_only")]}')
     L(f'#define TU_DMA_CHANNELS         {dma["channels"]}')
     L('#define TU_DMA_ENGINE_MAX_CHANNELS 8')

@@ -1,4 +1,4 @@
-/* DMA explicit external-address and dual-endpoint 4 KiB boundary sweep. */
+/* DMA explicit external-address and dual-endpoint boundary sweep. */
 #include "tu_cmodel/tu_cmodel.h"
 #include "tu_cmodel/dma_descriptor.h"
 #include "tu_cmodel/infra/config.h"
@@ -16,7 +16,7 @@ static void init_engine(int mode, uint32_t channels, int binding) {
     tu_dma_init_config_boundary(
         true, channels, 4, TU_DMA_BUS_MODE_INDEPENDENT,
         TU_DMA_ARB_ROUND_ROBIN, binding, 256u, BASE_CYCLES, BASE_CYCLES,
-        8192u, 8192u, 8192u, 3u, 0u, 0u, false, false,
+        128u, 128u, 128u, 3u, 0u, 0u, false, false,
         TU_DMA_SEGMENT_LOGICAL, TU_DMA_BASE_PER_DESCRIPTOR,
         TU_DMA_PAYLOAD_ALIGN_BURST_COMMAND,
         TU_DMA_ISSUE_PAYLOAD_SERIALIZED, mode);
@@ -61,7 +61,7 @@ static int missing_metadata_rejection(void) {
     tu_sram_region_t sram;
     tu_sram_init(&sram, SPACE, "dma-external-reject");
     sram.banks.bw_modeling = false;
-    init_engine(TU_DMA_BOUNDARY_EXTERNAL_4K, 1, TU_DMA_BIND_EXPLICIT);
+    init_engine(TU_DMA_BOUNDARY_EXTERNAL_ADDRESS, 1, TU_DMA_BIND_EXPLICIT);
     tu_dma_descriptor_t *desc = tu_dma_desc_create_linear(
         0, TU_DMA_DIR_HOST_TO_TU, &sram, 0, input, 1, 64);
     if (!desc || tu_dma_submit_desc(desc) != 0 ||
@@ -117,15 +117,15 @@ static int propagation_gate(void) {
     tu_config_t cfg;
     char err[192] = {0};
     if (tu_config_load_string(
-            "{\"tu\":{\"dma\":{\"burst_boundary_mode\":\"both_4k\"}}}",
+            "{\"tu\":{\"dma\":{\"burst_boundary_mode\":\"both_address\"}}}",
             &cfg, err, sizeof(err)) != 0) return -1;
     if (cfg.dma_burst_boundary_mode !=
-        TU_DMA_CONFIG_BURST_BOUNDARY_BOTH_4K) return -2;
+        TU_DMA_CONFIG_BURST_BOUNDARY_BOTH_ADDRESS) return -2;
     tu_runtime_config_t rt = tu_config_to_runtime(&cfg);
     if (rt.dma_burst_boundary_mode !=
-        TU_DMA_CONFIG_BURST_BOUNDARY_BOTH_4K) return -3;
+        TU_DMA_CONFIG_BURST_BOUNDARY_BOTH_ADDRESS) return -3;
     tu_init_with_config(&rt);
-    return g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_BOTH_4K ? 0 : -4;
+    return g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_BOTH_ADDRESS ? 0 : -4;
 }
 
 static int projection_reversal_gate(int mode, uint8_t expected_channel) {
@@ -140,7 +140,7 @@ static int projection_reversal_gate(int mode, uint8_t expected_channel) {
     tu_dma_descriptor_t *probe = tu_dma_desc_create_linear(
         0, TU_DMA_DIR_HOST_TO_TU, &sram, 512, input, 1, 16);
     if (!linear || !rows || !probe ||
-        !tu_dma_desc_set_external_address(linear, 4090) ||
+        !tu_dma_desc_set_external_address(linear, 126) ||
         !tu_dma_desc_set_external_address(rows, 0) ||
         !tu_dma_desc_set_external_address(probe, 512) ||
         tu_dma_submit_desc(linear) == 0 || tu_dma_submit_desc(rows) == 0)
@@ -169,13 +169,16 @@ int main(void) {
         uint64_t completion;
         uint64_t occupied;
     } rows[] = {
-        {"size_only",   TU_DMA_BOUNDARY_SIZE_ONLY,    4090u, 4070u, 56u,  64u},
-        {"sram_4k",     TU_DMA_BOUNDARY_SRAM_4K,      4090u, 4070u, 60u,  96u},
-        {"external_4k", TU_DMA_BOUNDARY_EXTERNAL_4K,  4090u, 4070u, 60u,  96u},
-        {"both_4k",     TU_DMA_BOUNDARY_BOTH_4K,      4090u, 4070u, 64u, 128u},
+        {"size_only",       TU_DMA_BOUNDARY_SIZE_ONLY,        126u,  110u, 56u,  64u},
+        {"sram_address",    TU_DMA_BOUNDARY_SRAM_ADDRESS,     126u,  110u, 60u,  96u},
+        {"external_address",TU_DMA_BOUNDARY_EXTERNAL_ADDRESS, 126u,  110u, 60u,  96u},
+        {"both_address",    TU_DMA_BOUNDARY_BOTH_ADDRESS,     126u,  110u, 64u, 128u},
+        {"sram_4k",         TU_DMA_BOUNDARY_SRAM_4K,         4090u, 4070u, 60u,  96u},
+        {"external_4k",     TU_DMA_BOUNDARY_EXTERNAL_4K,     4090u, 4070u, 60u,  96u},
+        {"both_4k",         TU_DMA_BOUNDARY_BOTH_4K,         4090u, 4070u, 64u, 128u},
     };
 
-    printf("DMA endpoint 4 KiB sweep (32-byte interface, 8192-byte maximum, 3 issue cycles, 50-cycle base)\n");
+    printf("DMA endpoint boundary sweep (32-byte interface, 128-byte maximum, 3 issue cycles, 50-cycle base)\n");
     printf("mode sram_addr external_addr completion useful occupied\n");
     for (uint32_t i = 0; i < sizeof(rows) / sizeof(rows[0]); i++) {
         if (run_linear(rows[i].mode, TU_DMA_DIR_HOST_TO_TU,
@@ -192,17 +195,21 @@ int main(void) {
     }
     if (run_linear(TU_DMA_BOUNDARY_EXTERNAL_4K, TU_DMA_DIR_TU_TO_HOST,
                    0, 4090, 60, 96) ||
+        run_linear(TU_DMA_BOUNDARY_EXTERNAL_ADDRESS, TU_DMA_DIR_TU_TO_HOST,
+                   0, 126, 60, 96) ||
+        run_linear(TU_DMA_BOUNDARY_BOTH_ADDRESS, TU_DMA_DIR_TU_TO_HOST,
+                   126, 110, 64, 128) ||
         run_linear(TU_DMA_BOUNDARY_BOTH_4K, TU_DMA_DIR_TU_TO_HOST,
                    4090, 4070, 64, 128) || strided_external_gate()) {
         fprintf(stderr, "FAIL: store or strided direction gate\n");
         return 3;
     }
     if (projection_reversal_gate(TU_DMA_BOUNDARY_SIZE_ONLY, 0) ||
-        projection_reversal_gate(TU_DMA_BOUNDARY_EXTERNAL_4K, 1)) {
+        projection_reversal_gate(TU_DMA_BOUNDARY_EXTERNAL_ADDRESS, 1)) {
         fprintf(stderr, "FAIL: queued projection reversal\n");
         return 4;
     }
 
-    printf("PASS: explicit external metadata, independent and combined endpoint boundaries, load/store bytes, occupied traffic, queued timing, config/default/rejection\n");
+    printf("PASS: explicit external metadata, max-burst and 4 KiB endpoint boundaries, load/store bytes, occupied traffic, queued timing, config/default/rejection\n");
     return 0;
 }

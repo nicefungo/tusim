@@ -53,7 +53,7 @@ def main() -> int:
             'issue_payload_mode: "serialized"':
                 'issue_payload_mode: "overlapped"',
             'burst_boundary_mode: "size_only"':
-                'burst_boundary_mode: "both_4k"',
+                'burst_boundary_mode: "both_address"',
             'payload_scope: "descriptor"':
                 'payload_scope: "burst_commands"',
             '    fp16:\n      rounding: "round_nearest_even"':
@@ -90,7 +90,7 @@ def main() -> int:
             'int main(void) { tu_runtime_config_t c = tu_runtime_config_default(); '
             'return c.dataflow_mode != TU_DATAFLOW_MODE_OS || '
             'c.dma_issue_payload_mode != TU_DMA_ISSUE_PAYLOAD_DEFAULT_OVERLAPPED || '
-            'c.dma_burst_boundary_mode != TU_DMA_BURST_BOUNDARY_BOTH_4K || '
+            'c.dma_burst_boundary_mode != TU_DMA_BURST_BOUNDARY_BOTH_ADDRESS || '
             'c.dma_payload_scope != TU_DMA_PAYLOAD_SCOPE_BURST_COMMANDS; }\n'
         )
         subprocess.run(

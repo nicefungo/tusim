@@ -1,51 +1,50 @@
-# DMA External and Dual-Endpoint 4 KiB Boundary Accounting
+# DMA External and Dual-Endpoint Burst Boundaries
 
-**Date:** 2026-09-18
+**Date:** 2026-09-19
 **Mode:** pre-spec exploration
 **Evidence:** `tests/test_dma_external_boundary_sweep.c`
 
 ## Architecture question
 
-Should DMA burst legality depend only on the local SRAM address, only on the external bus address, or on both endpoints?
+Should maximum-burst alignment and 4 KiB no-crossing rules be evaluated at the local SRAM endpoint, the external bus endpoint, or both?
 
-The previous model could enforce an SRAM-side 4 KiB boundary but deliberately ignored host pointers because they are process virtual addresses. That is correct, but insufficient for studying an external AXI-like interface: a transfer can be locally aligned while its external physical/I/O address crosses 4 KiB, or vice versa. A realistic descriptor therefore needs explicit modeled bus-address metadata rather than deriving placement from a host pointer.
+The model previously offered SRAM maximum-burst alignment and one-/two-sided 4 KiB boundaries. This left an asymmetry: an external cache-line, bridge window, or command adapter could require bursts to end at the directional maximum-burst boundary, but the cmodel could express that alignment only on SRAM. Host pointers cannot repair the gap because they are process virtual addresses, not modeled bus placement.
 
 ## Realistic alternatives
 
-- **`size_only` (zero/default):** split only at the directional maximum transfer length. This preserves compatibility and represents a permissive bridge or hidden realignment.
-- **`sram_4k`:** enforce a 4 KiB boundary only in the local SRAM address space. This represents a locally paged/windowed adapter or the prior protocol abstraction.
-- **`external_4k`:** enforce a 4 KiB boundary only on an explicit external bus address. This represents an external AXI-like legality rule while allowing the local SRAM path to span that location.
-- **`both_4k`:** stop at whichever endpoint reaches a 4 KiB boundary first. This represents two independently constrained adapters and can require more fragments than either one-sided mode.
+- **`size_only` (zero/default):** cap command length but ignore address alignment. This represents a permissive bridge or hidden realignment and preserves historical behavior.
+- **`sram_address`:** align commands to the directional maximum-burst boundary in local SRAM. This represents a constrained local adapter.
+- **`external_address`:** align commands to the same directional maximum-burst boundary at the explicit external address. This represents an external line/window adapter while allowing local spans.
+- **`both_address`:** stop at whichever endpoint reaches its maximum-burst boundary first. This represents two independently constrained adapters.
+- **`sram_4k`, `external_4k`, `both_4k`:** retain the independent fixed 4 KiB legality alternatives. These represent paged/windowed or AXI-like endpoint rules and are not aliases for maximum-burst alignment.
 
-The existing **`sram_address`** mode remains a separate maximum-burst-alignment alternative. A physical TU would usually hard-wire its endpoint contracts; the pre-spec cmodel keeps the alternatives runtime-selectable.
+A physical TU would normally hard-wire one endpoint contract. The pre-spec cmodel retains all seven alternatives because each encodes a materially different placement/resource assumption.
 
 ## Executable contract
 
-Descriptors now optionally carry:
+Descriptors optionally carry:
 
 ```text
 external_address
 external_address_valid
 ```
 
-`tu_dma_desc_set_external_address()` sets this metadata. Host pointers remain functional copy pointers only and are never interpreted as physical addresses. `external_4k` and `both_4k` reject submission before queue or binding state changes when metadata is absent.
+`tu_dma_desc_set_external_address()` sets this metadata. Host pointers remain functional copy pointers only. Every mode that examines the external endpoint rejects direct execution, submission, and descriptor-chain submission before copying or queue/binding mutation when metadata is absent.
 
-For each logical segment, the command generator starts with:
+For each logical segment, command generation starts with:
 
 ```text
 chunk = min(remaining, directional_max_burst)
 ```
 
-It then limits `chunk` by the enabled endpoint rooms:
+It then limits the chunk by each enabled endpoint:
 
 ```text
-sram_room = 4096 - (sram_address mod 4096)
-external_room = 4096 - (external_address mod 4096)
+max-burst room = directional_max_burst - (address mod directional_max_burst)
+4 KiB room      = 4096 - (address mod 4096)
 ```
 
-`both_4k` uses the minimum of all three limits. Both addresses advance by the emitted chunk. Strided 2D/3D descriptors use the corresponding host stride for external placement; scatter/gather uses contiguous external elements and indexed SRAM elements; multicast reuses the source external span for each destination.
-
-The same helper feeds live completion, occupied-byte accounting, and queued least-projected-cycle binding.
+Dual-endpoint modes use the minimum enabled room. Both addresses advance by the emitted chunk. Strided 2D/3D descriptors retain corresponding external strides; scatter/gather uses contiguous external elements and indexed SRAM elements; multicast reuses the source external span for each destination. One helper feeds live completion, occupied-byte accounting, and queued least-projected-cycle binding.
 
 ## Measured matrix
 
@@ -55,44 +54,59 @@ Command:
 make test-dma-external-boundary-sweep
 ```
 
-Controls: one independent channel, 256-bit/32-byte interface, 8192-byte directional maximum, three issue cycles per command, 50-cycle descriptor base, logical segmentation, burst-command payload alignment, serialized issue/payload, disabled SRAM bandwidth metering, and a 64-byte linear load. SRAM starts at 4090; external address starts at 4070, so their 4 KiB boundaries occur 6 and 26 bytes into the transfer.
+Controls: one independent channel, 256-bit/32-byte interface, 128-byte directional maximum, three issue cycles per command, 50-cycle descriptor base, logical segmentation, burst-command payload alignment, serialized issue/payload, disabled SRAM bandwidth metering, and a 64-byte linear load.
+
+The maximum-burst rows start SRAM at 126 and external at 110, placing endpoint boundaries 2 and 18 bytes into the transfer. The 4 KiB rows start at 4090 and 4070, placing boundaries 6 and 26 bytes into the transfer.
 
 | Mode | SRAM address | External address | Completion cycles | Useful B | Occupied B |
 |---|---:|---:|---:|---:|---:|
-| `size_only` | 4090 | 4070 | 56 | 64 | 64 |
+| `size_only` | 126 | 110 | 56 | 64 | 64 |
+| `sram_address` | 126 | 110 | 60 | 64 | 96 |
+| `external_address` | 126 | 110 | 60 | 64 | 96 |
+| `both_address` | 126 | 110 | 64 | 64 | 128 |
 | `sram_4k` | 4090 | 4070 | 60 | 64 | 96 |
 | `external_4k` | 4090 | 4070 | 60 | 64 | 96 |
 | `both_4k` | 4090 | 4070 | 64 | 64 | 128 |
 
-The one-sided modes each emit two commands and happen to tie in this placement, but they split at different addresses. `both_4k` emits three commands (6, 20, and 38 bytes), raising completion 14.3% and occupied interface bytes 2x versus `size_only`. This is not a universal penalty: aligned or same-offset endpoints can collapse to the same command geometry.
+The one-sided modes each emit two commands and tie in these placements, though they split at different addresses. Each dual-endpoint mode emits three commands because endpoint offsets differ. Relative to `size_only`, one-sided boundary accounting raises measured completion 7.1% and occupied bytes 50%; dual-endpoint accounting raises completion 14.3% and occupied bytes 100%. These are placement-specific command/lane costs, not universal throughput penalties. Aligned endpoints or coincident offsets can collapse to identical geometry.
 
-Store-direction gates reproduce 60 cycles/96 occupied bytes for external-only crossing and 64/128 for two different endpoint crossings. A two-row strided load with one externally crossing row completes in 63 cycles with 96 occupied bytes and preserves both row payloads. Direct execution, single submission, and descriptor-chain submission all reject missing metadata without copying or queue-state mutation. A queued gate also reverses least-projected binding: the 64-byte linear descriptor is selected over a two-row descriptor in `size_only`, while its external crossing makes the two-row queue preferable in `external_4k`.
+Store gates reproduce both external maximum-burst and dual-endpoint results. The existing externally crossing strided load remains byte-exact. A queued gate reverses least-projected binding: the 64-byte linear descriptor is preferred over a two-row descriptor in `size_only`, while its external maximum-burst crossing makes the two-row queue preferable in `external_address`.
 
 ## Gain versus sacrifice
 
-| Dimension | `size_only` | One-sided 4 KiB | `both_4k` |
+| Dimension | `size_only` | One-sided endpoint boundary | Dual-endpoint boundary |
 |---|---|---|---|
-| Throughput | Optimistic if either endpoint has a no-crossing rule | Exposes one constrained adapter; sustained throughput remains unmodeled | Exposes compounded fragmentation when endpoint offsets differ |
-| Latency | 56 cycles in the measured row | 60 cycles, +7.1% | 64 cycles, +14.3% |
-| Area/resources | Assumes permissive span handling or hidden steering | One low-address comparator/counter plus split state | Two address trackers/comparators and minimum selection; magnitudes unquantified |
-| Power/energy | Lowest visible command/lane activity; hidden steering unmodeled | 1.5x occupied bytes in the measured crossing | 2x occupied bytes; expected higher command/control switching |
-| SRAM/DRAM traffic | Useful bytes unchanged | Useful bytes unchanged; one interface boundary exposed | Useful bytes unchanged; both endpoint fragmentations exposed |
+| Throughput | Optimistic if an endpoint cannot realign | Exposes one source of command fragmentation; sustained rate unmodeled | Exposes compounded fragmentation; sustained rate unmodeled |
+| Latency | 56 cycles in the measured control | 60 cycles, +7.1% | 64 cycles, +14.3% |
+| Area/resources | Assumes hidden steering/buffering or permissive protocol | One address tracker, comparator, and split state | Two trackers/comparators plus minimum selection and response merge state |
+| Power/energy | Lowest visible command/lane activity; hidden realignment cost omitted | 1.5x occupied bytes in the measured crossing; expected more control switching | 2x occupied bytes; expected highest command/control switching |
+| SRAM/DRAM traffic | Useful bytes unchanged; physical overfetch hidden | Useful bytes unchanged; one interface's lane occupancy exposed | Useful bytes unchanged; both endpoint fragmentations exposed |
 | Numerical accuracy | Byte-exact, unchanged | Byte-exact, unchanged | Byte-exact, unchanged |
-| Control complexity | Simplest visible accounting, strongest bridge assumption | Must retain and advance one address contract | Must synchronize two address domains and merge more responses |
-| Verification burden | Length/tail cases | Explicit metadata, both directions, boundary edges | Independent offsets, coincident boundaries, strides/indices, and failure atomicity |
-| Compiler/runtime | Placement appears insensitive | Allocator/descriptor must provide the relevant bus address | Placement of both SRAM and external buffers can affect command pressure |
+| Control complexity | Simplest visible model | Must retain/advance one placement contract | Must synchronize two address domains and merge more fragments |
+| Verification burden | Length/tail cases | Explicit metadata, directions, exact boundary edges | Independent/coincident offsets, all descriptor shapes, failure atomicity |
+| Compiler/runtime | Placement appears insensitive | Allocator/descriptor supplies the relevant address | Both SRAM and external placement can affect command pressure |
 
-Area, power, energy, sustained throughput, and response-buffer capacity are not quantified. The directions above are hardware rationale, not silicon measurements.
+Area, power, energy, sustained throughput, finite credit demand, and response-buffer capacity are qualitative/unquantified. The cmodel does not justify selecting one mode universally.
 
 ## Configuration and compatibility
 
-`tu.dma.burst_boundary_mode` now accepts `size_only`, `sram_address`, `sram_4k`, `external_4k`, and `both_4k` through YAML/JSON, generated constants/runtime defaults, canonical parsing/validation/conversion, top-level initialization, and live DMA state.
+`tu.dma.burst_boundary_mode` accepts:
 
-`size_only` remains zero/default. Existing constructors and callers do not need external metadata unless they select an external-boundary mode. Address zero is valid because presence is represented by a separate boolean. Unsupported mode IDs and missing required metadata fail closed.
+```text
+size_only
+sram_address
+external_address
+both_address
+sram_4k
+external_4k
+both_4k
+```
+
+The path is executable through YAML/JSON, generated constants/runtime defaults, canonical parsing/validation/conversion, top-level initialization, and live DMA state. `size_only` remains numeric zero/default. Existing constructors need external metadata only when an external endpoint mode is selected. Address zero remains valid through an explicit validity bit. Unsupported mode IDs fail closed.
 
 ## Fidelity limits
 
-This is deterministic command geometry, not a complete AXI, IOMMU, virtual-memory, cache, NoC, or DRAM model. The explicit external address is caller-supplied model metadata; the cmodel does not translate process virtual pointers or validate an OS mapping. The model omits page-table walks, IOMMU/TLB behavior, byte enables, response reordering/merge capacity, finite command credits, backpressure, adjacent-segment coalescing, shared SRAM/DRAM contention, and calibrated area/power. Occupied bytes represent DMA-interface lane occupancy, not automatically off-chip DRAM traffic.
+This is deterministic command geometry, not a complete AXI, cache, IOMMU, virtual-memory, NoC, or DRAM model. The explicit external address is caller-supplied metadata; the cmodel does not translate host pointers. It omits page-table walks, TLBs, byte enables, response ordering/merge capacity, finite command credits, backpressure, adjacent-segment coalescing, shared SRAM/DRAM contention, sustained queue throughput, and calibrated area/power. Occupied bytes represent DMA-interface lane occupancy, not automatically off-chip DRAM traffic. The maximum-burst boundary is a configurable architecture abstraction, not a claim that every bus protocol requires naturally aligned maximum-length bursts.
 
 ## Verification
 

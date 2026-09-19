@@ -91,7 +91,9 @@ typedef enum {
     TU_DMA_BOUNDARY_SRAM_ADDRESS = 1,
     TU_DMA_BOUNDARY_SRAM_4K = 2,
     TU_DMA_BOUNDARY_EXTERNAL_4K = 3,
-    TU_DMA_BOUNDARY_BOTH_4K = 4
+    TU_DMA_BOUNDARY_BOTH_4K = 4,
+    TU_DMA_BOUNDARY_EXTERNAL_ADDRESS = 5,
+    TU_DMA_BOUNDARY_BOTH_ADDRESS = 6
 } tu_dma_burst_boundary_mode_t;
 
 /* ---- Transfer direction ---- */
