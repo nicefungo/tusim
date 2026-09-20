@@ -394,6 +394,12 @@ tu_dma_descriptor_t *tu_dma_desc_chain(tu_dma_descriptor_t *head, tu_dma_descrip
 bool tu_dma_desc_set_external_address(tu_dma_descriptor_t *desc, uint64_t address);
 
 /* ---- Submission & Execution ---- */
+/* Submission validates the complete linked chain before admission.  On any
+ * rejection it destroys the full chain and returns 0; callers must not free or
+ * dereference it afterward.  On acceptance, borrowed host pointers, SRAM
+ * regions, index lists, and multicast arrays must remain alive until execution
+ * completes.  Successful-descriptor cleanup depends on pending/active/completed
+ * state; use the engine lifecycle or explicit destroy only after detachment. */
 uint32_t tu_dma_submit_desc(tu_dma_descriptor_t *desc);
 void tu_dma_execute_desc(tu_dma_descriptor_t *desc);
 int tu_dma_tick(void);

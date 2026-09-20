@@ -576,6 +576,167 @@ static void test_dma_shared_arbitration(void) {
     if (ok) PASS(); else FAIL("policy selection or rejection failed");
 }
 
+static int rejected_without_submission(tu_dma_descriptor_t *desc) {
+    uint32_t id = tu_dma_submit_desc(desc);
+    if (id == 0) return 1; /* Rejection owns and destroys the descriptor. */
+    /* All callers use async mode, so an accepted descriptor is still owned by
+     * the engine and is released exactly once here. */
+    tu_dma_destroy();
+    return 0;
+}
+
+static void test_dma_descriptor_sram_span_validation(void) {
+    TEST("Descriptor SRAM spans reject out-of-range geometry atomically");
+
+    static uint8_t host[256];
+    static const uint32_t bad_indices[2] = {0u, 60u};
+    int ok = 1;
+    tu_sram_region_t sram;
+    tu_sram_region_t other;
+    tu_sram_init(&sram, 128, "span-primary");
+    tu_sram_init(&other, 64, "span-other");
+    memset(tu_sram_raw_ptr(&sram), 0, 128);
+    memset(tu_sram_raw_ptr(&other), 0, 64);
+
+    /* The allocation is 128 B, but the architectural region is 64 B.  This
+     * makes the pre-fix direct-execution failure observable without allowing
+     * the invalid second row to escape the backing allocation. */
+    sram.total_size = 64;
+    tu_dma_init_full(true, 1, 8);
+    tu_dma_descriptor_t *direct = tu_dma_desc_create_strided_2d(
+        0, TU_DMA_DIR_HOST_TO_TU, &sram, 16, host, 40, 16, 1, 2, 16);
+    tu_dma_execute_desc(direct);
+    ok = ok && direct && !direct->completed && g_tu_dma.total_transfers == 0;
+    uint8_t *sram_bytes = (uint8_t *)tu_sram_raw_ptr(&sram);
+    for (uint32_t i = 56; i < 72 && ok; i++)
+        ok = sram_bytes[i] == 0;
+    tu_dma_desc_destroy(direct);
+    tu_dma_destroy();
+
+    tu_dma_init_full(true, 1, 8);
+    tu_dma_descriptor_t *d2 = tu_dma_desc_create_strided_2d(
+        0, TU_DMA_DIR_HOST_TO_TU, &sram, 16, host, 40, 16, 1, 2, 16);
+    ok = ok && d2 && rejected_without_submission(d2) &&
+         g_tu_dma.channels[0].total_submitted == 0;
+
+    tu_dma_init_full(true, 1, 8);
+    tu_dma_descriptor_t *d3 = tu_dma_desc_create_strided_3d(
+        0, TU_DMA_DIR_HOST_TO_TU, &sram, 0, host,
+        32, 48, 16, 32, 1, 2, 2, 16);
+    ok = ok && d3 && rejected_without_submission(d3) &&
+         g_tu_dma.channels[0].total_submitted == 0;
+
+    tu_dma_init_full(true, 1, 8);
+    tu_dma_descriptor_t *scatter = tu_dma_desc_create_scatter(
+        0, &sram, host, bad_indices, 2, 8);
+    ok = ok && scatter && rejected_without_submission(scatter) &&
+         g_tu_dma.channels[0].total_submitted == 0;
+
+    tu_dma_init_full(true, 1, 8);
+    tu_dma_descriptor_t *gather = tu_dma_desc_create_gather(
+        0, &sram, host, bad_indices, 2, 8);
+    ok = ok && gather && rejected_without_submission(gather) &&
+         g_tu_dma.channels[0].total_submitted == 0;
+
+    /* Validation must use the copy width, not mutable index metadata. */
+    tu_dma_init_full(true, 1, 8);
+    tu_dma_descriptor_t *width_mismatch = tu_dma_desc_create_scatter(
+        0, &sram, host, bad_indices, 2, 8);
+    if (width_mismatch) width_mismatch->index_elem_size = 1;
+    ok = ok && width_mismatch && rejected_without_submission(width_mismatch) &&
+         g_tu_dma.channels[0].total_submitted == 0;
+
+    /* A public TU-to-TU descriptor must bound both SRAM endpoints. */
+    tu_dma_init_full(true, 1, 8);
+    tu_dma_descriptor_t *internal = calloc(1, sizeof(*internal));
+    if (internal) {
+        internal->type = TU_DMA_XFER_STRIDED_2D;
+        internal->direction = TU_DMA_DIR_TU_TO_TU;
+        internal->channel = 0;
+        internal->src_region = &sram;
+        internal->src_base = 16;
+        internal->src_strides[0] = 40;
+        internal->dst_region = &other;
+        internal->dst_base = 0;
+        internal->dst_strides[0] = 16;
+        internal->elem_size = 1;
+        internal->dims[0] = 2;
+        internal->dims[1] = 16;
+        internal->dims[2] = 1;
+        internal->total_bytes = 32;
+    }
+    ok = ok && internal && rejected_without_submission(internal) &&
+         g_tu_dma.channels[0].total_submitted == 0;
+
+    for (uint32_t missing = 0; missing < 2; missing++) {
+        tu_dma_init_full(true, 1, 8);
+        tu_dma_descriptor_t *null_endpoint = calloc(1, sizeof(*null_endpoint));
+        if (null_endpoint) {
+            null_endpoint->type = TU_DMA_XFER_LINEAR;
+            null_endpoint->direction = TU_DMA_DIR_TU_TO_TU;
+            null_endpoint->channel = 0;
+            null_endpoint->src_region = missing == 0 ? NULL : &sram;
+            null_endpoint->dst_region = missing == 1 ? NULL : &other;
+            null_endpoint->elem_size = 1;
+            null_endpoint->dims[0] = 8;
+            null_endpoint->dims[1] = 1;
+            null_endpoint->dims[2] = 1;
+            null_endpoint->total_bytes = 8;
+        }
+        ok = ok && null_endpoint &&
+             rejected_without_submission(null_endpoint) &&
+             g_tu_dma.channels[0].total_submitted == 0;
+    }
+
+    tu_sram_region_t *targets[2] = {&sram, NULL};
+    uint32_t offsets[2] = {0u, 0u};
+    tu_dma_init_full(true, 1, 8);
+    tu_dma_descriptor_t *null_multicast = tu_dma_desc_create_multicast(
+        0, host, targets, offsets, 2, 1, 8);
+    ok = ok && null_multicast && rejected_without_submission(null_multicast) &&
+         g_tu_dma.channels[0].total_submitted == 0;
+
+    targets[1] = &other;
+    offsets[1] = 60u;
+    tu_dma_init_full(true, 1, 8);
+    tu_dma_descriptor_t *multicast = tu_dma_desc_create_multicast(
+        0, host, targets, offsets, 2, 1, 8);
+    ok = ok && multicast && rejected_without_submission(multicast) &&
+         g_tu_dma.channels[0].total_submitted == 0;
+
+    /* Validate the complete chain before accepting its head. */
+    tu_dma_init_full(true, 1, 8);
+    tu_dma_descriptor_t *head = tu_dma_desc_create_linear(
+        0, TU_DMA_DIR_HOST_TO_TU, &sram, 0, host, 1, 8);
+    tu_dma_descriptor_t *tail = tu_dma_desc_create_strided_2d(
+        0, TU_DMA_DIR_HOST_TO_TU, &sram, 16, host, 40, 16, 1, 2, 16);
+    tu_dma_desc_chain(head, tail);
+    ok = ok && head && tail && rejected_without_submission(head) &&
+         g_tu_dma.channels[0].total_submitted == 0;
+    for (uint32_t i = 0; i < 64 && ok; i++)
+        ok = sram_bytes[i] == 0;
+
+    /* The exact last-byte edge remains legal and byte-exact. */
+    for (uint32_t i = 0; i < 32; i++) host[i] = (uint8_t)(0xa0u + i);
+    tu_dma_init_full(false, 1, 8);
+    tu_dma_descriptor_t *edge = tu_dma_desc_create_strided_2d(
+        0, TU_DMA_DIR_HOST_TO_TU, &sram, 0, host, 48, 16, 1, 2, 16);
+    uint32_t edge_id = edge ? tu_dma_submit_desc(edge) : 0;
+    ok = ok && edge_id > 0 && edge->completed &&
+         memcmp(tu_sram_raw_ptr(&sram), host, 16) == 0 &&
+         memcmp(tu_sram_raw_ptr(&sram) + 48, host + 16, 16) == 0;
+    tu_dma_destroy();
+    if (edge_id > 0) {
+        edge->next = NULL;
+        tu_dma_desc_destroy(edge);
+    }
+
+    sram.total_size = 128;
+    tu_sram_destroy(&other);
+    tu_sram_destroy(&sram);
+    if (ok) PASS(); else FAIL("invalid span accepted, copied, or mutated queue state");
+}
+
 static void test_dma_channel_binding(void) {
     TEST("Explicit / RR / least-outstanding / bytes / projected-cycles binding");
     tu_sram_region_t sram;
@@ -651,6 +812,7 @@ int main(void) {
     test_dma_channel_capacity();
     test_dma_outstanding_includes_active();
     test_dma_shared_arbitration();
+    test_dma_descriptor_sram_span_validation();
     test_dma_channel_binding();
 
     printf("\n═══════════════════════════════════════════\n");

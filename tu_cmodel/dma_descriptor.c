@@ -777,6 +777,137 @@ static void execute_multicast(const tu_dma_descriptor_t *desc)
     }
 }
 
+static bool u64_mul_checked(uint64_t a, uint64_t b, uint64_t *out) {
+    if (a != 0 && b > UINT64_MAX / a) return false;
+    *out = a * b;
+    return true;
+}
+
+static bool u64_add_checked(uint64_t a, uint64_t b, uint64_t *out) {
+    if (b > UINT64_MAX - a) return false;
+    *out = a + b;
+    return true;
+}
+
+static bool sram_range_fits(const tu_sram_region_t *region,
+                            uint64_t offset, uint64_t bytes) {
+    if (!region) return true;
+    return offset <= region->total_size &&
+           bytes <= (uint64_t)region->total_size - offset;
+}
+
+static bool strided_2d_fits(const tu_sram_region_t *region,
+                            uint64_t base, uint64_t row_stride,
+                            uint64_t rows, uint64_t row_bytes) {
+    uint64_t last_row, last_end;
+    if (!region || rows == 0 || row_bytes == 0) return true;
+    if (!u64_mul_checked(rows - 1u, row_stride, &last_row) ||
+        !u64_add_checked(base, last_row, &last_row) ||
+        !u64_add_checked(last_row, row_bytes, &last_end)) return false;
+    return last_end <= region->total_size;
+}
+
+static bool strided_3d_fits(const tu_sram_region_t *region,
+                            uint64_t base, uint64_t row_stride,
+                            uint64_t depth_stride, uint64_t depth,
+                            uint64_t rows, uint64_t row_bytes) {
+    uint64_t depth_off, row_off, last_start, last_end;
+    if (!region || depth == 0 || rows == 0 || row_bytes == 0) return true;
+    if (!u64_mul_checked(depth - 1u, depth_stride, &depth_off) ||
+        !u64_mul_checked(rows - 1u, row_stride, &row_off) ||
+        !u64_add_checked(base, depth_off, &last_start) ||
+        !u64_add_checked(last_start, row_off, &last_start) ||
+        !u64_add_checked(last_start, row_bytes, &last_end)) return false;
+    return last_end <= region->total_size;
+}
+
+/* Validate the actual SRAM addresses touched by each descriptor shape.  A
+ * total-byte check is insufficient for strided and indexed transfers because
+ * holes do not contribute to total_bytes. */
+static bool descriptor_sram_spans_valid(const tu_dma_descriptor_t *desc) {
+    if (!desc) return false;
+    uint64_t row_bytes;
+
+    if (desc->type == TU_DMA_XFER_MULTICAST) {
+        if (desc->direction != TU_DMA_DIR_HOST_TO_TU) return false;
+    } else {
+        switch (desc->direction) {
+        case TU_DMA_DIR_HOST_TO_TU:
+            if (!desc->dst_region) return false;
+            break;
+        case TU_DMA_DIR_TU_TO_HOST:
+            if (!desc->src_region) return false;
+            break;
+        case TU_DMA_DIR_TU_TO_TU:
+            if (!desc->src_region || !desc->dst_region) return false;
+            break;
+        default:
+            return false;
+        }
+    }
+
+    switch (desc->type) {
+    case TU_DMA_XFER_STRIDED_2D:
+        if (!u64_mul_checked(desc->elem_size, desc->dims[1], &row_bytes))
+            return false;
+        return strided_2d_fits(desc->src_region, desc->src_base,
+                               desc->src_strides[0], desc->dims[0],
+                               row_bytes) &&
+               strided_2d_fits(desc->dst_region, desc->dst_base,
+                               desc->dst_strides[0], desc->dims[0],
+                               row_bytes);
+
+    case TU_DMA_XFER_STRIDED_3D:
+        if (!u64_mul_checked(desc->elem_size, desc->dims[2], &row_bytes))
+            return false;
+        return strided_3d_fits(desc->src_region, desc->src_base,
+                               desc->src_strides[0], desc->src_strides[1],
+                               desc->dims[0], desc->dims[1], row_bytes) &&
+               strided_3d_fits(desc->dst_region, desc->dst_base,
+                               desc->dst_strides[0], desc->dst_strides[1],
+                               desc->dims[0], desc->dims[1], row_bytes);
+
+    case TU_DMA_XFER_SCATTER:
+    case TU_DMA_XFER_GATHER: {
+        const tu_sram_region_t *region =
+            desc->type == TU_DMA_XFER_SCATTER ?
+                desc->dst_region : desc->src_region;
+        if (!region && desc->index_count != 0) return false;
+        if (desc->index_count != 0 && !desc->index_list) return false;
+        if (desc->index_elem_size != desc->elem_size) return false;
+        for (uint32_t i = 0; i < desc->index_count; i++)
+            if (!sram_range_fits(region, desc->index_list[i],
+                                 desc->elem_size)) return false;
+        return true;
+    }
+
+    case TU_DMA_XFER_MULTICAST:
+        if (desc->multicast.count != 0 &&
+            (!desc->multicast.regions || !desc->multicast.offsets)) return false;
+        if (!u64_mul_checked(desc->dims[0], desc->elem_size, &row_bytes))
+            return false;
+        for (uint32_t i = 0; i < desc->multicast.count; i++) {
+            if (!desc->multicast.regions[i]) return false;
+            if (!sram_range_fits(desc->multicast.regions[i],
+                                 desc->multicast.offsets[i], row_bytes))
+                return false;
+        }
+        return true;
+
+    case TU_DMA_XFER_LINEAR:
+        if (desc->src_region &&
+            !sram_range_fits(desc->src_region, desc->src_base,
+                             desc->total_bytes)) return false;
+        if (desc->dst_region &&
+            !sram_range_fits(desc->dst_region, desc->dst_base,
+                             desc->total_bytes)) return false;
+        return true;
+
+    default:
+        return false;
+    }
+}
+
 static uint32_t descriptor_burst_bytes(const tu_dma_descriptor_t *desc) {
     return desc->direction == TU_DMA_DIR_TU_TO_HOST ?
            g_tu_dma.write_max_burst_bytes : g_tu_dma.read_max_burst_bytes;
@@ -1040,6 +1171,10 @@ static uint64_t descriptor_transfer_cycles(const tu_dma_descriptor_t *desc) {
 
 void tu_dma_execute_desc(tu_dma_descriptor_t *desc) {
     if (!desc || desc->completed) return;
+    if (!descriptor_sram_spans_valid(desc)) {
+        fprintf(stderr, "DMA: descriptor SRAM span exceeds region capacity\n");
+        return;
+    }
     if ((g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_EXTERNAL_4K ||
          g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_BOTH_4K ||
          g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_EXTERNAL_ADDRESS ||
@@ -1068,14 +1203,6 @@ void tu_dma_execute_desc(tu_dma_descriptor_t *desc) {
             dst_ptr = tu_sram_raw_ptr(desc->dst_region) + desc->dst_base;
             sram_region = desc->dst_region;
             sram_write = true;
-            /* Validate bounds */
-            if (desc->dst_base + desc->total_bytes > desc->dst_region->total_size) {
-                fprintf(stderr, "DMA overflow: dst=%s offset=%u + %u > %u\n",
-                        desc->dst_region->name,
-                        desc->dst_base, desc->total_bytes,
-                        desc->dst_region->total_size);
-                return;
-            }
         } else {
             dst_ptr = (uint8_t *)desc->dst_host;
         }
@@ -1086,13 +1213,6 @@ void tu_dma_execute_desc(tu_dma_descriptor_t *desc) {
             src_ptr = tu_sram_raw_ptr(desc->src_region) + desc->src_base;
             sram_region = desc->src_region;
             sram_read = true;
-            if (desc->src_base + desc->total_bytes > desc->src_region->total_size) {
-                fprintf(stderr, "DMA overflow: src=%s offset=%u + %u > %u\n",
-                        desc->src_region->name,
-                        desc->src_base, desc->total_bytes,
-                        desc->src_region->total_size);
-                return;
-            }
         } else {
             src_ptr = (const uint8_t *)desc->src_host;
         }
@@ -1223,6 +1343,14 @@ static uint64_t channel_projected_cycles(const tu_dma_channel_state_t *ch) {
 
 uint32_t tu_dma_submit_desc(tu_dma_descriptor_t *desc) {
     if (!desc) return 0;
+
+    for (const tu_dma_descriptor_t *item = desc; item; item = item->next) {
+        if (!descriptor_sram_spans_valid(item)) {
+            fprintf(stderr, "DMA: descriptor SRAM span exceeds region capacity\n");
+            tu_dma_desc_destroy(desc);
+            return 0;
+        }
+    }
 
     if (g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_EXTERNAL_4K ||
         g_tu_dma.burst_boundary_mode == TU_DMA_BOUNDARY_BOTH_4K ||
