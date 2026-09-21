@@ -1,9 +1,10 @@
 /*
  * Shared-serial DMA arbitration exploration.
  *
- * Compares descriptor-boundary round-robin with strict descriptor priority.
- * This is a deterministic queue-selection study, not a preemptive, beat-level,
- * queue-aware DRAM, or end-to-end compute/DMA throughput model.
+ * Compares descriptor-boundary round-robin, strict descriptor priority, and
+ * grant-epoch aging priority. This is a deterministic queue-selection study,
+ * not a preemptive, beat-level, queue-aware DRAM, or end-to-end throughput
+ * model.
  */
 #include "tu_cmodel/dma_descriptor.h"
 #include <stdint.h>
@@ -24,8 +25,9 @@
 static uint8_t sources[STREAMS][STREAM_BYTES];
 
 static const char *policy_name(int policy) {
-    return policy == TU_DMA_ARB_STRICT_PRIORITY ?
-           "strict_priority" : "round_robin";
+    if (policy == TU_DMA_ARB_STRICT_PRIORITY) return "strict_priority";
+    if (policy == TU_DMA_ARB_AGING_PRIORITY) return "aging_priority";
+    return "round_robin";
 }
 
 static int run_case(int policy, uint64_t completed[STREAMS]) {
@@ -90,10 +92,84 @@ static int run_case(int policy, uint64_t completed[STREAMS]) {
     return 0;
 }
 
+/* Keep injecting fresh priority-2 work behind channel 1. Strict priority
+ * serves all three before the priority-0 descriptor. Aging adds one effective
+ * level per missed grant, so the old descriptor ties after two misses and the
+ * rotating tie-break selects it before the third fresh high-priority item. */
+static int run_sustained_case(int policy, uint64_t *low_complete,
+                              uint64_t high_complete[3]) {
+    enum { BYTES = 64 };
+    static uint8_t low_src[BYTES];
+    static uint8_t high_src[3][BYTES];
+    tu_sram_region_t sram;
+    tu_dma_descriptor_t *low = NULL;
+    tu_dma_descriptor_t *high[3] = {0};
+    tu_sram_init(&sram, 4u * BYTES, "dma-aging-sweep");
+    sram.banks.bw_modeling = false;
+    memset(low_src, 0x11, sizeof(low_src));
+    memset(high_src, 0x22, sizeof(high_src));
+    tu_dma_init_config_policy(true, 2, 4,
+                              TU_DMA_BUS_MODE_SHARED_SERIAL, policy);
+    low = tu_dma_desc_create_linear(0, TU_DMA_DIR_HOST_TO_TU, &sram,
+                                    0, low_src, 1, BYTES);
+    high[0] = tu_dma_desc_create_linear(1, TU_DMA_DIR_HOST_TO_TU, &sram,
+                                        BYTES, high_src[0], 1, BYTES);
+    if (!low || !high[0]) return -1;
+    low->priority = 0;
+    high[0]->priority = 2;
+    if (!tu_dma_submit_desc(low) || !tu_dma_submit_desc(high[0])) return -2;
+
+    tu_dma_tick();
+    for (uint32_t n = 1; n < 3; n++) {
+        high[n] = tu_dma_desc_create_linear(1, TU_DMA_DIR_HOST_TO_TU, &sram,
+                                            (n + 1u) * BYTES,
+                                            high_src[n], 1, BYTES);
+        if (!high[n]) return -3;
+        high[n]->priority = 2;
+        if (!tu_dma_submit_desc(high[n])) return -4;
+        while (g_tu_dma.arbitration_epoch < n + 1u &&
+               g_tu_dma.current_cycle < 10000u)
+            tu_dma_tick();
+    }
+    while (g_tu_dma.total_transfers < 4u &&
+           g_tu_dma.current_cycle < 10000u)
+        tu_dma_tick();
+    while (g_tu_dma.channels[0].total_completed +
+           g_tu_dma.channels[1].total_completed < 4u &&
+           g_tu_dma.current_cycle < 10000u)
+        tu_dma_tick();
+    *low_complete = low->cycles_completed;
+    for (uint32_t i = 0; i < 3; i++)
+        high_complete[i] = high[i]->cycles_completed;
+
+    if (policy == TU_DMA_ARB_STRICT_PRIORITY) {
+        if (!(*low_complete > high_complete[2])) return -5;
+    } else if (policy == TU_DMA_ARB_AGING_PRIORITY) {
+        if (!(*low_complete < high_complete[2]) ||
+            g_tu_dma.arbitration_epoch != 4u) return -6;
+    }
+    uint8_t *raw = tu_sram_raw_ptr(&sram);
+    if (memcmp(raw, low_src, BYTES) != 0) return -7;
+    for (uint32_t i = 0; i < 3; i++)
+        if (memcmp(raw + (i + 1u) * BYTES, high_src[i], BYTES) != 0)
+            return -8;
+
+    tu_dma_destroy();
+    low->next = NULL;
+    tu_dma_desc_destroy(low);
+    for (uint32_t i = 0; i < 3; i++) {
+        high[i]->next = NULL;
+        tu_dma_desc_destroy(high[i]);
+    }
+    tu_sram_destroy(&sram);
+    return 0;
+}
+
 int main(void) {
     const int policies[] = {
         TU_DMA_ARB_ROUND_ROBIN,
-        TU_DMA_ARB_STRICT_PRIORITY
+        TU_DMA_ARB_STRICT_PRIORITY,
+        TU_DMA_ARB_AGING_PRIORITY
     };
     printf("DMA shared-serial arbitration sweep (priorities ch0/ch1/ch2=0/10/5)\n");
     printf("policy low_ch0_complete critical_ch1_complete medium_ch2_complete batch_complete\n");
@@ -115,6 +191,21 @@ int main(void) {
                (unsigned long)completed[2],
                (unsigned long)batch);
     }
-    printf("PASS: arbitration order, exact completion cycles, and byte movement\n");
+
+    printf("\nsustained policy low_complete high0 high1 high2\n");
+    for (uint32_t i = 1; i < sizeof(policies) / sizeof(policies[0]); i++) {
+        uint64_t low = 0, high[3] = {0};
+        int rc = run_sustained_case(policies[i], &low, high);
+        if (rc != 0) {
+            fprintf(stderr, "FAIL sustained policy=%s rc=%d\n",
+                    policy_name(policies[i]), rc);
+            return 30 - rc;
+        }
+        printf("%15s %12lu %5lu %5lu %5lu\n",
+               policy_name(policies[i]), (unsigned long)low,
+               (unsigned long)high[0], (unsigned long)high[1],
+               (unsigned long)high[2]);
+    }
+    printf("PASS: exact order/cycles, bounded grant aging, and byte movement\n");
     return 0;
 }

@@ -348,7 +348,9 @@ def generate_header(config, output_path):
     L(f'#define TU_DMA_BUS_MODE         {0 if dma.get("bus_topology", "independent") == "independent" else 1}')
     L('#define TU_DMA_ARB_DEFAULT_ROUND_ROBIN  0')
     L('#define TU_DMA_ARB_DEFAULT_STRICT_PRIORITY 1')
-    L(f'#define TU_DMA_ARB_POLICY       {0 if dma.get("arbitration", "round_robin") == "round_robin" else 1}')
+    L('#define TU_DMA_ARB_DEFAULT_AGING_PRIORITY 2')
+    arb_map = {'round_robin': 0, 'strict_priority': 1, 'aging_priority': 2}
+    L(f'#define TU_DMA_ARB_POLICY       {arb_map[dma.get("arbitration", "round_robin")]}')
     L('#define TU_DMA_BIND_DEFAULT_EXPLICIT 0')
     L('#define TU_DMA_BIND_DEFAULT_ROUND_ROBIN 1')
     L('#define TU_DMA_BIND_DEFAULT_LEAST_OUTSTANDING 2')

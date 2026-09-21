@@ -521,7 +521,7 @@ static void test_dma_outstanding_includes_active(void) {
 }
 
 static void test_dma_shared_arbitration(void) {
-    TEST("Shared bus round-robin / strict-priority arbitration");
+    TEST("Shared bus round-robin / strict / aging arbitration");
     tu_sram_region_t sram;
     static uint8_t src[3][64];
     int ok = 1;
@@ -553,6 +553,19 @@ static void test_dma_shared_arbitration(void) {
          g_tu_dma.channels[0].active == NULL;
     tu_dma_destroy();
 
+    tu_dma_init_config_policy(true, 3, 2, TU_DMA_BUS_MODE_SHARED_SERIAL,
+                              TU_DMA_ARB_AGING_PRIORITY);
+    for (uint8_t i = 0; i < 3; i++) {
+        tu_dma_descriptor_t *d = tu_dma_desc_create_linear(
+            i, TU_DMA_DIR_HOST_TO_TU, &sram, i * 64, src[i], 1, 64);
+        d->priority = (uint8_t)(i == 1 ? 10 : i == 2 ? 5 : 0);
+        ok = ok && tu_dma_submit_desc(d) > 0;
+    }
+    tu_dma_tick();
+    ok = ok && g_tu_dma.channels[1].active != NULL &&
+         g_tu_dma.arbitration_epoch == 1;
+    tu_dma_destroy();
+
     /* Equal priority falls back to rotating tie-break, not channel 0 forever. */
     tu_dma_init_config_policy(true, 3, 2, TU_DMA_BUS_MODE_SHARED_SERIAL,
                               TU_DMA_ARB_STRICT_PRIORITY);
@@ -569,7 +582,7 @@ static void test_dma_shared_arbitration(void) {
     ok = ok && g_tu_dma.channels[1].active != NULL;
     tu_dma_destroy();
 
-    tu_dma_init_config_policy(true, 3, 2, TU_DMA_BUS_MODE_SHARED_SERIAL, 2);
+    tu_dma_init_config_policy(true, 3, 2, TU_DMA_BUS_MODE_SHARED_SERIAL, 3);
     ok = ok && g_tu_dma.num_channels == 0;
     tu_dma_destroy();
     tu_sram_destroy(&sram);

@@ -54,7 +54,8 @@ void tu_dma_init_config_boundary(bool async, uint32_t num_channels,
     }
     g_tu_dma.bus_mode = (tu_dma_bus_mode_t)bus_mode;
     if (arb_policy != TU_DMA_ARB_ROUND_ROBIN &&
-        arb_policy != TU_DMA_ARB_STRICT_PRIORITY) {
+        arb_policy != TU_DMA_ARB_STRICT_PRIORITY &&
+        arb_policy != TU_DMA_ARB_AGING_PRIORITY) {
         fprintf(stderr, "DMA: unsupported arbitration policy %d\n", arb_policy);
         return;
     }
@@ -1429,7 +1430,10 @@ uint32_t tu_dma_submit_desc(tu_dma_descriptor_t *desc) {
         g_tu_dma.next_binding_channel = (ch_id + 1u) % g_tu_dma.num_channels;
     }
 
-    /* Enqueue */
+    /* Enqueue. Aging is measured in missed shared-bus grants, not wall-clock
+     * cycles, so long descriptors do not receive a disproportionate boost. */
+    for (tu_dma_descriptor_t *item = desc; item; item = item->next)
+        item->arbitration_epoch_submitted = g_tu_dma.arbitration_epoch;
     if (!ch->head) {
         ch->head = desc;
         ch->tail = desc;
@@ -1454,6 +1458,14 @@ uint32_t tu_dma_submit_desc(tu_dma_descriptor_t *desc) {
     }
 
     return desc->desc_id;
+}
+
+static uint8_t descriptor_effective_priority(
+    const tu_dma_descriptor_t *desc) {
+    uint64_t age = g_tu_dma.arbitration_epoch -
+                   desc->arbitration_epoch_submitted;
+    uint64_t effective = (uint64_t)desc->priority + age;
+    return effective > UINT8_MAX ? UINT8_MAX : (uint8_t)effective;
 }
 
 int tu_dma_tick(void) {
@@ -1481,8 +1493,9 @@ int tu_dma_tick(void) {
     }
 
     /* Shared-serial mode represents multiple descriptor queues feeding one
-     * physical data path. Start at most one transfer, using round-robin or
-     * strict descriptor priority with a rotating tie-break. */
+     * physical data path. Start at most one transfer, using round-robin,
+     * strict descriptor priority, or grant-epoch aging priority with a
+     * rotating tie-break. */
     if (g_tu_dma.bus_mode == TU_DMA_BUS_MODE_SHARED_SERIAL) {
         bool bus_busy = false;
         for (uint32_t i = 0; i < g_tu_dma.num_channels; i++)
@@ -1490,11 +1503,16 @@ int tu_dma_tick(void) {
 
         if (!bus_busy) {
             uint8_t best_priority = 0;
-            if (g_tu_dma.arb_policy == TU_DMA_ARB_STRICT_PRIORITY) {
+            if (g_tu_dma.arb_policy == TU_DMA_ARB_STRICT_PRIORITY ||
+                g_tu_dma.arb_policy == TU_DMA_ARB_AGING_PRIORITY) {
                 for (uint32_t i = 0; i < g_tu_dma.num_channels; i++) {
                     tu_dma_descriptor_t *head = g_tu_dma.channels[i].head;
-                    if (head && head->priority > best_priority)
-                        best_priority = head->priority;
+                    uint8_t priority = 0;
+                    if (head)
+                        priority = g_tu_dma.arb_policy == TU_DMA_ARB_AGING_PRIORITY ?
+                            descriptor_effective_priority(head) : head->priority;
+                    if (head && priority > best_priority)
+                        best_priority = priority;
                 }
             }
             for (uint32_t probe = 0; probe < g_tu_dma.num_channels; probe++) {
@@ -1502,14 +1520,20 @@ int tu_dma_tick(void) {
                              g_tu_dma.num_channels;
                 tu_dma_channel_state_t *ch = &g_tu_dma.channels[i];
                 if (!ch->head) continue;
-                if (g_tu_dma.arb_policy == TU_DMA_ARB_STRICT_PRIORITY &&
-                    ch->head->priority != best_priority)
-                    continue;
+                if (g_tu_dma.arb_policy == TU_DMA_ARB_STRICT_PRIORITY ||
+                    g_tu_dma.arb_policy == TU_DMA_ARB_AGING_PRIORITY) {
+                    uint8_t priority =
+                        g_tu_dma.arb_policy == TU_DMA_ARB_AGING_PRIORITY ?
+                        descriptor_effective_priority(ch->head) :
+                        ch->head->priority;
+                    if (priority != best_priority) continue;
+                }
                 ch->active = ch->head;
                 ch->head = ch->head->next;
                 ch->queue_depth--;
                 tu_dma_execute_desc(ch->active);
                 g_tu_dma.next_shared_channel = (i + 1u) % g_tu_dma.num_channels;
+                g_tu_dma.arbitration_epoch++;
                 break;
             }
         }

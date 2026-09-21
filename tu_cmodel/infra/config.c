@@ -157,6 +157,8 @@ static int parse_dma_arb_policy_str(const char *s) {
         return TU_DMA_CONFIG_ARB_ROUND_ROBIN;
     if (strcmp(s, "strict_priority") == 0)
         return TU_DMA_CONFIG_ARB_STRICT_PRIORITY;
+    if (strcmp(s, "aging_priority") == 0)
+        return TU_DMA_CONFIG_ARB_AGING_PRIORITY;
     return -1;
 }
 
@@ -1066,10 +1068,10 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
         return -1;
     }
     if (cfg->dma_arb_policy < TU_DMA_CONFIG_ARB_ROUND_ROBIN ||
-        cfg->dma_arb_policy > TU_DMA_CONFIG_ARB_STRICT_PRIORITY) {
+        cfg->dma_arb_policy > TU_DMA_CONFIG_ARB_AGING_PRIORITY) {
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
-                     "DMA arbitration must be round_robin or strict_priority");
+                     "DMA arbitration must be round_robin, strict_priority, or aging_priority");
         return -1;
     }
     if (cfg->dma_binding_policy < TU_DMA_CONFIG_BIND_EXPLICIT ||
@@ -1580,8 +1582,13 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             cfg->dma_num_channels);
     fprintf(out, "| `dma_bus_topology` | %s | enum | Channel data paths: independent or shared_serial |\n",
             cfg->dma_bus_mode == TU_DMA_CONFIG_BUS_SHARED_SERIAL ? "shared_serial" : "independent");
-    fprintf(out, "| `dma_arbitration` | %s | enum | Shared-serial selection: round_robin or strict_priority |\n",
-            cfg->dma_arb_policy == TU_DMA_CONFIG_ARB_STRICT_PRIORITY ? "strict_priority" : "round_robin");
+    const char *dma_arb_name =
+        cfg->dma_arb_policy == TU_DMA_CONFIG_ARB_STRICT_PRIORITY ?
+        "strict_priority" :
+        (cfg->dma_arb_policy == TU_DMA_CONFIG_ARB_AGING_PRIORITY ?
+         "aging_priority" : "round_robin");
+    fprintf(out, "| `dma_arbitration` | %s | enum | Shared-serial selection: round_robin, strict_priority, or aging_priority |\n",
+            dma_arb_name);
     const char *binding_name = cfg->dma_binding_policy == TU_DMA_CONFIG_BIND_ROUND_ROBIN ?
                                "round_robin" :
                                (cfg->dma_binding_policy == TU_DMA_CONFIG_BIND_LEAST_OUTSTANDING ?

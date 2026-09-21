@@ -45,11 +45,14 @@ typedef enum {
 } tu_dma_bus_mode_t;
 
 /* Shared-serial descriptor-boundary arbitration. Round-robin is the
- * compatibility default; strict priority uses descriptor.priority and
- * round-robin tie-breaking. Independent paths do not consume this policy. */
+ * compatibility default; strict priority uses descriptor.priority; aging
+ * priority adds one effective priority level per missed grant. Priority ties
+ * use the rotating round-robin cursor. Independent paths do not consume this
+ * policy. */
 typedef enum {
     TU_DMA_ARB_ROUND_ROBIN = 0,
-    TU_DMA_ARB_STRICT_PRIORITY = 1
+    TU_DMA_ARB_STRICT_PRIORITY = 1,
+    TU_DMA_ARB_AGING_PRIORITY = 2
 } tu_dma_arb_policy_t;
 
 /* Descriptor-to-queue binding. Explicit preserves the producer-selected
@@ -158,6 +161,7 @@ typedef struct tu_dma_descriptor_t {
 
     /* Status (set by engine) */
     bool                    completed;
+    uint64_t                arbitration_epoch_submitted;
     uint64_t                cycles_issued;
     uint64_t                cycles_completed;
 } tu_dma_descriptor_t;
@@ -186,6 +190,7 @@ typedef struct {
     tu_dma_bus_mode_t       bus_mode;
     tu_dma_arb_policy_t     arb_policy;
     uint32_t                next_shared_channel;
+    uint64_t                arbitration_epoch;
     tu_dma_binding_policy_t binding_policy;
     uint32_t                next_binding_channel;
     uint32_t                bus_width_bytes;

@@ -54,6 +54,8 @@ def main() -> int:
                 'issue_payload_mode: "overlapped"',
             'burst_boundary_mode: "size_only"':
                 'burst_boundary_mode: "both_address"',
+            'arbitration: "round_robin"':
+                'arbitration: "aging_priority"',
             'payload_scope: "descriptor"':
                 'payload_scope: "burst_commands"',
             '    fp16:\n      rounding: "round_nearest_even"':
@@ -86,11 +88,13 @@ def main() -> int:
             '_Static_assert(TU_LOG_LEVEL_DEFAULT == 4, "log level");\n'
             '_Static_assert(TU_DMA_ISSUE_PAYLOAD_MODE == TU_DMA_ISSUE_PAYLOAD_DEFAULT_OVERLAPPED, "DMA issue/payload overlap");\n'
             '_Static_assert(TU_DMA_PAYLOAD_SCOPE == TU_DMA_PAYLOAD_SCOPE_BURST_COMMANDS, "DMA burst payload scope");\n'
+            '_Static_assert(TU_DMA_ARB_POLICY == TU_DMA_ARB_DEFAULT_AGING_PRIORITY, "DMA aging arbitration");\n'
             '_Static_assert(TU_FP16_ROUNDING_MODE == TU_FP16_ROUNDING_STOCHASTIC, "rounding");\n'
             'int main(void) { tu_runtime_config_t c = tu_runtime_config_default(); '
             'return c.dataflow_mode != TU_DATAFLOW_MODE_OS || '
             'c.dma_issue_payload_mode != TU_DMA_ISSUE_PAYLOAD_DEFAULT_OVERLAPPED || '
             'c.dma_burst_boundary_mode != TU_DMA_BURST_BOUNDARY_BOTH_ADDRESS || '
+            'c.dma_arb_policy != TU_DMA_ARB_DEFAULT_AGING_PRIORITY || '
             'c.dma_payload_scope != TU_DMA_PAYLOAD_SCOPE_BURST_COMMANDS; }\n'
         )
         subprocess.run(

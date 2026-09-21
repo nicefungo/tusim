@@ -102,7 +102,8 @@ typedef enum {
 
 typedef enum {
     TU_DMA_CONFIG_ARB_ROUND_ROBIN = 0,
-    TU_DMA_CONFIG_ARB_STRICT_PRIORITY = 1
+    TU_DMA_CONFIG_ARB_STRICT_PRIORITY = 1,
+    TU_DMA_CONFIG_ARB_AGING_PRIORITY = 2
 } tu_dma_config_arb_policy_t;
 
 typedef enum {
@@ -243,7 +244,7 @@ typedef struct tu_config_t {
     int      dma_burst_boundary_mode; /* size_only=0, SRAM/external/both max-burst or 4 KiB boundaries */
     uint32_t dma_num_channels;
     int      dma_bus_mode;          /* independent=0, shared_serial=1 */
-    int      dma_arb_policy;        /* round_robin=0, strict_priority=1 */
+    int      dma_arb_policy;        /* round_robin=0, strict=1, aging=2 */
     int      dma_binding_policy;    /* explicit=0, RR=1, least-outstanding=2, bytes=3, projected-cycles=4 */
     uint32_t dma_max_outstanding;
     bool     dma_async_mode;
