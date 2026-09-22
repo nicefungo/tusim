@@ -585,6 +585,16 @@ static void test_dma_shared_arbitration(void) {
     tu_dma_init_config_policy(true, 3, 2, TU_DMA_BUS_MODE_SHARED_SERIAL, 3);
     ok = ok && g_tu_dma.num_channels == 0;
     tu_dma_destroy();
+
+    tu_dma_init_config_boundary_aging(
+        true, 3, 2, TU_DMA_BUS_MODE_SHARED_SERIAL,
+        TU_DMA_ARB_AGING_PRIORITY, 2, TU_DMA_BIND_EXPLICIT,
+        256, 50, 50, 64, 64, 64, 0, 0, 0, false, false,
+        TU_DMA_SEGMENT_AGGREGATE, TU_DMA_BASE_PER_DESCRIPTOR,
+        TU_DMA_PAYLOAD_PACKED_DESCRIPTOR, TU_DMA_ISSUE_PAYLOAD_SERIALIZED,
+        TU_DMA_BOUNDARY_SIZE_ONLY);
+    ok = ok && g_tu_dma.num_channels == 0;
+    tu_dma_destroy();
     tu_sram_destroy(&sram);
     if (ok) PASS(); else FAIL("policy selection or rejection failed");
 }

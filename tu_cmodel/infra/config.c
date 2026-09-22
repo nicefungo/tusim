@@ -162,6 +162,14 @@ static int parse_dma_arb_policy_str(const char *s) {
     return -1;
 }
 
+static int parse_dma_aging_scope_str(const char *s) {
+    if (!s || strcmp(s, "submission") == 0)
+        return TU_DMA_CONFIG_AGING_SUBMISSION;
+    if (strcmp(s, "queue_head") == 0)
+        return TU_DMA_CONFIG_AGING_QUEUE_HEAD;
+    return -1;
+}
+
 static int parse_dma_binding_policy_str(const char *s) {
     if (!s || strcmp(s, "explicit") == 0)
         return TU_DMA_CONFIG_BIND_EXPLICIT;
@@ -390,6 +398,7 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->dma_num_channels    = 3;
     cfg->dma_bus_mode        = TU_DMA_CONFIG_BUS_INDEPENDENT;
     cfg->dma_arb_policy      = TU_DMA_CONFIG_ARB_ROUND_ROBIN;
+    cfg->dma_aging_scope     = TU_DMA_CONFIG_AGING_SUBMISSION;
     cfg->dma_binding_policy  = TU_DMA_CONFIG_BIND_EXPLICIT;
     cfg->dma_max_outstanding = 4;
     cfg->dma_async_mode      = false;
@@ -486,6 +495,7 @@ tu_runtime_config_t tu_config_to_runtime(const struct tu_config_t *cfg) {
     rt.dma_num_channels = cfg->dma_num_channels;
     rt.dma_bus_mode = cfg->dma_bus_mode;
     rt.dma_arb_policy = cfg->dma_arb_policy;
+    rt.dma_aging_scope = cfg->dma_aging_scope;
     rt.dma_binding_policy = cfg->dma_binding_policy;
     rt.dma_max_outstanding = cfg->dma_max_outstanding;
     rt.dma_async_mode = cfg->dma_async_mode;
@@ -726,6 +736,10 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
         const tu_json_value_t *arb = tu_json_get(d, "arbitration");
         if (arb && arb->type == TU_JSON_STRING)
             cfg->dma_arb_policy = parse_dma_arb_policy_str(tu_json_as_string(arb, NULL));
+        const tu_json_value_t *aging_scope = tu_json_get(d, "aging_scope");
+        if (aging_scope && aging_scope->type == TU_JSON_STRING)
+            cfg->dma_aging_scope = parse_dma_aging_scope_str(
+                tu_json_as_string(aging_scope, NULL));
         const tu_json_value_t *binding = tu_json_get(d, "channel_binding");
         if (binding && binding->type == TU_JSON_STRING)
             cfg->dma_binding_policy = parse_dma_binding_policy_str(
@@ -1072,6 +1086,13 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
                      "DMA arbitration must be round_robin, strict_priority, or aging_priority");
+        return -1;
+    }
+    if (cfg->dma_aging_scope < TU_DMA_CONFIG_AGING_SUBMISSION ||
+        cfg->dma_aging_scope > TU_DMA_CONFIG_AGING_QUEUE_HEAD) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DMA aging_scope must be submission or queue_head");
         return -1;
     }
     if (cfg->dma_binding_policy < TU_DMA_CONFIG_BIND_EXPLICIT ||
@@ -1589,6 +1610,9 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
          "aging_priority" : "round_robin");
     fprintf(out, "| `dma_arbitration` | %s | enum | Shared-serial selection: round_robin, strict_priority, or aging_priority |\n",
             dma_arb_name);
+    fprintf(out, "| `dma_aging_scope` | %s | enum | Aging starts at accepted submission or queue-head eligibility |\n",
+            cfg->dma_aging_scope == TU_DMA_CONFIG_AGING_QUEUE_HEAD ?
+            "queue_head" : "submission");
     const char *binding_name = cfg->dma_binding_policy == TU_DMA_CONFIG_BIND_ROUND_ROBIN ?
                                "round_robin" :
                                (cfg->dma_binding_policy == TU_DMA_CONFIG_BIND_LEAST_OUTSTANDING ?

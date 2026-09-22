@@ -107,6 +107,11 @@ typedef enum {
 } tu_dma_config_arb_policy_t;
 
 typedef enum {
+    TU_DMA_CONFIG_AGING_SUBMISSION = 0,
+    TU_DMA_CONFIG_AGING_QUEUE_HEAD = 1
+} tu_dma_config_aging_scope_t;
+
+typedef enum {
     TU_DMA_CONFIG_BIND_EXPLICIT = 0,
     TU_DMA_CONFIG_BIND_ROUND_ROBIN = 1,
     TU_DMA_CONFIG_BIND_LEAST_OUTSTANDING = 2,
@@ -245,6 +250,7 @@ typedef struct tu_config_t {
     uint32_t dma_num_channels;
     int      dma_bus_mode;          /* independent=0, shared_serial=1 */
     int      dma_arb_policy;        /* round_robin=0, strict=1, aging=2 */
+    int      dma_aging_scope;       /* submission=0, queue_head=1 */
     int      dma_binding_policy;    /* explicit=0, RR=1, least-outstanding=2, bytes=3, projected-cycles=4 */
     uint32_t dma_max_outstanding;
     bool     dma_async_mode;

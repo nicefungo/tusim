@@ -2,7 +2,8 @@
  * Shared-serial DMA arbitration exploration.
  *
  * Compares descriptor-boundary round-robin, strict descriptor priority, and
- * grant-epoch aging priority. This is a deterministic queue-selection study,
+ * grant-epoch aging priority, including submission versus queue-head aging.
+ * This is a deterministic queue-selection study,
  * not a preemptive, beat-level, queue-aware DRAM, or end-to-end throughput
  * model.
  */
@@ -165,6 +166,71 @@ static int run_sustained_case(int policy, uint64_t *low_complete,
     return 0;
 }
 
+static void init_aging_scope(int scope) {
+    tu_dma_init_config_boundary_aging(
+        true, 2, 4, TU_DMA_BUS_MODE_SHARED_SERIAL,
+        TU_DMA_ARB_AGING_PRIORITY, scope, TU_DMA_BIND_EXPLICIT,
+        TU_DMA_BUS_WIDTH_BITS, TU_LATENCY_DRAM_READ, TU_LATENCY_DRAM_WRITE,
+        TU_DMA_MAX_BURST_BYTES, TU_DMA_MAX_BURST_BYTES,
+        TU_DMA_MAX_BURST_BYTES, 0, 0, 0, false, false,
+        TU_DMA_SEGMENT_AGGREGATE, TU_DMA_BASE_PER_DESCRIPTOR,
+        TU_DMA_PAYLOAD_PACKED_DESCRIPTOR, TU_DMA_ISSUE_PAYLOAD_SERIALIZED,
+        TU_DMA_BOUNDARY_SIZE_ONLY);
+}
+
+/* A descriptor queued behind an older same-channel head can either retain its
+ * total enqueue wait (submission scope) or start aging only when it reaches
+ * the selectable head (queue-head scope). */
+static int run_deep_queue_case(int scope, uint64_t *deep_complete,
+                               uint64_t *fresh_complete) {
+    enum { BYTES = 64 };
+    static uint8_t src[3][BYTES];
+    tu_sram_region_t sram;
+    tu_dma_descriptor_t *lead, *deep, *fresh;
+    tu_sram_init(&sram, 3u * BYTES, "dma-aging-scope-sweep");
+    sram.banks.bw_modeling = false;
+    memset(src, 0x5a, sizeof(src));
+    init_aging_scope(scope);
+    if (g_tu_dma.aging_scope != (tu_dma_aging_scope_t)scope) return -1;
+
+    lead = tu_dma_desc_create_linear(0, TU_DMA_DIR_HOST_TO_TU, &sram,
+                                     0, src[0], 1, BYTES);
+    deep = tu_dma_desc_create_linear(0, TU_DMA_DIR_HOST_TO_TU, &sram,
+                                     BYTES, src[1], 1, BYTES);
+    if (!lead || !deep) return -2;
+    lead->priority = 2;
+    deep->priority = 0;
+    if (!tu_dma_submit_desc(lead) || !tu_dma_submit_desc(deep)) return -3;
+    tu_dma_tick();
+
+    fresh = tu_dma_desc_create_linear(1, TU_DMA_DIR_HOST_TO_TU, &sram,
+                                      2u * BYTES, src[2], 1, BYTES);
+    if (!fresh || !tu_dma_submit_desc(fresh)) return -4;
+    while (g_tu_dma.total_transfers < 3u && g_tu_dma.current_cycle < 1000u)
+        tu_dma_tick();
+    while (g_tu_dma.channels[0].total_completed +
+           g_tu_dma.channels[1].total_completed < 3u &&
+           g_tu_dma.current_cycle < 1000u)
+        tu_dma_tick();
+    *deep_complete = deep->cycles_completed;
+    *fresh_complete = fresh->cycles_completed;
+    if (lead->cycles_completed != 53u) return -5;
+    if (scope == TU_DMA_AGING_FROM_SUBMISSION) {
+        if (*deep_complete != 105u || *fresh_complete != 157u) return -6;
+    } else {
+        if (*fresh_complete != 105u || *deep_complete != 157u) return -7;
+    }
+    if (memcmp(tu_sram_raw_ptr(&sram), src, sizeof(src)) != 0) return -8;
+
+    tu_dma_destroy();
+    lead->next = deep->next = fresh->next = NULL;
+    tu_dma_desc_destroy(lead);
+    tu_dma_desc_destroy(deep);
+    tu_dma_desc_destroy(fresh);
+    tu_sram_destroy(&sram);
+    return 0;
+}
+
 int main(void) {
     const int policies[] = {
         TU_DMA_ARB_ROUND_ROBIN,
@@ -206,6 +272,21 @@ int main(void) {
                (unsigned long)high[0], (unsigned long)high[1],
                (unsigned long)high[2]);
     }
-    printf("PASS: exact order/cycles, bounded grant aging, and byte movement\n");
+    printf("\naging_scope deep_queued fresh_peer\n");
+    const int scopes[] = {
+        TU_DMA_AGING_FROM_SUBMISSION, TU_DMA_AGING_FROM_QUEUE_HEAD
+    };
+    const char *scope_names[] = {"submission", "queue_head"};
+    for (uint32_t i = 0; i < 2; i++) {
+        uint64_t deep = 0, fresh = 0;
+        int rc = run_deep_queue_case(scopes[i], &deep, &fresh);
+        if (rc != 0) {
+            fprintf(stderr, "FAIL aging_scope=%s rc=%d\n", scope_names[i], rc);
+            return 50 - rc;
+        }
+        printf("%12s %11lu %10lu\n", scope_names[i],
+               (unsigned long)deep, (unsigned long)fresh);
+    }
+    printf("PASS: exact order/cycles, aging scopes, and byte movement\n");
     return 0;
 }

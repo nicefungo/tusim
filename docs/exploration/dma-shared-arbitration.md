@@ -1,6 +1,6 @@
 # Shared-Serial DMA Arbitration: Fair, Strict, and Aging Priority
 
-**Date:** 2026-08-25; grant-aging follow-up 2026-09-21
+**Date:** 2026-08-25; grant-aging follow-up 2026-09-21; aging-scope follow-up 2026-09-22
 **Mode:** pre-spec exploration
 **Evidence:** `tests/test_dma_arbitration_sweep.c`
 
@@ -18,14 +18,16 @@ When several descriptor queues share one non-preemptive DMA path, should the mov
 
 Selection occurs only when the shared path is idle and only at descriptor boundaries. Active work is never preempted. Ties use the rotating round-robin cursor. Independent DMA paths do not consume the policy.
 
-Aging is deliberately measured in **missed shared-bus grants**, not elapsed core cycles:
+Aging is deliberately measured in grant epochs, not elapsed core cycles. The
+runtime `aging_scope` selects whether the start epoch is accepted submission
+or queue-head eligibility:
 
 ```text
-age_grants        = current_grant_epoch - submission_grant_epoch
+age_grants        = current_grant_epoch - selected_start_epoch
 effective_priority = min(255, descriptor_priority + age_grants)
 ```
 
-The grant epoch increments after each shared-path descriptor selection. This makes the fairness trade-off independent of descriptor duration: one long transfer does not produce a larger boost than one short transfer. It does not provide a wall-clock deadline.
+The grant epoch increments after each shared-path descriptor selection. This makes the fairness trade-off independent of descriptor duration: one long transfer does not produce a larger boost than one short transfer. It does not provide a wall-clock deadline. `submission` remains the compatibility default and protects total accepted wait; `queue_head` counts only grants missed while selectable. See [`dma-aging-scope.md`](dma-aging-scope.md) for the discriminating deep-queue matrix and implementation details.
 
 ## Executable workload matrix
 
@@ -78,14 +80,14 @@ Physical area, timing closure, control energy, sustained producer throughput, qu
 
 The executable path is:
 
-1. `config/tu_config.yaml` and JSON parsing: `dma.arbitration` accepts `round_robin`, `strict_priority`, or `aging_priority`.
-2. `scripts/gen_config.py` and `tu_cmodel/tu_config.h`: generated constants/default runtime field; round-robin remains numeric zero/default.
-3. `tu_cmodel/infra/config.{h,c}`: canonical enum, parse, validation, runtime propagation, and generated config documentation.
-4. `tu_cmodel/tu_cmodel.c`: forwards the selected policy to the live descriptor engine.
-5. `tu_cmodel/dma_descriptor.{h,c}`: descriptors record their accepted submission epoch; shared selection computes saturating effective priority and advances the epoch after a grant.
-6. `tests/test_dma.c`, `tests/test_config.c`, `tests/test_generated_config.py`, and `tests/test_dma_arbitration_sweep.c`: defaults, generated alternative, parse-to-live propagation, invalid rejection, exact order/timestamps, dynamic arrivals, and byte movement.
+1. `config/tu_config.yaml` and JSON parsing: `dma.arbitration` accepts `round_robin`, `strict_priority`, or `aging_priority`; `dma.aging_scope` accepts `submission` or `queue_head`.
+2. `scripts/gen_config.py` and `tu_cmodel/tu_config.h`: generated constants/default runtime fields; round-robin and submission scope remain numeric zero/default.
+3. `tu_cmodel/infra/config.{h,c}`: canonical enums, parse, validation, runtime propagation, and generated config documentation.
+4. `tu_cmodel/tu_cmodel.c`: forwards the selected policy and aging scope to the live descriptor engine.
+5. `tu_cmodel/dma_descriptor.{h,c}`: descriptors record submission and eligibility epochs; shared selection computes saturating effective priority, updates the promoted queue head, and advances the epoch after a grant.
+6. `tests/test_dma.c`, `tests/test_config.c`, `tests/test_generated_config.py`, and `tests/test_dma_arbitration_sweep.c`: defaults, generated alternative, parse-to-live propagation, invalid rejection, exact order/timestamps, dynamic arrivals, deep-queue promotion, and byte movement.
 
-No public constructor signature changed. Existing and zero-initialized callers retain round-robin. Strict priority retains its previous behavior. Unsupported policy IDs fail closed without creating channels.
+Existing constructor signatures remain compatible; an additive extended initializer carries aging scope. Existing and zero-initialized callers retain round-robin and submission-aging defaults. Strict priority retains its previous behavior. Unsupported policy or scope IDs fail closed without creating channels.
 
 ## Fidelity limits and deferred variants
 
@@ -93,7 +95,7 @@ No public constructor signature changed. Existing and zero-initialized callers r
 - Arbitration remains non-preemptive. A new critical descriptor cannot interrupt active work. Beat-level preemption needs progress, replay, ordering, and physical burst contracts.
 - Epoch arithmetic uses a 64-bit monotonic model counter; practical wrap is not modeled as a hardware-width design. A physical implementation must choose counter width and wrap-safe comparison.
 - Priorities are caller metadata. Compiler/command-queue producers do not automatically classify traffic.
-- Weighted round-robin, deficit service, earliest deadline first, and configurable aging rates remain excluded until traces or QoS contracts distinguish them. Adding policy names without a discriminating workload would create mode proliferation.
+- Weighted round-robin, deficit service, earliest deadline first, and configurable aging rates remain excluded until traces or QoS contracts distinguish them. Submission and queue-head aging are retained because the executable deep-queue control distinguishes their fairness contracts; adding further policy names without such a workload would create mode proliferation.
 - Completion ticks use the coarse cmodel SRAM refill domain and are not calibrated AXI/DRAM timings.
 
 ## Verification

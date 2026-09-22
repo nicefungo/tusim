@@ -26,9 +26,10 @@ tu_dma_engine_t g_tu_dma = {0};
  * Lifecycle
  * ================================================================ */
 
-void tu_dma_init_config_boundary(bool async, uint32_t num_channels,
+void tu_dma_init_config_boundary_aging(bool async, uint32_t num_channels,
                                 uint32_t max_queue_depth, int bus_mode,
-                                int arb_policy, int binding_policy,
+                                int arb_policy, int aging_scope,
+                                int binding_policy,
                                 uint32_t bus_width_bits,
                                 uint32_t read_latency_cycles,
                                 uint32_t write_latency_cycles,
@@ -60,6 +61,13 @@ void tu_dma_init_config_boundary(bool async, uint32_t num_channels,
         return;
     }
     g_tu_dma.arb_policy = (tu_dma_arb_policy_t)arb_policy;
+    if (aging_scope != TU_DMA_AGING_FROM_SUBMISSION &&
+        aging_scope != TU_DMA_AGING_FROM_QUEUE_HEAD) {
+        fprintf(stderr, "DMA: unsupported aging scope %d\n", aging_scope);
+        memset(&g_tu_dma, 0, sizeof(g_tu_dma));
+        return;
+    }
+    g_tu_dma.aging_scope = (tu_dma_aging_scope_t)aging_scope;
     if (binding_policy != TU_DMA_BIND_EXPLICIT &&
         binding_policy != TU_DMA_BIND_ROUND_ROBIN &&
         binding_policy != TU_DMA_BIND_LEAST_OUTSTANDING &&
@@ -171,6 +179,36 @@ void tu_dma_init_config_boundary(bool async, uint32_t num_channels,
         g_tu_dma.channels[i].channel_id = (uint8_t)i;
         g_tu_dma.channels[i].max_depth = max_queue_depth > 0 ? max_queue_depth : TU_DMA_MAX_OUTSTANDING;
     }
+}
+
+void tu_dma_init_config_boundary(bool async, uint32_t num_channels,
+                                uint32_t max_queue_depth, int bus_mode,
+                                int arb_policy, int binding_policy,
+                                uint32_t bus_width_bits,
+                                uint32_t read_latency_cycles,
+                                uint32_t write_latency_cycles,
+                                uint32_t max_burst_bytes,
+                                uint32_t read_max_burst_bytes,
+                                uint32_t write_max_burst_bytes,
+                                uint32_t burst_issue_cycles,
+                                uint32_t read_burst_issue_cycles,
+                                uint32_t write_burst_issue_cycles,
+                                bool read_issue_configured,
+                                bool write_issue_configured,
+                                int burst_segmentation,
+                                int base_latency_scope,
+                                int payload_scope,
+                                int issue_payload_mode,
+                                int burst_boundary_mode) {
+    tu_dma_init_config_boundary_aging(
+        async, num_channels, max_queue_depth, bus_mode, arb_policy,
+        TU_DMA_AGING_FROM_SUBMISSION, binding_policy, bus_width_bits,
+        read_latency_cycles, write_latency_cycles, max_burst_bytes,
+        read_max_burst_bytes, write_max_burst_bytes, burst_issue_cycles,
+        read_burst_issue_cycles, write_burst_issue_cycles,
+        read_issue_configured, write_issue_configured, burst_segmentation,
+        base_latency_scope, payload_scope, issue_payload_mode,
+        burst_boundary_mode);
 }
 
 void tu_dma_init_config_overlap(bool async, uint32_t num_channels,
@@ -1430,10 +1468,12 @@ uint32_t tu_dma_submit_desc(tu_dma_descriptor_t *desc) {
         g_tu_dma.next_binding_channel = (ch_id + 1u) % g_tu_dma.num_channels;
     }
 
-    /* Enqueue. Aging is measured in missed shared-bus grants, not wall-clock
-     * cycles, so long descriptors do not receive a disproportionate boost. */
-    for (tu_dma_descriptor_t *item = desc; item; item = item->next)
+    /* Enqueue. Aging is measured in shared-bus grant epochs, not wall-clock
+     * cycles. Queue-head scope replaces the eligible epoch on promotion. */
+    for (tu_dma_descriptor_t *item = desc; item; item = item->next) {
         item->arbitration_epoch_submitted = g_tu_dma.arbitration_epoch;
+        item->arbitration_epoch_eligible = g_tu_dma.arbitration_epoch;
+    }
     if (!ch->head) {
         ch->head = desc;
         ch->tail = desc;
@@ -1462,8 +1502,10 @@ uint32_t tu_dma_submit_desc(tu_dma_descriptor_t *desc) {
 
 static uint8_t descriptor_effective_priority(
     const tu_dma_descriptor_t *desc) {
-    uint64_t age = g_tu_dma.arbitration_epoch -
-                   desc->arbitration_epoch_submitted;
+    uint64_t start = g_tu_dma.aging_scope == TU_DMA_AGING_FROM_QUEUE_HEAD ?
+                     desc->arbitration_epoch_eligible :
+                     desc->arbitration_epoch_submitted;
+    uint64_t age = g_tu_dma.arbitration_epoch - start;
     uint64_t effective = (uint64_t)desc->priority + age;
     return effective > UINT8_MAX ? UINT8_MAX : (uint8_t)effective;
 }
@@ -1531,6 +1573,9 @@ int tu_dma_tick(void) {
                 ch->active = ch->head;
                 ch->head = ch->head->next;
                 ch->queue_depth--;
+                if (ch->head)
+                    ch->head->arbitration_epoch_eligible =
+                        g_tu_dma.arbitration_epoch + 1u;
                 tu_dma_execute_desc(ch->active);
                 g_tu_dma.next_shared_channel = (i + 1u) % g_tu_dma.num_channels;
                 g_tu_dma.arbitration_epoch++;
