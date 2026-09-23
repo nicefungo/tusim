@@ -251,6 +251,7 @@ typedef struct tu_config_t {
     int      dma_bus_mode;          /* independent=0, shared_serial=1 */
     int      dma_arb_policy;        /* round_robin=0, strict=1, aging=2 */
     int      dma_aging_scope;       /* submission=0, queue_head=1 */
+    uint32_t dma_aging_increment;   /* priority levels gained per missed grant */
     int      dma_binding_policy;    /* explicit=0, RR=1, least-outstanding=2, bytes=3, projected-cycles=4 */
     uint32_t dma_max_outstanding;
     bool     dma_async_mode;

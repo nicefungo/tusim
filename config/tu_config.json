@@ -87,6 +87,7 @@
       "bus_topology": "independent",
       "arbitration": "round_robin",
       "aging_scope": "submission",
+      "aging_increment": 1,
       "channel_binding": "explicit",
       "max_outstanding": 4,
       "async_mode": false,

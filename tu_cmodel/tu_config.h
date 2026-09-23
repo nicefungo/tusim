@@ -188,6 +188,7 @@ extern "C" {
 #define TU_DMA_AGING_SCOPE_SUBMISSION 0
 #define TU_DMA_AGING_SCOPE_QUEUE_HEAD 1
 #define TU_DMA_AGING_SCOPE      0
+#define TU_DMA_AGING_INCREMENT  1
 #define TU_DMA_BIND_DEFAULT_EXPLICIT 0
 #define TU_DMA_BIND_DEFAULT_ROUND_ROBIN 1
 #define TU_DMA_BIND_DEFAULT_LEAST_OUTSTANDING 2
@@ -321,6 +322,7 @@ typedef struct {
     int      dma_bus_mode;
     int      dma_arb_policy;
     int      dma_aging_scope;
+    uint32_t dma_aging_increment;
     int      dma_binding_policy;
     uint32_t dma_max_outstanding;
     bool     dma_async_mode;
@@ -372,6 +374,7 @@ static inline tu_runtime_config_t tu_runtime_config_default(void) {
         .dma_bus_mode       = TU_DMA_BUS_MODE,
         .dma_arb_policy     = TU_DMA_ARB_POLICY,
         .dma_aging_scope    = TU_DMA_AGING_SCOPE,
+        .dma_aging_increment = TU_DMA_AGING_INCREMENT,
         .dma_binding_policy = TU_DMA_BIND_POLICY,
         .dma_max_outstanding = TU_DMA_MAX_OUTSTANDING,
         .dma_async_mode     = TU_DMA_ASYNC_MODE ? true : false,

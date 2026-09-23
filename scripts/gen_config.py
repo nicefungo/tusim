@@ -355,6 +355,7 @@ def generate_header(config, output_path):
     L('#define TU_DMA_AGING_SCOPE_QUEUE_HEAD 1')
     aging_scope_map = {'submission': 0, 'queue_head': 1}
     L(f'#define TU_DMA_AGING_SCOPE      {aging_scope_map[dma.get("aging_scope", "submission")]}')
+    L(f'#define TU_DMA_AGING_INCREMENT  {dma.get("aging_increment", 1)}')
     L('#define TU_DMA_BIND_DEFAULT_EXPLICIT 0')
     L('#define TU_DMA_BIND_DEFAULT_ROUND_ROBIN 1')
     L('#define TU_DMA_BIND_DEFAULT_LEAST_OUTSTANDING 2')
@@ -520,6 +521,7 @@ def generate_header(config, output_path):
     L('    int      dma_bus_mode;')
     L('    int      dma_arb_policy;')
     L('    int      dma_aging_scope;')
+    L('    uint32_t dma_aging_increment;')
     L('    int      dma_binding_policy;')
     L('    uint32_t dma_max_outstanding;')
     L('    bool     dma_async_mode;')
@@ -571,6 +573,7 @@ def generate_header(config, output_path):
     L(f'        .dma_bus_mode       = TU_DMA_BUS_MODE,')
     L(f'        .dma_arb_policy     = TU_DMA_ARB_POLICY,')
     L(f'        .dma_aging_scope    = TU_DMA_AGING_SCOPE,')
+    L(f'        .dma_aging_increment = TU_DMA_AGING_INCREMENT,')
     L(f'        .dma_binding_policy = TU_DMA_BIND_POLICY,')
     L(f'        .dma_max_outstanding = TU_DMA_MAX_OUTSTANDING,')
     L(f'        .dma_async_mode     = TU_DMA_ASYNC_MODE ? true : false,')

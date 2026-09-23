@@ -196,6 +196,7 @@ typedef struct {
     tu_dma_bus_mode_t       bus_mode;
     tu_dma_arb_policy_t     arb_policy;
     tu_dma_aging_scope_t    aging_scope;
+    uint32_t                aging_increment;
     uint32_t                next_shared_channel;
     uint64_t                arbitration_epoch;
     tu_dma_binding_policy_t binding_policy;
@@ -381,6 +382,18 @@ void tu_dma_init_config_boundary_aging(bool async, uint32_t num_channels,
                                        int payload_scope,
                                        int issue_payload_mode,
                                        int burst_boundary_mode);
+void tu_dma_init_config_boundary_aging_rate(
+    bool async, uint32_t num_channels, uint32_t max_queue_depth,
+    int bus_mode, int arb_policy, int aging_scope,
+    uint32_t aging_increment, int binding_policy,
+    uint32_t bus_width_bits, uint32_t read_latency_cycles,
+    uint32_t write_latency_cycles, uint32_t max_burst_bytes,
+    uint32_t read_max_burst_bytes, uint32_t write_max_burst_bytes,
+    uint32_t burst_issue_cycles, uint32_t read_burst_issue_cycles,
+    uint32_t write_burst_issue_cycles, bool read_issue_configured,
+    bool write_issue_configured, int burst_segmentation,
+    int base_latency_scope, int payload_scope, int issue_payload_mode,
+    int burst_boundary_mode);
 void tu_dma_init(bool async);
 void tu_dma_destroy(void);
 

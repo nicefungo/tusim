@@ -2,7 +2,8 @@
  * Shared-serial DMA arbitration exploration.
  *
  * Compares descriptor-boundary round-robin, strict descriptor priority, and
- * grant-epoch aging priority, including submission versus queue-head aging.
+ * grant-epoch aging priority, including submission versus queue-head aging
+ * and configurable priority increments per missed grant.
  * This is a deterministic queue-selection study,
  * not a preemptive, beat-level, queue-aware DRAM, or end-to-end throughput
  * model.
@@ -178,6 +179,19 @@ static void init_aging_scope(int scope) {
         TU_DMA_BOUNDARY_SIZE_ONLY);
 }
 
+static void init_aging_rate(uint32_t increment) {
+    tu_dma_init_config_boundary_aging_rate(
+        true, 2, 8, TU_DMA_BUS_MODE_SHARED_SERIAL,
+        TU_DMA_ARB_AGING_PRIORITY, TU_DMA_AGING_FROM_SUBMISSION, increment,
+        TU_DMA_BIND_EXPLICIT, TU_DMA_BUS_WIDTH_BITS,
+        TU_LATENCY_DRAM_READ, TU_LATENCY_DRAM_WRITE,
+        TU_DMA_MAX_BURST_BYTES, TU_DMA_MAX_BURST_BYTES,
+        TU_DMA_MAX_BURST_BYTES, 0, 0, 0, false, false,
+        TU_DMA_SEGMENT_AGGREGATE, TU_DMA_BASE_PER_DESCRIPTOR,
+        TU_DMA_PAYLOAD_PACKED_DESCRIPTOR, TU_DMA_ISSUE_PAYLOAD_SERIALIZED,
+        TU_DMA_BOUNDARY_SIZE_ONLY);
+}
+
 /* A descriptor queued behind an older same-channel head can either retain its
  * total enqueue wait (submission scope) or start aging only when it reaches
  * the selectable head (queue-head scope). */
@@ -227,6 +241,70 @@ static int run_deep_queue_case(int scope, uint64_t *deep_complete,
     tu_dma_desc_destroy(lead);
     tu_dma_desc_destroy(deep);
     tu_dma_desc_destroy(fresh);
+    tu_sram_destroy(&sram);
+    return 0;
+}
+
+/* Priority-4 arrivals expose the fairness/latency tuning range. An increment
+ * of 1/2/4 lets the old priority-0 descriptor tie after 4/2/1 missed grants. */
+static int run_aging_rate_case(uint32_t increment, uint64_t *low_complete,
+                               uint64_t *batch_complete) {
+    enum { BYTES = 64, HIGH_COUNT = 5 };
+    static uint8_t src[HIGH_COUNT + 1][BYTES];
+    tu_sram_region_t sram;
+    tu_dma_descriptor_t *low = NULL;
+    tu_dma_descriptor_t *high[HIGH_COUNT] = {0};
+    tu_sram_init(&sram, sizeof(src), "dma-aging-rate-sweep");
+    sram.banks.bw_modeling = false;
+    memset(src, 0x6b, sizeof(src));
+    init_aging_rate(increment);
+    if (g_tu_dma.aging_increment != increment) return -1;
+
+    low = tu_dma_desc_create_linear(0, TU_DMA_DIR_HOST_TO_TU, &sram,
+                                    0, src[0], 1, BYTES);
+    high[0] = tu_dma_desc_create_linear(1, TU_DMA_DIR_HOST_TO_TU, &sram,
+                                        BYTES, src[1], 1, BYTES);
+    if (!low || !high[0]) return -2;
+    low->priority = 0;
+    high[0]->priority = 4;
+    if (!tu_dma_submit_desc(low) || !tu_dma_submit_desc(high[0])) return -3;
+    tu_dma_tick();
+
+    for (uint32_t n = 1; n < HIGH_COUNT; n++) {
+        high[n] = tu_dma_desc_create_linear(
+            1, TU_DMA_DIR_HOST_TO_TU, &sram, (n + 1u) * BYTES,
+            src[n + 1u], 1, BYTES);
+        if (!high[n]) return -4;
+        high[n]->priority = 4;
+        if (!tu_dma_submit_desc(high[n])) return -5;
+        while (g_tu_dma.arbitration_epoch < n + 1u &&
+               g_tu_dma.current_cycle < 10000u)
+            tu_dma_tick();
+    }
+    while (g_tu_dma.total_transfers < HIGH_COUNT + 1u &&
+           g_tu_dma.current_cycle < 10000u)
+        tu_dma_tick();
+    while (g_tu_dma.channels[0].total_completed +
+           g_tu_dma.channels[1].total_completed < HIGH_COUNT + 1u &&
+           g_tu_dma.current_cycle < 10000u)
+        tu_dma_tick();
+
+    *low_complete = low->cycles_completed;
+    *batch_complete = g_tu_dma.current_cycle;
+    if ((increment == 1u && *low_complete != 261u) ||
+        (increment == 2u && *low_complete != 157u) ||
+        (increment == 4u && *low_complete != 105u) ||
+        *batch_complete != 313u ||
+        memcmp(tu_sram_raw_ptr(&sram), src, sizeof(src)) != 0)
+        return -6;
+
+    tu_dma_destroy();
+    low->next = NULL;
+    tu_dma_desc_destroy(low);
+    for (uint32_t n = 0; n < HIGH_COUNT; n++) {
+        high[n]->next = NULL;
+        tu_dma_desc_destroy(high[n]);
+    }
     tu_sram_destroy(&sram);
     return 0;
 }
@@ -287,6 +365,19 @@ int main(void) {
         printf("%12s %11lu %10lu\n", scope_names[i],
                (unsigned long)deep, (unsigned long)fresh);
     }
-    printf("PASS: exact order/cycles, aging scopes, and byte movement\n");
+    printf("\naging_increment low_priority_complete batch_complete\n");
+    const uint32_t increments[] = {1u, 2u, 4u};
+    for (uint32_t i = 0; i < 3; i++) {
+        uint64_t low = 0, batch = 0;
+        int rc = run_aging_rate_case(increments[i], &low, &batch);
+        if (rc != 0) {
+            fprintf(stderr, "FAIL aging_increment=%u rc=%d\n",
+                    increments[i], rc);
+            return 70 - rc;
+        }
+        printf("%15u %21lu %14lu\n", increments[i],
+               (unsigned long)low, (unsigned long)batch);
+    }
+    printf("PASS: exact order/cycles, aging scopes/rates, and byte movement\n");
     return 0;
 }
