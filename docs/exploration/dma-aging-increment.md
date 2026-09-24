@@ -82,7 +82,7 @@ Value 1 is the generated and canonical default. A zero-initialized runtime field
 
 ## Fidelity limits
 
-- Aging is measured in granted descriptors, not cycles. Variable descriptor lengths make wall-clock fairness workload-dependent.
+- This sweep isolates the `grants` metric: aging is measured in granted descriptors, so variable descriptor lengths make wall-clock fairness workload-dependent. The separately configurable `cycles` metric and its descriptor-length trade-off are covered in [`dma-aging-time-base.md`](dma-aging-time-base.md).
 - Service is descriptor-boundary and non-preemptive; a selected long transfer cannot be interrupted.
 - The model uses 64-bit epochs and 8-bit priorities. A physical counter width, wrap protocol, comparator timing, and register interface are not selected.
 - Constant multipliers may synthesize differently for 1, 2, 4, and arbitrary values; area, timing, and energy are unquantified.

@@ -2,8 +2,8 @@
  * Shared-serial DMA arbitration exploration.
  *
  * Compares descriptor-boundary round-robin, strict descriptor priority, and
- * grant-epoch aging priority, including submission versus queue-head aging
- * and configurable priority increments per missed grant.
+ * aging priority, including submission versus queue-head scope, configurable
+ * increments, and missed-grant versus wait-cycle metrics.
  * This is a deterministic queue-selection study,
  * not a preemptive, beat-level, queue-aware DRAM, or end-to-end throughput
  * model.
@@ -192,6 +192,19 @@ static void init_aging_rate(uint32_t increment) {
         TU_DMA_BOUNDARY_SIZE_ONLY);
 }
 
+static void init_aging_metric(int metric, uint32_t quantum) {
+    tu_dma_init_config_boundary_aging_policy(
+        true, 2, 4, TU_DMA_BUS_MODE_SHARED_SERIAL,
+        TU_DMA_ARB_AGING_PRIORITY, TU_DMA_AGING_FROM_SUBMISSION, metric,
+        1u, quantum, TU_DMA_BIND_EXPLICIT, TU_DMA_BUS_WIDTH_BITS,
+        TU_LATENCY_DRAM_READ, TU_LATENCY_DRAM_WRITE,
+        TU_DMA_MAX_BURST_BYTES, TU_DMA_MAX_BURST_BYTES,
+        TU_DMA_MAX_BURST_BYTES, 0, 0, 0, false, false,
+        TU_DMA_SEGMENT_AGGREGATE, TU_DMA_BASE_PER_DESCRIPTOR,
+        TU_DMA_PAYLOAD_PACKED_DESCRIPTOR, TU_DMA_ISSUE_PAYLOAD_SERIALIZED,
+        TU_DMA_BOUNDARY_SIZE_ONLY);
+}
+
 /* A descriptor queued behind an older same-channel head can either retain its
  * total enqueue wait (submission scope) or start aging only when it reaches
  * the selectable head (queue-head scope). */
@@ -309,6 +322,75 @@ static int run_aging_rate_case(uint32_t increment, uint64_t *low_complete,
     return 0;
 }
 
+/* One long priority-2 transfer separates the metrics. Immediately before it
+ * retires, enqueue a fresh priority-2 peer. Missed-grant aging gives the old
+ * priority-0 request one step and serves the fresh peer; 64-cycle aging gives
+ * it two steps after 178 wait cycles, so the rotating tie serves the old work. */
+static int run_aging_metric_case(int metric, uint64_t *low_complete,
+                                 uint64_t *fresh_complete,
+                                 uint64_t *batch_complete) {
+    enum { LOW_BYTES = 64, LONG_BYTES = 4096, TOTAL_BYTES = 4224 };
+    static uint8_t low_src[LOW_BYTES];
+    static uint8_t long_src[LONG_BYTES];
+    static uint8_t fresh_src[LOW_BYTES];
+    tu_sram_region_t sram;
+    tu_dma_descriptor_t *low = NULL, *long_desc = NULL, *fresh = NULL;
+    tu_sram_init(&sram, TOTAL_BYTES, "dma-aging-metric-sweep");
+    sram.banks.bw_modeling = false;
+    memset(low_src, 0x31, sizeof(low_src));
+    memset(long_src, 0x42, sizeof(long_src));
+    memset(fresh_src, 0x53, sizeof(fresh_src));
+    init_aging_metric(metric, 64u);
+    if (g_tu_dma.aging_metric != (tu_dma_aging_metric_t)metric ||
+        g_tu_dma.aging_cycle_quantum != 64u) return -1;
+
+    low = tu_dma_desc_create_linear(0, TU_DMA_DIR_HOST_TO_TU, &sram,
+                                    0, low_src, 1, LOW_BYTES);
+    long_desc = tu_dma_desc_create_linear(1, TU_DMA_DIR_HOST_TO_TU, &sram,
+                                          LOW_BYTES, long_src, 1, LONG_BYTES);
+    if (!low || !long_desc) return -2;
+    low->priority = 0;
+    long_desc->priority = 2;
+    if (!tu_dma_submit_desc(low) || !tu_dma_submit_desc(long_desc)) return -3;
+    tu_dma_tick();
+    while (g_tu_dma.current_cycle < 178u) tu_dma_tick();
+
+    fresh = tu_dma_desc_create_linear(1, TU_DMA_DIR_HOST_TO_TU, &sram,
+                                      LOW_BYTES + LONG_BYTES, fresh_src,
+                                      1, LOW_BYTES);
+    if (!fresh) return -4;
+    fresh->priority = 2;
+    if (!tu_dma_submit_desc(fresh)) return -5;
+    while (g_tu_dma.total_transfers < 3u && g_tu_dma.current_cycle < 1000u)
+        tu_dma_tick();
+    while (g_tu_dma.channels[0].total_completed +
+           g_tu_dma.channels[1].total_completed < 3u &&
+           g_tu_dma.current_cycle < 1000u)
+        tu_dma_tick();
+
+    *low_complete = low->cycles_completed;
+    *fresh_complete = fresh->cycles_completed;
+    *batch_complete = g_tu_dma.current_cycle;
+    if ((metric == TU_DMA_AGING_BY_MISSED_GRANTS &&
+         (*fresh_complete != 231u || *low_complete != 283u)) ||
+        (metric == TU_DMA_AGING_BY_WAIT_CYCLES &&
+         (*low_complete != 231u || *fresh_complete != 283u)) ||
+        *batch_complete != 283u) return -6;
+    uint8_t *raw = tu_sram_raw_ptr(&sram);
+    if (memcmp(raw, low_src, LOW_BYTES) != 0 ||
+        memcmp(raw + LOW_BYTES, long_src, LONG_BYTES) != 0 ||
+        memcmp(raw + LOW_BYTES + LONG_BYTES, fresh_src, LOW_BYTES) != 0)
+        return -7;
+
+    tu_dma_destroy();
+    low->next = long_desc->next = fresh->next = NULL;
+    tu_dma_desc_destroy(low);
+    tu_dma_desc_destroy(long_desc);
+    tu_dma_desc_destroy(fresh);
+    tu_sram_destroy(&sram);
+    return 0;
+}
+
 int main(void) {
     const int policies[] = {
         TU_DMA_ARB_ROUND_ROBIN,
@@ -378,6 +460,23 @@ int main(void) {
         printf("%15u %21lu %14lu\n", increments[i],
                (unsigned long)low, (unsigned long)batch);
     }
-    printf("PASS: exact order/cycles, aging scopes/rates, and byte movement\n");
+    printf("\naging_metric old_low_complete fresh_high_complete batch_complete\n");
+    const int metrics[] = {
+        TU_DMA_AGING_BY_MISSED_GRANTS, TU_DMA_AGING_BY_WAIT_CYCLES
+    };
+    const char *metric_names[] = {"grants", "cycles_q64"};
+    for (uint32_t i = 0; i < 2; i++) {
+        uint64_t low = 0, fresh = 0, batch = 0;
+        int rc = run_aging_metric_case(metrics[i], &low, &fresh, &batch);
+        if (rc != 0) {
+            fprintf(stderr, "FAIL aging_metric=%s rc=%d\n",
+                    metric_names[i], rc);
+            return 90 - rc;
+        }
+        printf("%12s %16lu %19lu %14lu\n", metric_names[i],
+               (unsigned long)low, (unsigned long)fresh,
+               (unsigned long)batch);
+    }
+    printf("PASS: exact order/cycles, aging scopes/rates/metrics, and byte movement\n");
     return 0;
 }

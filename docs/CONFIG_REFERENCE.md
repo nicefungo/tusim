@@ -97,7 +97,9 @@
 | `dma_bus_topology` | independent | enum | Channel data paths: independent or shared_serial |
 | `dma_arbitration` | round_robin | enum | Shared-serial selection: round_robin, strict_priority, or aging_priority |
 | `dma_aging_scope` | submission | enum | Aging starts at accepted submission or queue-head eligibility |
-| `dma_aging_increment` | 1 | levels/grant | Priority levels gained per missed shared-bus grant |
+| `dma_aging_metric` | grants | enum | Aging measured in missed grants or quantized wait cycles |
+| `dma_aging_increment` | 1 | levels/step | Priority levels gained per aging step |
+| `dma_aging_cycle_quantum` | 1 | cycles/step | Wait-cycle quantum used by cycle aging |
 | `dma_channel_binding` | explicit | enum | Descriptor queue binding: explicit, round_robin, least_outstanding, least_bytes, or least_projected_cycles |
 | `dma_max_outstanding` | 4 | uint32 | Max outstanding descriptors |
 | `dma_async_mode` | `false` | bool | Async DMA with descriptor queues |

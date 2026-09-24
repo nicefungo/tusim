@@ -175,6 +175,9 @@ int main(void) {
               "DMA size-only burst boundary default");
         CHECK(cfg.dma_aging_increment == 1,
               "DMA one-level aging default");
+        CHECK(cfg.dma_aging_metric == TU_DMA_CONFIG_AGING_MISSED_GRANTS &&
+              cfg.dma_aging_cycle_quantum == 1,
+              "DMA grant aging metric default");
         CHECK(cfg.cycle_model == 2, "cycle");
         CHECK(cfg.counters_enabled, "counters");
         CHECK(cfg.dataflow_mode == 0, "dataflow");
@@ -238,7 +241,9 @@ int main(void) {
             "    \"bus_topology\": \"shared_serial\","
             "    \"arbitration\": \"strict_priority\","
             "    \"aging_scope\": \"queue_head\","
+            "    \"aging_metric\": \"cycles\","
             "    \"aging_increment\": 4,"
+            "    \"aging_cycle_quantum\": 64,"
             "    \"channel_binding\": \"least_projected_cycles\","
             "    \"max_outstanding\": 7,"
             "    \"async_mode\": true"
@@ -278,6 +283,11 @@ int main(void) {
               "DMA aging scope parse/runtime propagation");
         CHECK(cfg.dma_aging_increment == 4 && rt.dma_aging_increment == 4,
               "DMA aging increment parse/runtime propagation");
+        CHECK(cfg.dma_aging_metric == TU_DMA_CONFIG_AGING_WAIT_CYCLES &&
+              rt.dma_aging_metric == TU_DMA_CONFIG_AGING_WAIT_CYCLES &&
+              cfg.dma_aging_cycle_quantum == 64 &&
+              rt.dma_aging_cycle_quantum == 64,
+              "DMA cycle aging parse/runtime propagation");
         CHECK(cfg.dma_binding_policy == TU_DMA_CONFIG_BIND_LEAST_PROJECTED_CYCLES,
               "DMA binding parse");
         CHECK(cfg.dma_max_outstanding == 7, "DMA outstanding parse");
@@ -633,6 +643,10 @@ int main(void) {
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
               "should reject aging scope=2");
         cfg.dma_aging_scope = TU_DMA_CONFIG_AGING_SUBMISSION;
+        cfg.dma_aging_metric = 2;
+        CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
+              "should reject aging metric=2");
+        cfg.dma_aging_metric = TU_DMA_CONFIG_AGING_MISSED_GRANTS;
         cfg.dma_aging_increment = 0;
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
               "should reject aging increment=0");
@@ -640,6 +654,13 @@ int main(void) {
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
               "should reject aging increment=256");
         cfg.dma_aging_increment = 1;
+        cfg.dma_aging_cycle_quantum = 0;
+        CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
+              "should reject aging cycle quantum=0");
+        cfg.dma_aging_cycle_quantum = 1048577u;
+        CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
+              "should reject aging cycle quantum above limit");
+        cfg.dma_aging_cycle_quantum = 1;
         cfg.dma_binding_policy = 5;
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0, "should reject binding=5");
         cfg.dma_binding_policy = TU_DMA_CONFIG_BIND_EXPLICIT;
@@ -679,6 +700,16 @@ int main(void) {
               cfg.dma_aging_increment == 4 &&
               tu_config_to_runtime(&cfg).dma_aging_increment == 4,
               "aging increment propagation");
+        CHECK(tu_config_load_string(
+                  "{\"tu\":{\"dma\":{\"aging_metric\":\"cycles\",\"aging_cycle_quantum\":64}}}",
+                  &cfg, err, sizeof(err)) == 0 &&
+              cfg.dma_aging_metric == TU_DMA_CONFIG_AGING_WAIT_CYCLES &&
+              cfg.dma_aging_cycle_quantum == 64,
+              "cycle aging metric propagation");
+        CHECK(tu_config_load_string(
+                  "{\"tu\":{\"dma\":{\"aging_metric\":\"time\"}}}",
+                  &cfg, err, sizeof(err)) != 0,
+              "should reject unsupported aging metric");
         CHECK(tu_config_load_string(
                   "{\"tu\":{\"dma\":{\"channel_binding\":\"least_work\"}}}",
                   &cfg, err, sizeof(err)) != 0,
@@ -812,7 +843,9 @@ int main(void) {
         cfg.dma_bus_mode = TU_DMA_CONFIG_BUS_SHARED_SERIAL;
         cfg.dma_arb_policy = TU_DMA_CONFIG_ARB_AGING_PRIORITY;
         cfg.dma_aging_scope = TU_DMA_CONFIG_AGING_QUEUE_HEAD;
+        cfg.dma_aging_metric = TU_DMA_CONFIG_AGING_WAIT_CYCLES;
         cfg.dma_aging_increment = 4;
+        cfg.dma_aging_cycle_quantum = 64;
         cfg.dma_binding_policy = TU_DMA_CONFIG_BIND_LEAST_PROJECTED_CYCLES;
         cfg.dma_max_outstanding = 7;
         cfg.dma_async_mode = false;
@@ -836,6 +869,9 @@ int main(void) {
               "active DMA aging scope");
         CHECK(g_tu_dma.aging_increment == 4,
               "active DMA aging increment");
+        CHECK(g_tu_dma.aging_metric == TU_DMA_AGING_BY_WAIT_CYCLES &&
+              g_tu_dma.aging_cycle_quantum == 64,
+              "active DMA cycle aging policy");
         CHECK(g_tu_dma.binding_policy == TU_DMA_BIND_LEAST_PROJECTED_CYCLES,
               "active DMA channel binding");
         CHECK(g_tu_dma.channels[0].max_depth == 7 &&

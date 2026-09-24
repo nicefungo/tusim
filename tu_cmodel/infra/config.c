@@ -170,6 +170,14 @@ static int parse_dma_aging_scope_str(const char *s) {
     return -1;
 }
 
+static int parse_dma_aging_metric_str(const char *s) {
+    if (!s || strcmp(s, "grants") == 0)
+        return TU_DMA_CONFIG_AGING_MISSED_GRANTS;
+    if (strcmp(s, "cycles") == 0)
+        return TU_DMA_CONFIG_AGING_WAIT_CYCLES;
+    return -1;
+}
+
 static int parse_dma_binding_policy_str(const char *s) {
     if (!s || strcmp(s, "explicit") == 0)
         return TU_DMA_CONFIG_BIND_EXPLICIT;
@@ -399,7 +407,9 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->dma_bus_mode        = TU_DMA_CONFIG_BUS_INDEPENDENT;
     cfg->dma_arb_policy      = TU_DMA_CONFIG_ARB_ROUND_ROBIN;
     cfg->dma_aging_scope     = TU_DMA_CONFIG_AGING_SUBMISSION;
+    cfg->dma_aging_metric    = TU_DMA_CONFIG_AGING_MISSED_GRANTS;
     cfg->dma_aging_increment = 1;
+    cfg->dma_aging_cycle_quantum = 1;
     cfg->dma_binding_policy  = TU_DMA_CONFIG_BIND_EXPLICIT;
     cfg->dma_max_outstanding = 4;
     cfg->dma_async_mode      = false;
@@ -497,7 +507,9 @@ tu_runtime_config_t tu_config_to_runtime(const struct tu_config_t *cfg) {
     rt.dma_bus_mode = cfg->dma_bus_mode;
     rt.dma_arb_policy = cfg->dma_arb_policy;
     rt.dma_aging_scope = cfg->dma_aging_scope;
+    rt.dma_aging_metric = cfg->dma_aging_metric;
     rt.dma_aging_increment = cfg->dma_aging_increment;
+    rt.dma_aging_cycle_quantum = cfg->dma_aging_cycle_quantum;
     rt.dma_binding_policy = cfg->dma_binding_policy;
     rt.dma_max_outstanding = cfg->dma_max_outstanding;
     rt.dma_async_mode = cfg->dma_async_mode;
@@ -742,8 +754,14 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
         if (aging_scope && aging_scope->type == TU_JSON_STRING)
             cfg->dma_aging_scope = parse_dma_aging_scope_str(
                 tu_json_as_string(aging_scope, NULL));
+        const tu_json_value_t *aging_metric = tu_json_get(d, "aging_metric");
+        if (aging_metric && aging_metric->type == TU_JSON_STRING)
+            cfg->dma_aging_metric = parse_dma_aging_metric_str(
+                tu_json_as_string(aging_metric, NULL));
         if (parse_opt_int64(d, "aging_increment", &iv))
             cfg->dma_aging_increment = (uint32_t)iv;
+        if (parse_opt_int64(d, "aging_cycle_quantum", &iv))
+            cfg->dma_aging_cycle_quantum = (uint32_t)iv;
         const tu_json_value_t *binding = tu_json_get(d, "channel_binding");
         if (binding && binding->type == TU_JSON_STRING)
             cfg->dma_binding_policy = parse_dma_binding_policy_str(
@@ -1099,10 +1117,24 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
                      "DMA aging_scope must be submission or queue_head");
         return -1;
     }
+    if (cfg->dma_aging_metric < TU_DMA_CONFIG_AGING_MISSED_GRANTS ||
+        cfg->dma_aging_metric > TU_DMA_CONFIG_AGING_WAIT_CYCLES) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DMA aging_metric must be grants or cycles");
+        return -1;
+    }
     if (cfg->dma_aging_increment == 0 || cfg->dma_aging_increment > UINT8_MAX) {
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
                      "DMA aging_increment must be in [1,255]");
+        return -1;
+    }
+    if (cfg->dma_aging_cycle_quantum == 0 ||
+        cfg->dma_aging_cycle_quantum > 1048576u) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DMA aging_cycle_quantum must be in [1,1048576]");
         return -1;
     }
     if (cfg->dma_binding_policy < TU_DMA_CONFIG_BIND_EXPLICIT ||
@@ -1623,8 +1655,13 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
     fprintf(out, "| `dma_aging_scope` | %s | enum | Aging starts at accepted submission or queue-head eligibility |\n",
             cfg->dma_aging_scope == TU_DMA_CONFIG_AGING_QUEUE_HEAD ?
             "queue_head" : "submission");
-    fprintf(out, "| `dma_aging_increment` | %u | levels/grant | Priority levels gained per missed shared-bus grant |\n",
+    fprintf(out, "| `dma_aging_metric` | %s | enum | Aging measured in missed grants or quantized wait cycles |\n",
+            cfg->dma_aging_metric == TU_DMA_CONFIG_AGING_WAIT_CYCLES ?
+            "cycles" : "grants");
+    fprintf(out, "| `dma_aging_increment` | %u | levels/step | Priority levels gained per aging step |\n",
             cfg->dma_aging_increment);
+    fprintf(out, "| `dma_aging_cycle_quantum` | %u | cycles/step | Wait-cycle quantum used by cycle aging |\n",
+            cfg->dma_aging_cycle_quantum);
     const char *binding_name = cfg->dma_binding_policy == TU_DMA_CONFIG_BIND_ROUND_ROBIN ?
                                "round_robin" :
                                (cfg->dma_binding_policy == TU_DMA_CONFIG_BIND_LEAST_OUTSTANDING ?

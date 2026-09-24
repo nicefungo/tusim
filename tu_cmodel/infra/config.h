@@ -112,6 +112,11 @@ typedef enum {
 } tu_dma_config_aging_scope_t;
 
 typedef enum {
+    TU_DMA_CONFIG_AGING_MISSED_GRANTS = 0,
+    TU_DMA_CONFIG_AGING_WAIT_CYCLES = 1
+} tu_dma_config_aging_metric_t;
+
+typedef enum {
     TU_DMA_CONFIG_BIND_EXPLICIT = 0,
     TU_DMA_CONFIG_BIND_ROUND_ROBIN = 1,
     TU_DMA_CONFIG_BIND_LEAST_OUTSTANDING = 2,
@@ -251,7 +256,9 @@ typedef struct tu_config_t {
     int      dma_bus_mode;          /* independent=0, shared_serial=1 */
     int      dma_arb_policy;        /* round_robin=0, strict=1, aging=2 */
     int      dma_aging_scope;       /* submission=0, queue_head=1 */
-    uint32_t dma_aging_increment;   /* priority levels gained per missed grant */
+    int      dma_aging_metric;      /* missed_grants=0, wait_cycles=1 */
+    uint32_t dma_aging_increment;   /* priority levels gained per aging step */
+    uint32_t dma_aging_cycle_quantum; /* cycles per aging step in cycle mode */
     int      dma_binding_policy;    /* explicit=0, RR=1, least-outstanding=2, bytes=3, projected-cycles=4 */
     uint32_t dma_max_outstanding;
     bool     dma_async_mode;

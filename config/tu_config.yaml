@@ -103,9 +103,11 @@ tu:
     burst_boundary_mode: "size_only" # size_only (compat) | sram_address | external_address | both_address | sram_4k | external_4k | both_4k (external modes require descriptor bus address)
     channels: 3           # Number of DMA scheduling channels
     bus_topology: "independent"  # independent (compat) | shared_serial
-    arbitration: "round_robin"   # round_robin (compat) | strict_priority | aging_priority (one level per missed shared-bus grant)
-    aging_scope: "submission"    # submission (compat, total queued wait) | queue_head (only grants missed while eligible)
-    aging_increment: 1           # Priority levels gained per missed grant [1,255]
+    arbitration: "round_robin"   # round_robin (compat) | strict_priority | aging_priority
+    aging_scope: "submission"    # submission (compat, total queued wait) | queue_head (only wait while eligible)
+    aging_metric: "grants"       # grants (compat) | cycles (wall-clock wait quantized below)
+    aging_increment: 1           # Priority levels gained per aging step [1,255]
+    aging_cycle_quantum: 1       # Cycles per aging step in cycles mode [1,1048576]
     channel_binding: "explicit"  # explicit (compat) | round_robin | least_outstanding | least_bytes | least_projected_cycles
     max_outstanding: 4    # Maximum outstanding requests per channel
     async_mode: false     # true = async DMA with completion notification

@@ -58,7 +58,10 @@ def main() -> int:
                 'arbitration: "aging_priority"',
             'aging_scope: "submission"':
                 'aging_scope: "queue_head"',
+            'aging_metric: "grants"':
+                'aging_metric: "cycles"',
             "aging_increment: 1": "aging_increment: 4",
+            "aging_cycle_quantum: 1": "aging_cycle_quantum: 64",
             'payload_scope: "descriptor"':
                 'payload_scope: "burst_commands"',
             '    fp16:\n      rounding: "round_nearest_even"':
@@ -93,7 +96,9 @@ def main() -> int:
             '_Static_assert(TU_DMA_PAYLOAD_SCOPE == TU_DMA_PAYLOAD_SCOPE_BURST_COMMANDS, "DMA burst payload scope");\n'
             '_Static_assert(TU_DMA_ARB_POLICY == TU_DMA_ARB_DEFAULT_AGING_PRIORITY, "DMA aging arbitration");\n'
             '_Static_assert(TU_DMA_AGING_SCOPE == TU_DMA_AGING_SCOPE_QUEUE_HEAD, "DMA aging scope");\n'
+            '_Static_assert(TU_DMA_AGING_METRIC == TU_DMA_AGING_METRIC_CYCLES, "DMA aging metric");\n'
             '_Static_assert(TU_DMA_AGING_INCREMENT == 4, "DMA aging increment");\n'
+            '_Static_assert(TU_DMA_AGING_CYCLE_QUANTUM == 64, "DMA aging quantum");\n'
             '_Static_assert(TU_FP16_ROUNDING_MODE == TU_FP16_ROUNDING_STOCHASTIC, "rounding");\n'
             'int main(void) { tu_runtime_config_t c = tu_runtime_config_default(); '
             'return c.dataflow_mode != TU_DATAFLOW_MODE_OS || '
@@ -101,7 +106,9 @@ def main() -> int:
             'c.dma_burst_boundary_mode != TU_DMA_BURST_BOUNDARY_BOTH_ADDRESS || '
             'c.dma_arb_policy != TU_DMA_ARB_DEFAULT_AGING_PRIORITY || '
             'c.dma_aging_scope != TU_DMA_AGING_SCOPE_QUEUE_HEAD || '
+            'c.dma_aging_metric != TU_DMA_AGING_METRIC_CYCLES || '
             'c.dma_aging_increment != 4 || '
+            'c.dma_aging_cycle_quantum != 64 || '
             'c.dma_payload_scope != TU_DMA_PAYLOAD_SCOPE_BURST_COMMANDS; }\n'
         )
         subprocess.run(
