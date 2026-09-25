@@ -9,6 +9,7 @@
  * model.
  */
 #include "tu_cmodel/dma_descriptor.h"
+#include "tu_cmodel/infra/config.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -326,7 +327,8 @@ static int run_aging_rate_case(uint32_t increment, uint64_t *low_complete,
  * retires, enqueue a fresh priority-2 peer. Missed-grant aging gives the old
  * priority-0 request one step and serves the fresh peer; 64-cycle aging gives
  * it two steps after 178 wait cycles, so the rotating tie serves the old work. */
-static int run_aging_metric_case(int metric, uint64_t *low_complete,
+static int run_aging_metric_case(int metric, uint32_t quantum,
+                                 uint64_t *low_complete,
                                  uint64_t *fresh_complete,
                                  uint64_t *batch_complete) {
     enum { LOW_BYTES = 64, LONG_BYTES = 4096, TOTAL_BYTES = 4224 };
@@ -340,9 +342,9 @@ static int run_aging_metric_case(int metric, uint64_t *low_complete,
     memset(low_src, 0x31, sizeof(low_src));
     memset(long_src, 0x42, sizeof(long_src));
     memset(fresh_src, 0x53, sizeof(fresh_src));
-    init_aging_metric(metric, 64u);
+    init_aging_metric(metric, quantum);
     if (g_tu_dma.aging_metric != (tu_dma_aging_metric_t)metric ||
-        g_tu_dma.aging_cycle_quantum != 64u) return -1;
+        g_tu_dma.aging_cycle_quantum != quantum) return -1;
 
     low = tu_dma_desc_create_linear(0, TU_DMA_DIR_HOST_TO_TU, &sram,
                                     0, low_src, 1, LOW_BYTES);
@@ -373,8 +375,10 @@ static int run_aging_metric_case(int metric, uint64_t *low_complete,
     *batch_complete = g_tu_dma.current_cycle;
     if ((metric == TU_DMA_AGING_BY_MISSED_GRANTS &&
          (*fresh_complete != 231u || *low_complete != 283u)) ||
-        (metric == TU_DMA_AGING_BY_WAIT_CYCLES &&
+        (metric == TU_DMA_AGING_BY_WAIT_CYCLES && quantum <= 64u &&
          (*low_complete != 231u || *fresh_complete != 283u)) ||
+        (metric == TU_DMA_AGING_BY_WAIT_CYCLES && quantum > 64u &&
+         (*fresh_complete != 231u || *low_complete != 283u)) ||
         *batch_complete != 283u) return -6;
     uint8_t *raw = tu_sram_raw_ptr(&sram);
     if (memcmp(raw, low_src, LOW_BYTES) != 0 ||
@@ -467,7 +471,7 @@ int main(void) {
     const char *metric_names[] = {"grants", "cycles_q64"};
     for (uint32_t i = 0; i < 2; i++) {
         uint64_t low = 0, fresh = 0, batch = 0;
-        int rc = run_aging_metric_case(metrics[i], &low, &fresh, &batch);
+        int rc = run_aging_metric_case(metrics[i], 64u, &low, &fresh, &batch);
         if (rc != 0) {
             fprintf(stderr, "FAIL aging_metric=%s rc=%d\n",
                     metric_names[i], rc);
@@ -477,6 +481,42 @@ int main(void) {
                (unsigned long)low, (unsigned long)fresh,
                (unsigned long)batch);
     }
-    printf("PASS: exact order/cycles, aging scopes/rates/metrics, and byte movement\n");
+    printf("\naging_quantum_domain clock_ghz effective_cycles old_low_complete fresh_high_complete batch_complete\n");
+    const double clocks[] = {0.5, 1.0, 2.0};
+    for (uint32_t domain = TU_DMA_CONFIG_AGING_QUANTUM_CORE_CYCLES;
+         domain <= TU_DMA_CONFIG_AGING_QUANTUM_PHYSICAL_NS; domain++) {
+        for (uint32_t i = 0; i < 3; i++) {
+            tu_config_t cfg;
+            tu_config_default(&cfg);
+            cfg.dma_aging_metric = TU_DMA_CONFIG_AGING_WAIT_CYCLES;
+            cfg.dma_aging_cycle_quantum = 64u;
+            cfg.dma_aging_quantum_domain = (int)domain;
+            cfg.dma_aging_quantum_ns = 64.0;
+            cfg.dram_core_clock_ghz = clocks[i];
+            if (tu_config_validate(&cfg, NULL, 0) != 0) return 100;
+            tu_runtime_config_t rt = tu_config_to_runtime(&cfg);
+            uint32_t expected_quantum = domain ==
+                    TU_DMA_CONFIG_AGING_QUANTUM_PHYSICAL_NS ?
+                (uint32_t)(64.0 * clocks[i]) : 64u;
+            if (rt.dma_aging_cycle_quantum != expected_quantum ||
+                rt.dma_aging_quantum_domain != (int)domain)
+                return 101;
+            uint64_t low = 0, fresh = 0, batch = 0;
+            int rc = run_aging_metric_case(TU_DMA_AGING_BY_WAIT_CYCLES,
+                                           expected_quantum,
+                                           &low, &fresh, &batch);
+            if (rc != 0) {
+                fprintf(stderr, "FAIL aging domain=%u clock=%.1f rc=%d\n",
+                        domain, clocks[i], rc);
+                return 102 - rc;
+            }
+            printf("%20s %9.1f %16u %16lu %19lu %14lu\n",
+                   domain == TU_DMA_CONFIG_AGING_QUANTUM_PHYSICAL_NS ?
+                       "physical_ns" : "core_cycles",
+                   clocks[i], expected_quantum, (unsigned long)low,
+                   (unsigned long)fresh, (unsigned long)batch);
+        }
+    }
+    printf("PASS: exact order/cycles, aging scopes/rates/metrics/domains, config conversion, and byte movement\n");
     return 0;
 }

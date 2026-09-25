@@ -192,6 +192,10 @@ extern "C" {
 #define TU_DMA_AGING_METRIC_CYCLES 1
 #define TU_DMA_AGING_METRIC     0
 #define TU_DMA_AGING_INCREMENT  1
+#define TU_DMA_AGING_QUANTUM_CORE_CYCLES 0
+#define TU_DMA_AGING_QUANTUM_PHYSICAL_NS 1
+#define TU_DMA_AGING_QUANTUM_DOMAIN 0
+#define TU_DMA_AGING_QUANTUM_NS 1.0
 #define TU_DMA_AGING_CYCLE_QUANTUM 1
 #define TU_DMA_BIND_DEFAULT_EXPLICIT 0
 #define TU_DMA_BIND_DEFAULT_ROUND_ROBIN 1
@@ -329,6 +333,8 @@ typedef struct {
     int      dma_aging_metric;
     uint32_t dma_aging_increment;
     uint32_t dma_aging_cycle_quantum;
+    int      dma_aging_quantum_domain;
+    double   dma_aging_quantum_ns;
     int      dma_binding_policy;
     uint32_t dma_max_outstanding;
     bool     dma_async_mode;
@@ -383,6 +389,8 @@ static inline tu_runtime_config_t tu_runtime_config_default(void) {
         .dma_aging_metric   = TU_DMA_AGING_METRIC,
         .dma_aging_increment = TU_DMA_AGING_INCREMENT,
         .dma_aging_cycle_quantum = TU_DMA_AGING_CYCLE_QUANTUM,
+        .dma_aging_quantum_domain = TU_DMA_AGING_QUANTUM_DOMAIN,
+        .dma_aging_quantum_ns = TU_DMA_AGING_QUANTUM_NS,
         .dma_binding_policy = TU_DMA_BIND_POLICY,
         .dma_max_outstanding = TU_DMA_MAX_OUTSTANDING,
         .dma_async_mode     = TU_DMA_ASYNC_MODE ? true : false,

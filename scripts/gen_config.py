@@ -10,6 +10,7 @@ import sys
 import os
 import re
 import argparse
+import math
 
 def load_yaml_simple(path):
     """Minimal YAML parser — handles the subset we use (no pyyaml dependency)."""
@@ -360,7 +361,17 @@ def generate_header(config, output_path):
     aging_metric_map = {'grants': 0, 'cycles': 1}
     L(f'#define TU_DMA_AGING_METRIC     {aging_metric_map[dma.get("aging_metric", "grants")]}')
     L(f'#define TU_DMA_AGING_INCREMENT  {dma.get("aging_increment", 1)}')
-    L(f'#define TU_DMA_AGING_CYCLE_QUANTUM {dma.get("aging_cycle_quantum", 1)}')
+    aging_domain_map = {'core_cycles': 0, 'physical_ns': 1}
+    aging_domain = dma.get('aging_quantum_domain', 'core_cycles')
+    aging_quantum_ns = float(dma.get('aging_quantum_ns', 1.0))
+    aging_cycle_quantum = int(dma.get('aging_cycle_quantum', 1))
+    aging_effective_quantum = (math.ceil(aging_quantum_ns * float(dram['core_clock_ghz']))
+                               if aging_domain == 'physical_ns' else aging_cycle_quantum)
+    L('#define TU_DMA_AGING_QUANTUM_CORE_CYCLES 0')
+    L('#define TU_DMA_AGING_QUANTUM_PHYSICAL_NS 1')
+    L(f'#define TU_DMA_AGING_QUANTUM_DOMAIN {aging_domain_map[aging_domain]}')
+    L(f'#define TU_DMA_AGING_QUANTUM_NS {aging_quantum_ns}')
+    L(f'#define TU_DMA_AGING_CYCLE_QUANTUM {aging_effective_quantum}')
     L('#define TU_DMA_BIND_DEFAULT_EXPLICIT 0')
     L('#define TU_DMA_BIND_DEFAULT_ROUND_ROBIN 1')
     L('#define TU_DMA_BIND_DEFAULT_LEAST_OUTSTANDING 2')
@@ -529,6 +540,8 @@ def generate_header(config, output_path):
     L('    int      dma_aging_metric;')
     L('    uint32_t dma_aging_increment;')
     L('    uint32_t dma_aging_cycle_quantum;')
+    L('    int      dma_aging_quantum_domain;')
+    L('    double   dma_aging_quantum_ns;')
     L('    int      dma_binding_policy;')
     L('    uint32_t dma_max_outstanding;')
     L('    bool     dma_async_mode;')
@@ -583,6 +596,8 @@ def generate_header(config, output_path):
     L(f'        .dma_aging_metric   = TU_DMA_AGING_METRIC,')
     L(f'        .dma_aging_increment = TU_DMA_AGING_INCREMENT,')
     L(f'        .dma_aging_cycle_quantum = TU_DMA_AGING_CYCLE_QUANTUM,')
+    L(f'        .dma_aging_quantum_domain = TU_DMA_AGING_QUANTUM_DOMAIN,')
+    L(f'        .dma_aging_quantum_ns = TU_DMA_AGING_QUANTUM_NS,')
     L(f'        .dma_binding_policy = TU_DMA_BIND_POLICY,')
     L(f'        .dma_max_outstanding = TU_DMA_MAX_OUTSTANDING,')
     L(f'        .dma_async_mode     = TU_DMA_ASYNC_MODE ? true : false,')

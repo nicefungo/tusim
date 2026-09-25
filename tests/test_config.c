@@ -178,6 +178,10 @@ int main(void) {
         CHECK(cfg.dma_aging_metric == TU_DMA_CONFIG_AGING_MISSED_GRANTS &&
               cfg.dma_aging_cycle_quantum == 1,
               "DMA grant aging metric default");
+        CHECK(cfg.dma_aging_quantum_domain ==
+                  TU_DMA_CONFIG_AGING_QUANTUM_CORE_CYCLES &&
+              cfg.dma_aging_quantum_ns == 1.0,
+              "DMA core-cycle aging quantum default");
         CHECK(cfg.cycle_model == 2, "cycle");
         CHECK(cfg.counters_enabled, "counters");
         CHECK(cfg.dataflow_mode == 0, "dataflow");
@@ -244,6 +248,8 @@ int main(void) {
             "    \"aging_metric\": \"cycles\","
             "    \"aging_increment\": 4,"
             "    \"aging_cycle_quantum\": 64,"
+            "    \"aging_quantum_domain\": \"physical_ns\","
+            "    \"aging_quantum_ns\": 64.0,"
             "    \"channel_binding\": \"least_projected_cycles\","
             "    \"max_outstanding\": 7,"
             "    \"async_mode\": true"
@@ -288,6 +294,13 @@ int main(void) {
               cfg.dma_aging_cycle_quantum == 64 &&
               rt.dma_aging_cycle_quantum == 64,
               "DMA cycle aging parse/runtime propagation");
+        CHECK(cfg.dma_aging_quantum_domain ==
+                  TU_DMA_CONFIG_AGING_QUANTUM_PHYSICAL_NS &&
+              rt.dma_aging_quantum_domain ==
+                  TU_DMA_CONFIG_AGING_QUANTUM_PHYSICAL_NS &&
+              cfg.dma_aging_quantum_ns == 64.0 &&
+              rt.dma_aging_quantum_ns == 64.0,
+              "DMA physical aging quantum parse/runtime propagation");
         CHECK(cfg.dma_binding_policy == TU_DMA_CONFIG_BIND_LEAST_PROJECTED_CYCLES,
               "DMA binding parse");
         CHECK(cfg.dma_max_outstanding == 7, "DMA outstanding parse");
@@ -661,6 +674,14 @@ int main(void) {
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
               "should reject aging cycle quantum above limit");
         cfg.dma_aging_cycle_quantum = 1;
+        cfg.dma_aging_quantum_domain = 2;
+        CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
+              "should reject aging quantum domain=2");
+        cfg.dma_aging_quantum_domain = TU_DMA_CONFIG_AGING_QUANTUM_CORE_CYCLES;
+        cfg.dma_aging_quantum_ns = 0.0;
+        CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
+              "should reject zero aging quantum ns");
+        cfg.dma_aging_quantum_ns = 1.0;
         cfg.dma_binding_policy = 5;
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0, "should reject binding=5");
         cfg.dma_binding_policy = TU_DMA_CONFIG_BIND_EXPLICIT;
@@ -706,6 +727,28 @@ int main(void) {
               cfg.dma_aging_metric == TU_DMA_CONFIG_AGING_WAIT_CYCLES &&
               cfg.dma_aging_cycle_quantum == 64,
               "cycle aging metric propagation");
+        CHECK(tu_config_load_string(
+                  "{\"tu\":{\"memory\":{\"dram\":{\"core_clock_ghz\":2}},"
+                  "\"dma\":{\"aging_metric\":\"cycles\","
+                  "\"aging_quantum_domain\":\"physical_ns\","
+                  "\"aging_quantum_ns\":64}}}",
+                  &cfg, err, sizeof(err)) == 0 &&
+              cfg.dma_aging_quantum_domain ==
+                  TU_DMA_CONFIG_AGING_QUANTUM_PHYSICAL_NS &&
+              tu_config_to_runtime(&cfg).dma_aging_cycle_quantum == 128,
+              "physical-ns aging quantum conversion");
+        CHECK(tu_config_load_string(
+                  "{\"tu\":{\"memory\":{\"dram\":{\"core_clock_ghz\":1.5}},"
+                  "\"dma\":{\"aging_metric\":\"cycles\","
+                  "\"aging_quantum_domain\":\"physical_ns\","
+                  "\"aging_quantum_ns\":1.1}}}",
+                  &cfg, err, sizeof(err)) == 0 &&
+              tu_config_to_runtime(&cfg).dma_aging_cycle_quantum == 2,
+              "physical-ns aging quantum rounds up fractional cycles");
+        CHECK(tu_config_load_string(
+                  "{\"tu\":{\"dma\":{\"aging_quantum_domain\":\"wall_time\"}}}",
+                  &cfg, err, sizeof(err)) != 0,
+              "should reject unsupported aging quantum domain");
         CHECK(tu_config_load_string(
                   "{\"tu\":{\"dma\":{\"aging_metric\":\"time\"}}}",
                   &cfg, err, sizeof(err)) != 0,
@@ -846,6 +889,9 @@ int main(void) {
         cfg.dma_aging_metric = TU_DMA_CONFIG_AGING_WAIT_CYCLES;
         cfg.dma_aging_increment = 4;
         cfg.dma_aging_cycle_quantum = 64;
+        cfg.dma_aging_quantum_domain = TU_DMA_CONFIG_AGING_QUANTUM_PHYSICAL_NS;
+        cfg.dma_aging_quantum_ns = 32.0;
+        cfg.dram_core_clock_ghz = 2.0;
         cfg.dma_binding_policy = TU_DMA_CONFIG_BIND_LEAST_PROJECTED_CYCLES;
         cfg.dma_max_outstanding = 7;
         cfg.dma_async_mode = false;
@@ -871,7 +917,7 @@ int main(void) {
               "active DMA aging increment");
         CHECK(g_tu_dma.aging_metric == TU_DMA_AGING_BY_WAIT_CYCLES &&
               g_tu_dma.aging_cycle_quantum == 64,
-              "active DMA cycle aging policy");
+              "active DMA physical-ns aging policy");
         CHECK(g_tu_dma.binding_policy == TU_DMA_BIND_LEAST_PROJECTED_CYCLES,
               "active DMA channel binding");
         CHECK(g_tu_dma.channels[0].max_depth == 7 &&

@@ -108,6 +108,8 @@ tu:
     aging_metric: "grants"       # grants (compat) | cycles (wall-clock wait quantized below)
     aging_increment: 1           # Priority levels gained per aging step [1,255]
     aging_cycle_quantum: 1       # Cycles per aging step in cycles mode [1,1048576]
+    aging_quantum_domain: "core_cycles" # core_cycles (compat) | physical_ns
+    aging_quantum_ns: 1.0        # Physical aging step source in ns when physical_ns is selected
     channel_binding: "explicit"  # explicit (compat) | round_robin | least_outstanding | least_bytes | least_projected_cycles
     max_outstanding: 4    # Maximum outstanding requests per channel
     async_mode: false     # true = async DMA with completion notification

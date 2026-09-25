@@ -117,6 +117,11 @@ typedef enum {
 } tu_dma_config_aging_metric_t;
 
 typedef enum {
+    TU_DMA_CONFIG_AGING_QUANTUM_CORE_CYCLES = 0,
+    TU_DMA_CONFIG_AGING_QUANTUM_PHYSICAL_NS = 1
+} tu_dma_config_aging_quantum_domain_t;
+
+typedef enum {
     TU_DMA_CONFIG_BIND_EXPLICIT = 0,
     TU_DMA_CONFIG_BIND_ROUND_ROBIN = 1,
     TU_DMA_CONFIG_BIND_LEAST_OUTSTANDING = 2,
@@ -259,6 +264,8 @@ typedef struct tu_config_t {
     int      dma_aging_metric;      /* missed_grants=0, wait_cycles=1 */
     uint32_t dma_aging_increment;   /* priority levels gained per aging step */
     uint32_t dma_aging_cycle_quantum; /* cycles per aging step in cycle mode */
+    int      dma_aging_quantum_domain; /* core_cycles=0 (compat), physical_ns=1 */
+    double   dma_aging_quantum_ns; /* physical aging quantum source */
     int      dma_binding_policy;    /* explicit=0, RR=1, least-outstanding=2, bytes=3, projected-cycles=4 */
     uint32_t dma_max_outstanding;
     bool     dma_async_mode;

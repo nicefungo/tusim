@@ -90,6 +90,8 @@
       "aging_metric": "grants",
       "aging_increment": 1,
       "aging_cycle_quantum": 1,
+      "aging_quantum_domain": "core_cycles",
+      "aging_quantum_ns": 1.0,
       "channel_binding": "explicit",
       "max_outstanding": 4,
       "async_mode": false,

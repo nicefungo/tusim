@@ -62,6 +62,9 @@ def main() -> int:
                 'aging_metric: "cycles"',
             "aging_increment: 1": "aging_increment: 4",
             "aging_cycle_quantum: 1": "aging_cycle_quantum: 64",
+            'aging_quantum_domain: "core_cycles"':
+                'aging_quantum_domain: "physical_ns"',
+            "aging_quantum_ns: 1.0": "aging_quantum_ns: 64.0",
             'payload_scope: "descriptor"':
                 'payload_scope: "burst_commands"',
             '    fp16:\n      rounding: "round_nearest_even"':
@@ -98,6 +101,7 @@ def main() -> int:
             '_Static_assert(TU_DMA_AGING_SCOPE == TU_DMA_AGING_SCOPE_QUEUE_HEAD, "DMA aging scope");\n'
             '_Static_assert(TU_DMA_AGING_METRIC == TU_DMA_AGING_METRIC_CYCLES, "DMA aging metric");\n'
             '_Static_assert(TU_DMA_AGING_INCREMENT == 4, "DMA aging increment");\n'
+            '_Static_assert(TU_DMA_AGING_QUANTUM_DOMAIN == TU_DMA_AGING_QUANTUM_PHYSICAL_NS, "DMA aging quantum domain");\n'
             '_Static_assert(TU_DMA_AGING_CYCLE_QUANTUM == 64, "DMA aging quantum");\n'
             '_Static_assert(TU_FP16_ROUNDING_MODE == TU_FP16_ROUNDING_STOCHASTIC, "rounding");\n'
             'int main(void) { tu_runtime_config_t c = tu_runtime_config_default(); '
@@ -108,6 +112,8 @@ def main() -> int:
             'c.dma_aging_scope != TU_DMA_AGING_SCOPE_QUEUE_HEAD || '
             'c.dma_aging_metric != TU_DMA_AGING_METRIC_CYCLES || '
             'c.dma_aging_increment != 4 || '
+            'c.dma_aging_quantum_domain != TU_DMA_AGING_QUANTUM_PHYSICAL_NS || '
+            'c.dma_aging_quantum_ns != 64.0 || '
             'c.dma_aging_cycle_quantum != 64 || '
             'c.dma_payload_scope != TU_DMA_PAYLOAD_SCOPE_BURST_COMMANDS; }\n'
         )

@@ -178,6 +178,14 @@ static int parse_dma_aging_metric_str(const char *s) {
     return -1;
 }
 
+static int parse_dma_aging_quantum_domain_str(const char *s) {
+    if (!s || strcmp(s, "core_cycles") == 0)
+        return TU_DMA_CONFIG_AGING_QUANTUM_CORE_CYCLES;
+    if (strcmp(s, "physical_ns") == 0)
+        return TU_DMA_CONFIG_AGING_QUANTUM_PHYSICAL_NS;
+    return -1;
+}
+
 static int parse_dma_binding_policy_str(const char *s) {
     if (!s || strcmp(s, "explicit") == 0)
         return TU_DMA_CONFIG_BIND_EXPLICIT;
@@ -410,6 +418,8 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->dma_aging_metric    = TU_DMA_CONFIG_AGING_MISSED_GRANTS;
     cfg->dma_aging_increment = 1;
     cfg->dma_aging_cycle_quantum = 1;
+    cfg->dma_aging_quantum_domain = TU_DMA_CONFIG_AGING_QUANTUM_CORE_CYCLES;
+    cfg->dma_aging_quantum_ns = 1.0;
     cfg->dma_binding_policy  = TU_DMA_CONFIG_BIND_EXPLICIT;
     cfg->dma_max_outstanding = 4;
     cfg->dma_async_mode      = false;
@@ -509,7 +519,12 @@ tu_runtime_config_t tu_config_to_runtime(const struct tu_config_t *cfg) {
     rt.dma_aging_scope = cfg->dma_aging_scope;
     rt.dma_aging_metric = cfg->dma_aging_metric;
     rt.dma_aging_increment = cfg->dma_aging_increment;
-    rt.dma_aging_cycle_quantum = cfg->dma_aging_cycle_quantum;
+    rt.dma_aging_quantum_domain = cfg->dma_aging_quantum_domain;
+    rt.dma_aging_quantum_ns = cfg->dma_aging_quantum_ns;
+    rt.dma_aging_cycle_quantum = cfg->dma_aging_quantum_domain ==
+            TU_DMA_CONFIG_AGING_QUANTUM_PHYSICAL_NS ?
+        (uint32_t)ceil(cfg->dma_aging_quantum_ns * latency_clock) :
+        cfg->dma_aging_cycle_quantum;
     rt.dma_binding_policy = cfg->dma_binding_policy;
     rt.dma_max_outstanding = cfg->dma_max_outstanding;
     rt.dma_async_mode = cfg->dma_async_mode;
@@ -762,6 +777,12 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
             cfg->dma_aging_increment = (uint32_t)iv;
         if (parse_opt_int64(d, "aging_cycle_quantum", &iv))
             cfg->dma_aging_cycle_quantum = (uint32_t)iv;
+        const tu_json_value_t *aging_domain =
+            tu_json_get(d, "aging_quantum_domain");
+        if (aging_domain && aging_domain->type == TU_JSON_STRING)
+            cfg->dma_aging_quantum_domain = parse_dma_aging_quantum_domain_str(
+                tu_json_as_string(aging_domain, NULL));
+        parse_opt_double(d, "aging_quantum_ns", &cfg->dma_aging_quantum_ns);
         const tu_json_value_t *binding = tu_json_get(d, "channel_binding");
         if (binding && binding->type == TU_JSON_STRING)
             cfg->dma_binding_policy = parse_dma_binding_policy_str(
@@ -1135,6 +1156,22 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
                      "DMA aging_cycle_quantum must be in [1,1048576]");
+        return -1;
+    }
+    if (cfg->dma_aging_quantum_domain < TU_DMA_CONFIG_AGING_QUANTUM_CORE_CYCLES ||
+        cfg->dma_aging_quantum_domain > TU_DMA_CONFIG_AGING_QUANTUM_PHYSICAL_NS) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DMA aging_quantum_domain must be core_cycles or physical_ns");
+        return -1;
+    }
+    if (!(cfg->dma_aging_quantum_ns > 0.0) ||
+        cfg->dma_aging_quantum_ns > 1048576.0 ||
+        (cfg->dma_aging_quantum_domain == TU_DMA_CONFIG_AGING_QUANTUM_PHYSICAL_NS &&
+         ceil(cfg->dma_aging_quantum_ns * cfg->dram_core_clock_ghz) > 1048576.0)) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DMA aging_quantum_ns must convert to [1,1048576] core cycles");
         return -1;
     }
     if (cfg->dma_binding_policy < TU_DMA_CONFIG_BIND_EXPLICIT ||
@@ -1662,6 +1699,11 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             cfg->dma_aging_increment);
     fprintf(out, "| `dma_aging_cycle_quantum` | %u | cycles/step | Wait-cycle quantum used by cycle aging |\n",
             cfg->dma_aging_cycle_quantum);
+    fprintf(out, "| `dma_aging_quantum_domain` | %s | enum | Aging quantum uses fixed core cycles or physical nanoseconds |\n",
+            cfg->dma_aging_quantum_domain == TU_DMA_CONFIG_AGING_QUANTUM_PHYSICAL_NS ?
+            "physical_ns" : "core_cycles");
+    fprintf(out, "| `dma_aging_quantum_ns` | %.3f | ns/step | Physical source converted with ceil(ns * core_clock_ghz) |\n",
+            cfg->dma_aging_quantum_ns);
     const char *binding_name = cfg->dma_binding_policy == TU_DMA_CONFIG_BIND_ROUND_ROBIN ?
                                "round_robin" :
                                (cfg->dma_binding_policy == TU_DMA_CONFIG_BIND_LEAST_OUTSTANDING ?
