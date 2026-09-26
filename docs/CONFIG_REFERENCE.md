@@ -99,6 +99,7 @@
 | `dma_aging_scope` | submission | enum | Aging starts at accepted submission or queue-head eligibility |
 | `dma_aging_metric` | grants | enum | Aging measured in missed grants or quantized wait cycles |
 | `dma_aging_increment` | 1 | levels/step | Priority levels gained per aging step |
+| `dma_aging_max_boost` | 0 | priority levels | Maximum aging boost; 0 preserves unbounded promotion |
 | `dma_aging_cycle_quantum` | 1 | cycles/step | Wait-cycle quantum used by cycle aging |
 | `dma_aging_quantum_domain` | core_cycles | enum | Aging quantum uses fixed core cycles or physical nanoseconds |
 | `dma_aging_quantum_ns` | 1.000 | ns/step | Physical source converted with ceil(ns * core_clock_ghz) |

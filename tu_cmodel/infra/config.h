@@ -263,6 +263,7 @@ typedef struct tu_config_t {
     int      dma_aging_scope;       /* submission=0, queue_head=1 */
     int      dma_aging_metric;      /* missed_grants=0, wait_cycles=1 */
     uint32_t dma_aging_increment;   /* priority levels gained per aging step */
+    uint32_t dma_aging_max_boost;   /* 0=unbounded compatibility; otherwise cap */
     uint32_t dma_aging_cycle_quantum; /* cycles per aging step in cycle mode */
     int      dma_aging_quantum_domain; /* core_cycles=0 (compat), physical_ns=1 */
     double   dma_aging_quantum_ns; /* physical aging quantum source */

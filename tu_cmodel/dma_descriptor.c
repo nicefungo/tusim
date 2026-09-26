@@ -26,10 +26,11 @@ tu_dma_engine_t g_tu_dma = {0};
  * Lifecycle
  * ================================================================ */
 
-void tu_dma_init_config_boundary_aging_policy(bool async, uint32_t num_channels,
+void tu_dma_init_config_boundary_aging_policy_cap(bool async, uint32_t num_channels,
                                 uint32_t max_queue_depth, int bus_mode,
                                 int arb_policy, int aging_scope,
                                 int aging_metric, uint32_t aging_increment,
+                                uint32_t aging_max_boost,
                                 uint32_t aging_cycle_quantum,
                                 int binding_policy,
                                 uint32_t bus_width_bits,
@@ -86,6 +87,13 @@ void tu_dma_init_config_boundary_aging_policy(bool async, uint32_t num_channels,
         return;
     }
     g_tu_dma.aging_increment = aging_increment;
+    if (aging_max_boost > UINT8_MAX) {
+        fprintf(stderr, "DMA: aging maximum boost must be in [0,255], got %u\n",
+                aging_max_boost);
+        memset(&g_tu_dma, 0, sizeof(g_tu_dma));
+        return;
+    }
+    g_tu_dma.aging_max_boost = aging_max_boost;
     if (aging_cycle_quantum == 0)
         aging_cycle_quantum = 1; /* zero-initialized runtime compatibility */
     if (aging_cycle_quantum > 1048576u) {
@@ -206,6 +214,39 @@ void tu_dma_init_config_boundary_aging_policy(bool async, uint32_t num_channels,
         g_tu_dma.channels[i].channel_id = (uint8_t)i;
         g_tu_dma.channels[i].max_depth = max_queue_depth > 0 ? max_queue_depth : TU_DMA_MAX_OUTSTANDING;
     }
+}
+
+void tu_dma_init_config_boundary_aging_policy(bool async, uint32_t num_channels,
+                                uint32_t max_queue_depth, int bus_mode,
+                                int arb_policy, int aging_scope,
+                                int aging_metric, uint32_t aging_increment,
+                                uint32_t aging_cycle_quantum,
+                                int binding_policy,
+                                uint32_t bus_width_bits,
+                                uint32_t read_latency_cycles,
+                                uint32_t write_latency_cycles,
+                                uint32_t max_burst_bytes,
+                                uint32_t read_max_burst_bytes,
+                                uint32_t write_max_burst_bytes,
+                                uint32_t burst_issue_cycles,
+                                uint32_t read_burst_issue_cycles,
+                                uint32_t write_burst_issue_cycles,
+                                bool read_issue_configured,
+                                bool write_issue_configured,
+                                int burst_segmentation,
+                                int base_latency_scope,
+                                int payload_scope,
+                                int issue_payload_mode,
+                                int burst_boundary_mode) {
+    tu_dma_init_config_boundary_aging_policy_cap(
+        async, num_channels, max_queue_depth, bus_mode, arb_policy,
+        aging_scope, aging_metric, aging_increment, 0u, aging_cycle_quantum,
+        binding_policy, bus_width_bits, read_latency_cycles,
+        write_latency_cycles, max_burst_bytes, read_max_burst_bytes,
+        write_max_burst_bytes, burst_issue_cycles, read_burst_issue_cycles,
+        write_burst_issue_cycles, read_issue_configured,
+        write_issue_configured, burst_segmentation, base_latency_scope,
+        payload_scope, issue_payload_mode, burst_boundary_mode);
 }
 
 void tu_dma_init_config_boundary_aging_rate(bool async, uint32_t num_channels,
@@ -1608,10 +1649,17 @@ static uint8_t descriptor_effective_priority(
         age = g_tu_dma.arbitration_epoch - start;
     }
     uint64_t room = UINT8_MAX - (uint64_t)desc->priority;
-    if (age > room / g_tu_dma.aging_increment)
-        return UINT8_MAX;
-    return (uint8_t)((uint64_t)desc->priority +
-                     age * g_tu_dma.aging_increment);
+    uint64_t boost;
+    if (age > UINT64_MAX / g_tu_dma.aging_increment)
+        boost = UINT64_MAX;
+    else
+        boost = age * g_tu_dma.aging_increment;
+    if (g_tu_dma.aging_max_boost != 0 &&
+        boost > g_tu_dma.aging_max_boost)
+        boost = g_tu_dma.aging_max_boost;
+    if (boost > room)
+        boost = room;
+    return (uint8_t)((uint64_t)desc->priority + boost);
 }
 
 int tu_dma_tick(void) {

@@ -417,6 +417,7 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->dma_aging_scope     = TU_DMA_CONFIG_AGING_SUBMISSION;
     cfg->dma_aging_metric    = TU_DMA_CONFIG_AGING_MISSED_GRANTS;
     cfg->dma_aging_increment = 1;
+    cfg->dma_aging_max_boost = 0;
     cfg->dma_aging_cycle_quantum = 1;
     cfg->dma_aging_quantum_domain = TU_DMA_CONFIG_AGING_QUANTUM_CORE_CYCLES;
     cfg->dma_aging_quantum_ns = 1.0;
@@ -519,6 +520,7 @@ tu_runtime_config_t tu_config_to_runtime(const struct tu_config_t *cfg) {
     rt.dma_aging_scope = cfg->dma_aging_scope;
     rt.dma_aging_metric = cfg->dma_aging_metric;
     rt.dma_aging_increment = cfg->dma_aging_increment;
+    rt.dma_aging_max_boost = cfg->dma_aging_max_boost;
     rt.dma_aging_quantum_domain = cfg->dma_aging_quantum_domain;
     rt.dma_aging_quantum_ns = cfg->dma_aging_quantum_ns;
     rt.dma_aging_cycle_quantum = cfg->dma_aging_quantum_domain ==
@@ -775,6 +777,8 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
                 tu_json_as_string(aging_metric, NULL));
         if (parse_opt_int64(d, "aging_increment", &iv))
             cfg->dma_aging_increment = (uint32_t)iv;
+        if (parse_opt_int64(d, "aging_max_boost", &iv))
+            cfg->dma_aging_max_boost = (uint32_t)iv;
         if (parse_opt_int64(d, "aging_cycle_quantum", &iv))
             cfg->dma_aging_cycle_quantum = (uint32_t)iv;
         const tu_json_value_t *aging_domain =
@@ -1149,6 +1153,12 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
                      "DMA aging_increment must be in [1,255]");
+        return -1;
+    }
+    if (cfg->dma_aging_max_boost > UINT8_MAX) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DMA aging_max_boost must be in [0,255]");
         return -1;
     }
     if (cfg->dma_aging_cycle_quantum == 0 ||
@@ -1697,6 +1707,8 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             "cycles" : "grants");
     fprintf(out, "| `dma_aging_increment` | %u | levels/step | Priority levels gained per aging step |\n",
             cfg->dma_aging_increment);
+    fprintf(out, "| `dma_aging_max_boost` | %u | priority levels | Maximum aging boost; 0 preserves unbounded promotion |\n",
+            cfg->dma_aging_max_boost);
     fprintf(out, "| `dma_aging_cycle_quantum` | %u | cycles/step | Wait-cycle quantum used by cycle aging |\n",
             cfg->dma_aging_cycle_quantum);
     fprintf(out, "| `dma_aging_quantum_domain` | %s | enum | Aging quantum uses fixed core cycles or physical nanoseconds |\n",

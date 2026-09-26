@@ -361,6 +361,7 @@ def generate_header(config, output_path):
     aging_metric_map = {'grants': 0, 'cycles': 1}
     L(f'#define TU_DMA_AGING_METRIC     {aging_metric_map[dma.get("aging_metric", "grants")]}')
     L(f'#define TU_DMA_AGING_INCREMENT  {dma.get("aging_increment", 1)}')
+    L(f'#define TU_DMA_AGING_MAX_BOOST  {dma.get("aging_max_boost", 0)}')
     aging_domain_map = {'core_cycles': 0, 'physical_ns': 1}
     aging_domain = dma.get('aging_quantum_domain', 'core_cycles')
     aging_quantum_ns = float(dma.get('aging_quantum_ns', 1.0))
@@ -539,6 +540,7 @@ def generate_header(config, output_path):
     L('    int      dma_aging_scope;')
     L('    int      dma_aging_metric;')
     L('    uint32_t dma_aging_increment;')
+    L('    uint32_t dma_aging_max_boost;')
     L('    uint32_t dma_aging_cycle_quantum;')
     L('    int      dma_aging_quantum_domain;')
     L('    double   dma_aging_quantum_ns;')
@@ -595,6 +597,7 @@ def generate_header(config, output_path):
     L(f'        .dma_aging_scope    = TU_DMA_AGING_SCOPE,')
     L(f'        .dma_aging_metric   = TU_DMA_AGING_METRIC,')
     L(f'        .dma_aging_increment = TU_DMA_AGING_INCREMENT,')
+    L(f'        .dma_aging_max_boost = TU_DMA_AGING_MAX_BOOST,')
     L(f'        .dma_aging_cycle_quantum = TU_DMA_AGING_CYCLE_QUANTUM,')
     L(f'        .dma_aging_quantum_domain = TU_DMA_AGING_QUANTUM_DOMAIN,')
     L(f'        .dma_aging_quantum_ns = TU_DMA_AGING_QUANTUM_NS,')

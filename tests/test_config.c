@@ -175,6 +175,8 @@ int main(void) {
               "DMA size-only burst boundary default");
         CHECK(cfg.dma_aging_increment == 1,
               "DMA one-level aging default");
+        CHECK(cfg.dma_aging_max_boost == 0,
+              "DMA unbounded aging boost compatibility default");
         CHECK(cfg.dma_aging_metric == TU_DMA_CONFIG_AGING_MISSED_GRANTS &&
               cfg.dma_aging_cycle_quantum == 1,
               "DMA grant aging metric default");
@@ -247,6 +249,7 @@ int main(void) {
             "    \"aging_scope\": \"queue_head\","
             "    \"aging_metric\": \"cycles\","
             "    \"aging_increment\": 4,"
+            "    \"aging_max_boost\": 3,"
             "    \"aging_cycle_quantum\": 64,"
             "    \"aging_quantum_domain\": \"physical_ns\","
             "    \"aging_quantum_ns\": 64.0,"
@@ -287,8 +290,9 @@ int main(void) {
         CHECK(cfg.dma_aging_scope == TU_DMA_CONFIG_AGING_QUEUE_HEAD &&
               rt.dma_aging_scope == TU_DMA_CONFIG_AGING_QUEUE_HEAD,
               "DMA aging scope parse/runtime propagation");
-        CHECK(cfg.dma_aging_increment == 4 && rt.dma_aging_increment == 4,
-              "DMA aging increment parse/runtime propagation");
+        CHECK(cfg.dma_aging_increment == 4 && rt.dma_aging_increment == 4 &&
+              cfg.dma_aging_max_boost == 3 && rt.dma_aging_max_boost == 3,
+              "DMA aging increment/cap parse/runtime propagation");
         CHECK(cfg.dma_aging_metric == TU_DMA_CONFIG_AGING_WAIT_CYCLES &&
               rt.dma_aging_metric == TU_DMA_CONFIG_AGING_WAIT_CYCLES &&
               cfg.dma_aging_cycle_quantum == 64 &&
@@ -667,6 +671,10 @@ int main(void) {
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
               "should reject aging increment=256");
         cfg.dma_aging_increment = 1;
+        cfg.dma_aging_max_boost = 256;
+        CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
+              "should reject aging max boost=256");
+        cfg.dma_aging_max_boost = 0;
         cfg.dma_aging_cycle_quantum = 0;
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
               "should reject aging cycle quantum=0");
@@ -888,6 +896,7 @@ int main(void) {
         cfg.dma_aging_scope = TU_DMA_CONFIG_AGING_QUEUE_HEAD;
         cfg.dma_aging_metric = TU_DMA_CONFIG_AGING_WAIT_CYCLES;
         cfg.dma_aging_increment = 4;
+        cfg.dma_aging_max_boost = 3;
         cfg.dma_aging_cycle_quantum = 64;
         cfg.dma_aging_quantum_domain = TU_DMA_CONFIG_AGING_QUANTUM_PHYSICAL_NS;
         cfg.dma_aging_quantum_ns = 32.0;
@@ -915,6 +924,8 @@ int main(void) {
               "active DMA aging scope");
         CHECK(g_tu_dma.aging_increment == 4,
               "active DMA aging increment");
+        CHECK(g_tu_dma.aging_max_boost == 3,
+              "active DMA aging boost cap");
         CHECK(g_tu_dma.aging_metric == TU_DMA_AGING_BY_WAIT_CYCLES &&
               g_tu_dma.aging_cycle_quantum == 64,
               "active DMA physical-ns aging policy");

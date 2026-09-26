@@ -89,6 +89,7 @@
       "aging_scope": "submission",
       "aging_metric": "grants",
       "aging_increment": 1,
+      "aging_max_boost": 0,
       "aging_cycle_quantum": 1,
       "aging_quantum_domain": "core_cycles",
       "aging_quantum_ns": 1.0,

@@ -180,10 +180,11 @@ static void init_aging_scope(int scope) {
         TU_DMA_BOUNDARY_SIZE_ONLY);
 }
 
-static void init_aging_rate(uint32_t increment) {
-    tu_dma_init_config_boundary_aging_rate(
+static void init_aging_rate(uint32_t increment, uint32_t max_boost) {
+    tu_dma_init_config_boundary_aging_policy_cap(
         true, 2, 8, TU_DMA_BUS_MODE_SHARED_SERIAL,
-        TU_DMA_ARB_AGING_PRIORITY, TU_DMA_AGING_FROM_SUBMISSION, increment,
+        TU_DMA_ARB_AGING_PRIORITY, TU_DMA_AGING_FROM_SUBMISSION,
+        TU_DMA_AGING_BY_MISSED_GRANTS, increment, max_boost, 1u,
         TU_DMA_BIND_EXPLICIT, TU_DMA_BUS_WIDTH_BITS,
         TU_LATENCY_DRAM_READ, TU_LATENCY_DRAM_WRITE,
         TU_DMA_MAX_BURST_BYTES, TU_DMA_MAX_BURST_BYTES,
@@ -261,7 +262,8 @@ static int run_deep_queue_case(int scope, uint64_t *deep_complete,
 
 /* Priority-4 arrivals expose the fairness/latency tuning range. An increment
  * of 1/2/4 lets the old priority-0 descriptor tie after 4/2/1 missed grants. */
-static int run_aging_rate_case(uint32_t increment, uint64_t *low_complete,
+static int run_aging_rate_case(uint32_t increment, uint32_t max_boost,
+                               uint64_t *low_complete,
                                uint64_t *batch_complete) {
     enum { BYTES = 64, HIGH_COUNT = 5 };
     static uint8_t src[HIGH_COUNT + 1][BYTES];
@@ -271,8 +273,9 @@ static int run_aging_rate_case(uint32_t increment, uint64_t *low_complete,
     tu_sram_init(&sram, sizeof(src), "dma-aging-rate-sweep");
     sram.banks.bw_modeling = false;
     memset(src, 0x6b, sizeof(src));
-    init_aging_rate(increment);
-    if (g_tu_dma.aging_increment != increment) return -1;
+    init_aging_rate(increment, max_boost);
+    if (g_tu_dma.aging_increment != increment ||
+        g_tu_dma.aging_max_boost != max_boost) return -1;
 
     low = tu_dma_desc_create_linear(0, TU_DMA_DIR_HOST_TO_TU, &sram,
                                     0, src[0], 1, BYTES);
@@ -305,9 +308,10 @@ static int run_aging_rate_case(uint32_t increment, uint64_t *low_complete,
 
     *low_complete = low->cycles_completed;
     *batch_complete = g_tu_dma.current_cycle;
-    if ((increment == 1u && *low_complete != 261u) ||
-        (increment == 2u && *low_complete != 157u) ||
-        (increment == 4u && *low_complete != 105u) ||
+    uint64_t expected_low = max_boost != 0u && max_boost < 4u ? 313u :
+                            (increment == 1u ? 261u :
+                             (increment == 2u ? 157u : 105u));
+    if (*low_complete != expected_low ||
         *batch_complete != 313u ||
         memcmp(tu_sram_raw_ptr(&sram), src, sizeof(src)) != 0)
         return -6;
@@ -455,13 +459,25 @@ int main(void) {
     const uint32_t increments[] = {1u, 2u, 4u};
     for (uint32_t i = 0; i < 3; i++) {
         uint64_t low = 0, batch = 0;
-        int rc = run_aging_rate_case(increments[i], &low, &batch);
+        int rc = run_aging_rate_case(increments[i], 0u, &low, &batch);
         if (rc != 0) {
             fprintf(stderr, "FAIL aging_increment=%u rc=%d\n",
                     increments[i], rc);
             return 70 - rc;
         }
         printf("%15u %21lu %14lu\n", increments[i],
+               (unsigned long)low, (unsigned long)batch);
+    }
+    printf("\naging_max_boost low_priority_complete batch_complete\n");
+    const uint32_t caps[] = {0u, 2u, 4u};
+    for (uint32_t i = 0; i < 3; i++) {
+        uint64_t low = 0, batch = 0;
+        int rc = run_aging_rate_case(1u, caps[i], &low, &batch);
+        if (rc != 0) {
+            fprintf(stderr, "FAIL aging_max_boost=%u rc=%d\n", caps[i], rc);
+            return 80 - rc;
+        }
+        printf("%15u %21lu %14lu\n", caps[i],
                (unsigned long)low, (unsigned long)batch);
     }
     printf("\naging_metric old_low_complete fresh_high_complete batch_complete\n");
@@ -517,6 +533,6 @@ int main(void) {
                    (unsigned long)fresh, (unsigned long)batch);
         }
     }
-    printf("PASS: exact order/cycles, aging scopes/rates/metrics/domains, config conversion, and byte movement\n");
+    printf("PASS: exact order/cycles, aging scopes/rates/caps/metrics/domains, config conversion, and byte movement\n");
     return 0;
 }

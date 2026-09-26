@@ -192,6 +192,7 @@ extern "C" {
 #define TU_DMA_AGING_METRIC_CYCLES 1
 #define TU_DMA_AGING_METRIC     0
 #define TU_DMA_AGING_INCREMENT  1
+#define TU_DMA_AGING_MAX_BOOST  0
 #define TU_DMA_AGING_QUANTUM_CORE_CYCLES 0
 #define TU_DMA_AGING_QUANTUM_PHYSICAL_NS 1
 #define TU_DMA_AGING_QUANTUM_DOMAIN 0
@@ -332,6 +333,7 @@ typedef struct {
     int      dma_aging_scope;
     int      dma_aging_metric;
     uint32_t dma_aging_increment;
+    uint32_t dma_aging_max_boost;
     uint32_t dma_aging_cycle_quantum;
     int      dma_aging_quantum_domain;
     double   dma_aging_quantum_ns;
@@ -388,6 +390,7 @@ static inline tu_runtime_config_t tu_runtime_config_default(void) {
         .dma_aging_scope    = TU_DMA_AGING_SCOPE,
         .dma_aging_metric   = TU_DMA_AGING_METRIC,
         .dma_aging_increment = TU_DMA_AGING_INCREMENT,
+        .dma_aging_max_boost = TU_DMA_AGING_MAX_BOOST,
         .dma_aging_cycle_quantum = TU_DMA_AGING_CYCLE_QUANTUM,
         .dma_aging_quantum_domain = TU_DMA_AGING_QUANTUM_DOMAIN,
         .dma_aging_quantum_ns = TU_DMA_AGING_QUANTUM_NS,
