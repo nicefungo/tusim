@@ -350,8 +350,11 @@ def generate_header(config, output_path):
     L('#define TU_DMA_ARB_DEFAULT_ROUND_ROBIN  0')
     L('#define TU_DMA_ARB_DEFAULT_STRICT_PRIORITY 1')
     L('#define TU_DMA_ARB_DEFAULT_AGING_PRIORITY 2')
-    arb_map = {'round_robin': 0, 'strict_priority': 1, 'aging_priority': 2}
+    L('#define TU_DMA_ARB_DEFAULT_DEFICIT_ROUND_ROBIN 3')
+    arb_map = {'round_robin': 0, 'strict_priority': 1, 'aging_priority': 2,
+               'deficit_round_robin': 3}
     L(f'#define TU_DMA_ARB_POLICY       {arb_map[dma.get("arbitration", "round_robin")]}')
+    L(f'#define TU_DMA_DRR_QUANTUM_BYTES {dma.get("drr_quantum_bytes", 256)}')
     L('#define TU_DMA_AGING_SCOPE_SUBMISSION 0')
     L('#define TU_DMA_AGING_SCOPE_QUEUE_HEAD 1')
     aging_scope_map = {'submission': 0, 'queue_head': 1}
@@ -537,6 +540,7 @@ def generate_header(config, output_path):
     L('    uint32_t dma_num_channels;')
     L('    int      dma_bus_mode;')
     L('    int      dma_arb_policy;')
+    L('    uint32_t dma_drr_quantum_bytes;')
     L('    int      dma_aging_scope;')
     L('    int      dma_aging_metric;')
     L('    uint32_t dma_aging_increment;')
@@ -594,6 +598,7 @@ def generate_header(config, output_path):
     L(f'        .dma_num_channels   = TU_DMA_CHANNELS,')
     L(f'        .dma_bus_mode       = TU_DMA_BUS_MODE,')
     L(f'        .dma_arb_policy     = TU_DMA_ARB_POLICY,')
+    L(f'        .dma_drr_quantum_bytes = TU_DMA_DRR_QUANTUM_BYTES,')
     L(f'        .dma_aging_scope    = TU_DMA_AGING_SCOPE,')
     L(f'        .dma_aging_metric   = TU_DMA_AGING_METRIC,')
     L(f'        .dma_aging_increment = TU_DMA_AGING_INCREMENT,')

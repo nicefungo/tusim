@@ -26,12 +26,13 @@ tu_dma_engine_t g_tu_dma = {0};
  * Lifecycle
  * ================================================================ */
 
-void tu_dma_init_config_boundary_aging_policy_cap(bool async, uint32_t num_channels,
+void tu_dma_init_config_boundary_aging_policy_drr(bool async, uint32_t num_channels,
                                 uint32_t max_queue_depth, int bus_mode,
                                 int arb_policy, int aging_scope,
                                 int aging_metric, uint32_t aging_increment,
                                 uint32_t aging_max_boost,
                                 uint32_t aging_cycle_quantum,
+                                uint32_t drr_quantum_bytes,
                                 int binding_policy,
                                 uint32_t bus_width_bits,
                                 uint32_t read_latency_cycles,
@@ -59,7 +60,8 @@ void tu_dma_init_config_boundary_aging_policy_cap(bool async, uint32_t num_chann
     g_tu_dma.bus_mode = (tu_dma_bus_mode_t)bus_mode;
     if (arb_policy != TU_DMA_ARB_ROUND_ROBIN &&
         arb_policy != TU_DMA_ARB_STRICT_PRIORITY &&
-        arb_policy != TU_DMA_ARB_AGING_PRIORITY) {
+        arb_policy != TU_DMA_ARB_AGING_PRIORITY &&
+        arb_policy != TU_DMA_ARB_DEFICIT_ROUND_ROBIN) {
         fprintf(stderr, "DMA: unsupported arbitration policy %d\n", arb_policy);
         return;
     }
@@ -103,6 +105,16 @@ void tu_dma_init_config_boundary_aging_policy_cap(bool async, uint32_t num_chann
         return;
     }
     g_tu_dma.aging_cycle_quantum = aging_cycle_quantum;
+    if (drr_quantum_bytes == 0)
+        drr_quantum_bytes = 256u;
+    if (drr_quantum_bytes < 16u || drr_quantum_bytes > 65536u ||
+        (drr_quantum_bytes & (drr_quantum_bytes - 1u)) != 0u) {
+        fprintf(stderr, "DMA: DRR quantum must be a power of two in [16,65536], got %u\n",
+                drr_quantum_bytes);
+        memset(&g_tu_dma, 0, sizeof(g_tu_dma));
+        return;
+    }
+    g_tu_dma.drr_quantum_bytes = drr_quantum_bytes;
     if (binding_policy != TU_DMA_BIND_EXPLICIT &&
         binding_policy != TU_DMA_BIND_ROUND_ROBIN &&
         binding_policy != TU_DMA_BIND_LEAST_OUTSTANDING &&
@@ -214,6 +226,41 @@ void tu_dma_init_config_boundary_aging_policy_cap(bool async, uint32_t num_chann
         g_tu_dma.channels[i].channel_id = (uint8_t)i;
         g_tu_dma.channels[i].max_depth = max_queue_depth > 0 ? max_queue_depth : TU_DMA_MAX_OUTSTANDING;
     }
+}
+
+void tu_dma_init_config_boundary_aging_policy_cap(bool async, uint32_t num_channels,
+                                uint32_t max_queue_depth, int bus_mode,
+                                int arb_policy, int aging_scope,
+                                int aging_metric, uint32_t aging_increment,
+                                uint32_t aging_max_boost,
+                                uint32_t aging_cycle_quantum,
+                                int binding_policy,
+                                uint32_t bus_width_bits,
+                                uint32_t read_latency_cycles,
+                                uint32_t write_latency_cycles,
+                                uint32_t max_burst_bytes,
+                                uint32_t read_max_burst_bytes,
+                                uint32_t write_max_burst_bytes,
+                                uint32_t burst_issue_cycles,
+                                uint32_t read_burst_issue_cycles,
+                                uint32_t write_burst_issue_cycles,
+                                bool read_issue_configured,
+                                bool write_issue_configured,
+                                int burst_segmentation,
+                                int base_latency_scope,
+                                int payload_scope,
+                                int issue_payload_mode,
+                                int burst_boundary_mode) {
+    tu_dma_init_config_boundary_aging_policy_drr(
+        async, num_channels, max_queue_depth, bus_mode, arb_policy,
+        aging_scope, aging_metric, aging_increment, aging_max_boost,
+        aging_cycle_quantum, 256u, binding_policy, bus_width_bits,
+        read_latency_cycles, write_latency_cycles, max_burst_bytes,
+        read_max_burst_bytes, write_max_burst_bytes, burst_issue_cycles,
+        read_burst_issue_cycles, write_burst_issue_cycles,
+        read_issue_configured, write_issue_configured, burst_segmentation,
+        base_latency_scope, payload_scope, issue_payload_mode,
+        burst_boundary_mode);
 }
 
 void tu_dma_init_config_boundary_aging_policy(bool async, uint32_t num_channels,
@@ -1696,6 +1743,42 @@ int tu_dma_tick(void) {
             bus_busy = bus_busy || g_tu_dma.channels[i].active != NULL;
 
         if (!bus_busy) {
+            if (g_tu_dma.arb_policy == TU_DMA_ARB_DEFICIT_ROUND_ROBIN) {
+                bool selected = false;
+                while (!selected) {
+                    bool any = false;
+                    for (uint32_t probe = 0; probe < g_tu_dma.num_channels; probe++) {
+                        uint32_t i = (g_tu_dma.next_shared_channel + probe) %
+                                     g_tu_dma.num_channels;
+                        tu_dma_channel_state_t *ch = &g_tu_dma.channels[i];
+                        if (!ch->head) {
+                            ch->drr_deficit_bytes = 0;
+                            continue;
+                        }
+                        any = true;
+                        if (UINT64_MAX - ch->drr_deficit_bytes <
+                            g_tu_dma.drr_quantum_bytes)
+                            ch->drr_deficit_bytes = UINT64_MAX;
+                        else
+                            ch->drr_deficit_bytes += g_tu_dma.drr_quantum_bytes;
+                        if (ch->drr_deficit_bytes < ch->head->total_bytes)
+                            continue;
+                        ch->drr_deficit_bytes -= ch->head->total_bytes;
+                        ch->active = ch->head;
+                        ch->head = ch->head->next;
+                        ch->queue_depth--;
+                        if (!ch->head)
+                            ch->drr_deficit_bytes = 0;
+                        tu_dma_execute_desc(ch->active);
+                        g_tu_dma.next_shared_channel =
+                            (i + 1u) % g_tu_dma.num_channels;
+                        g_tu_dma.arbitration_epoch++;
+                        selected = true;
+                        break;
+                    }
+                    if (!any) break;
+                }
+            } else {
             uint8_t best_priority = 0;
             if (g_tu_dma.arb_policy == TU_DMA_ARB_STRICT_PRIORITY ||
                 g_tu_dma.arb_policy == TU_DMA_ARB_AGING_PRIORITY) {
@@ -1735,6 +1818,7 @@ int tu_dma_tick(void) {
                 g_tu_dma.next_shared_channel = (i + 1u) % g_tu_dma.num_channels;
                 g_tu_dma.arbitration_epoch++;
                 break;
+            }
             }
         }
     }

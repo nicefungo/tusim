@@ -103,7 +103,8 @@ typedef enum {
 typedef enum {
     TU_DMA_CONFIG_ARB_ROUND_ROBIN = 0,
     TU_DMA_CONFIG_ARB_STRICT_PRIORITY = 1,
-    TU_DMA_CONFIG_ARB_AGING_PRIORITY = 2
+    TU_DMA_CONFIG_ARB_AGING_PRIORITY = 2,
+    TU_DMA_CONFIG_ARB_DEFICIT_ROUND_ROBIN = 3
 } tu_dma_config_arb_policy_t;
 
 typedef enum {
@@ -260,6 +261,7 @@ typedef struct tu_config_t {
     uint32_t dma_num_channels;
     int      dma_bus_mode;          /* independent=0, shared_serial=1 */
     int      dma_arb_policy;        /* round_robin=0, strict=1, aging=2 */
+    uint32_t dma_drr_quantum_bytes; /* byte credit per DRR visit */
     int      dma_aging_scope;       /* submission=0, queue_head=1 */
     int      dma_aging_metric;      /* missed_grants=0, wait_cycles=1 */
     uint32_t dma_aging_increment;   /* priority levels gained per aging step */

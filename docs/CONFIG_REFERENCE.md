@@ -95,7 +95,8 @@
 | `dma_burst_boundary_mode` | size_only | enum | Burst splitting by size or max-burst/4 KiB endpoint boundaries |
 | `dma_num_channels` | 3 | uint32 | DMA channel count |
 | `dma_bus_topology` | independent | enum | Channel data paths: independent or shared_serial |
-| `dma_arbitration` | round_robin | enum | Shared-serial selection: round_robin, strict_priority, or aging_priority |
+| `dma_arbitration` | round_robin | enum | Shared-serial selection: round_robin, strict_priority, aging_priority, or deficit_round_robin |
+| `dma_drr_quantum_bytes` | 256 | bytes/visit | Byte credit added to each backlogged DRR channel visit |
 | `dma_aging_scope` | submission | enum | Aging starts at accepted submission or queue-head eligibility |
 | `dma_aging_metric` | grants | enum | Aging measured in missed grants or quantized wait cycles |
 | `dma_aging_increment` | 1 | levels/step | Priority levels gained per aging step |

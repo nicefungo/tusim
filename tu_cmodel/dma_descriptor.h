@@ -52,7 +52,8 @@ typedef enum {
 typedef enum {
     TU_DMA_ARB_ROUND_ROBIN = 0,
     TU_DMA_ARB_STRICT_PRIORITY = 1,
-    TU_DMA_ARB_AGING_PRIORITY = 2
+    TU_DMA_ARB_AGING_PRIORITY = 2,
+    TU_DMA_ARB_DEFICIT_ROUND_ROBIN = 3
 } tu_dma_arb_policy_t;
 
 typedef enum {
@@ -192,6 +193,7 @@ typedef struct {
     uint64_t                total_bytes;
     uint64_t                total_occupied_bytes;
     uint64_t                total_cycles;
+    uint64_t                drr_deficit_bytes;
 } tu_dma_channel_state_t;
 
 /* ---- DMA Engine ---- */
@@ -207,6 +209,7 @@ typedef struct {
     uint32_t                aging_increment;
     uint32_t                aging_max_boost;
     uint32_t                aging_cycle_quantum;
+    uint32_t                drr_quantum_bytes;
     uint32_t                next_shared_channel;
     uint64_t                arbitration_epoch;
     tu_dma_binding_policy_t binding_policy;
@@ -429,6 +432,19 @@ void tu_dma_init_config_boundary_aging_policy_cap(
     bool write_issue_configured, int burst_segmentation,
     int base_latency_scope, int payload_scope, int issue_payload_mode,
     int burst_boundary_mode);
+void tu_dma_init_config_boundary_aging_policy_drr(
+    bool async, uint32_t num_channels, uint32_t max_queue_depth,
+    int bus_mode, int arb_policy, int aging_scope, int aging_metric,
+    uint32_t aging_increment, uint32_t aging_max_boost,
+    uint32_t aging_cycle_quantum, uint32_t drr_quantum_bytes,
+    int binding_policy, uint32_t bus_width_bits,
+    uint32_t read_latency_cycles, uint32_t write_latency_cycles,
+    uint32_t max_burst_bytes, uint32_t read_max_burst_bytes,
+    uint32_t write_max_burst_bytes, uint32_t burst_issue_cycles,
+    uint32_t read_burst_issue_cycles, uint32_t write_burst_issue_cycles,
+    bool read_issue_configured, bool write_issue_configured,
+    int burst_segmentation, int base_latency_scope, int payload_scope,
+    int issue_payload_mode, int burst_boundary_mode);
 void tu_dma_init(bool async);
 void tu_dma_destroy(void);
 

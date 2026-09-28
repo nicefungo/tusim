@@ -30,7 +30,76 @@ static uint8_t sources[STREAMS][STREAM_BYTES];
 static const char *policy_name(int policy) {
     if (policy == TU_DMA_ARB_STRICT_PRIORITY) return "strict_priority";
     if (policy == TU_DMA_ARB_AGING_PRIORITY) return "aging_priority";
+    if (policy == TU_DMA_ARB_DEFICIT_ROUND_ROBIN) return "deficit_round_robin";
     return "round_robin";
+}
+
+static void init_drr(uint32_t quantum) {
+    tu_dma_init_config_boundary_aging_policy_drr(
+        true, 2, 8, TU_DMA_BUS_MODE_SHARED_SERIAL,
+        TU_DMA_ARB_DEFICIT_ROUND_ROBIN, TU_DMA_AGING_FROM_SUBMISSION,
+        TU_DMA_AGING_BY_MISSED_GRANTS, 1u, 0u, 1u, quantum,
+        TU_DMA_BIND_EXPLICIT, TU_DMA_BUS_WIDTH_BITS,
+        TU_LATENCY_DRAM_READ, TU_LATENCY_DRAM_WRITE,
+        TU_DMA_MAX_BURST_BYTES, TU_DMA_MAX_BURST_BYTES,
+        TU_DMA_MAX_BURST_BYTES, 0, 0, 0, false, false,
+        TU_DMA_SEGMENT_AGGREGATE, TU_DMA_BASE_PER_DESCRIPTOR,
+        TU_DMA_PAYLOAD_PACKED_DESCRIPTOR, TU_DMA_ISSUE_PAYLOAD_SERIALIZED,
+        TU_DMA_BOUNDARY_SIZE_ONLY);
+}
+
+static int run_drr_case(uint32_t quantum, uint64_t small_complete[4],
+                        uint64_t *large_complete, uint64_t *batch_complete) {
+    enum { SMALL = 64, LARGE = 512, TOTAL = 4 * SMALL + LARGE };
+    static uint8_t small_src[4][SMALL];
+    static uint8_t large_src[LARGE];
+    tu_sram_region_t sram;
+    tu_dma_descriptor_t *small[4] = {0}, *large = NULL;
+    tu_sram_init(&sram, TOTAL, "dma-drr-sweep");
+    sram.banks.bw_modeling = false;
+    memset(small_src, 0x3c, sizeof(small_src));
+    memset(large_src, 0x7d, sizeof(large_src));
+    init_drr(quantum);
+    if (g_tu_dma.drr_quantum_bytes != quantum) return -1;
+    for (uint32_t i = 0; i < 4; i++) {
+        small[i] = tu_dma_desc_create_linear(0, TU_DMA_DIR_HOST_TO_TU,
+            &sram, i * SMALL, small_src[i], 1, SMALL);
+        if (!small[i] || !tu_dma_submit_desc(small[i])) return -2;
+    }
+    large = tu_dma_desc_create_linear(1, TU_DMA_DIR_HOST_TO_TU,
+        &sram, 4 * SMALL, large_src, 1, LARGE);
+    if (!large || !tu_dma_submit_desc(large)) return -3;
+    while (g_tu_dma.total_transfers < 5u && g_tu_dma.current_cycle < 10000u)
+        tu_dma_tick();
+    while (g_tu_dma.channels[0].total_completed +
+           g_tu_dma.channels[1].total_completed < 5u &&
+           g_tu_dma.current_cycle < 10000u)
+        tu_dma_tick();
+    for (uint32_t i = 0; i < 4; i++) small_complete[i] = small[i]->cycles_completed;
+    *large_complete = large->cycles_completed;
+    *batch_complete = g_tu_dma.current_cycle;
+    const uint64_t expected_large = quantum == 64u ? 275u :
+                                    (quantum == 256u ? 171u : 119u);
+    const uint64_t expected_small[3][4] = {
+        {53u, 105u, 157u, 209u},
+        {53u, 105u, 223u, 275u},
+        {53u, 171u, 223u, 275u}
+    };
+    uint32_t row = quantum == 64u ? 0u : (quantum == 256u ? 1u : 2u);
+    if (*batch_complete != 275u || *large_complete != expected_large ||
+        memcmp(small_complete, expected_small[row], sizeof(expected_small[row])) != 0 ||
+        memcmp(tu_sram_raw_ptr(&sram), small_src, sizeof(small_src)) != 0 ||
+        memcmp(tu_sram_raw_ptr(&sram) + 4 * SMALL, large_src, LARGE) != 0)
+        return -4;
+    tu_dma_destroy();
+    for (uint32_t i = 0; i < 4; i++) {
+        small[i]->next = NULL;
+        tu_dma_desc_destroy(small[i]);
+    }
+    large->next = NULL;
+    tu_dma_desc_destroy(large);
+    tu_sram_destroy(&sram);
+    return 0;
 }
 
 static int run_case(int policy, uint64_t completed[STREAMS]) {
@@ -533,6 +602,21 @@ int main(void) {
                    (unsigned long)fresh, (unsigned long)batch);
         }
     }
-    printf("PASS: exact order/cycles, aging scopes/rates/caps/metrics/domains, config conversion, and byte movement\n");
+    printf("\ndrr_quantum small0 small1 small2 small3 large batch\n");
+    const uint32_t drr_quantums[] = {64u, 256u, 1024u};
+    for (uint32_t i = 0; i < 3; i++) {
+        uint64_t small[4] = {0}, large = 0, batch = 0;
+        int rc = run_drr_case(drr_quantums[i], small, &large, &batch);
+        if (rc != 0) {
+            fprintf(stderr, "FAIL drr quantum=%u rc=%d\n", drr_quantums[i], rc);
+            return 120 - rc;
+        }
+        printf("%11u %6lu %6lu %6lu %6lu %5lu %5lu\n",
+               drr_quantums[i], (unsigned long)small[0],
+               (unsigned long)small[1], (unsigned long)small[2],
+               (unsigned long)small[3], (unsigned long)large,
+               (unsigned long)batch);
+    }
+    printf("PASS: exact order/cycles, aging and DRR alternatives, config conversion, and byte movement\n");
     return 0;
 }

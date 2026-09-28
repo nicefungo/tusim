@@ -177,6 +177,8 @@ int main(void) {
               "DMA one-level aging default");
         CHECK(cfg.dma_aging_max_boost == 0,
               "DMA unbounded aging boost compatibility default");
+        CHECK(cfg.dma_drr_quantum_bytes == 256,
+              "DMA DRR 256-byte quantum default");
         CHECK(cfg.dma_aging_metric == TU_DMA_CONFIG_AGING_MISSED_GRANTS &&
               cfg.dma_aging_cycle_quantum == 1,
               "DMA grant aging metric default");
@@ -250,6 +252,7 @@ int main(void) {
             "    \"aging_metric\": \"cycles\","
             "    \"aging_increment\": 4,"
             "    \"aging_max_boost\": 3,"
+            "    \"drr_quantum_bytes\": 1024,"
             "    \"aging_cycle_quantum\": 64,"
             "    \"aging_quantum_domain\": \"physical_ns\","
             "    \"aging_quantum_ns\": 64.0,"
@@ -293,6 +296,9 @@ int main(void) {
         CHECK(cfg.dma_aging_increment == 4 && rt.dma_aging_increment == 4 &&
               cfg.dma_aging_max_boost == 3 && rt.dma_aging_max_boost == 3,
               "DMA aging increment/cap parse/runtime propagation");
+        CHECK(cfg.dma_drr_quantum_bytes == 1024 &&
+              rt.dma_drr_quantum_bytes == 1024,
+              "DMA DRR quantum parse/runtime propagation");
         CHECK(cfg.dma_aging_metric == TU_DMA_CONFIG_AGING_WAIT_CYCLES &&
               rt.dma_aging_metric == TU_DMA_CONFIG_AGING_WAIT_CYCLES &&
               cfg.dma_aging_cycle_quantum == 64 &&
@@ -653,8 +659,8 @@ int main(void) {
         cfg.dma_bus_mode = 2;
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0, "should reject bus topology=2");
         cfg.dma_bus_mode = TU_DMA_CONFIG_BUS_INDEPENDENT;
-        cfg.dma_arb_policy = 3;
-        CHECK(tu_config_validate(&cfg, NULL, 0) != 0, "should reject arbitration=3");
+        cfg.dma_arb_policy = 4;
+        CHECK(tu_config_validate(&cfg, NULL, 0) != 0, "should reject arbitration=4");
         cfg.dma_arb_policy = TU_DMA_CONFIG_ARB_ROUND_ROBIN;
         cfg.dma_aging_scope = 2;
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
@@ -675,6 +681,15 @@ int main(void) {
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
               "should reject aging max boost=256");
         cfg.dma_aging_max_boost = 0;
+        cfg.dma_drr_quantum_bytes = 0;
+        CHECK(tu_config_validate(&cfg, NULL, 0) == 0,
+              "zero DRR quantum preserves legacy callers");
+        CHECK(tu_config_to_runtime(&cfg).dma_drr_quantum_bytes == 256,
+              "zero DRR quantum inherits compatibility default");
+        cfg.dma_drr_quantum_bytes = 100;
+        CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
+              "should reject non-power-of-two DRR quantum");
+        cfg.dma_drr_quantum_bytes = 256;
         cfg.dma_aging_cycle_quantum = 0;
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
               "should reject aging cycle quantum=0");

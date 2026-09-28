@@ -86,6 +86,7 @@
       "channels": 3,
       "bus_topology": "independent",
       "arbitration": "round_robin",
+      "drr_quantum_bytes": 256,
       "aging_scope": "submission",
       "aging_metric": "grants",
       "aging_increment": 1,

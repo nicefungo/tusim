@@ -159,6 +159,8 @@ static int parse_dma_arb_policy_str(const char *s) {
         return TU_DMA_CONFIG_ARB_STRICT_PRIORITY;
     if (strcmp(s, "aging_priority") == 0)
         return TU_DMA_CONFIG_ARB_AGING_PRIORITY;
+    if (strcmp(s, "deficit_round_robin") == 0)
+        return TU_DMA_CONFIG_ARB_DEFICIT_ROUND_ROBIN;
     return -1;
 }
 
@@ -414,6 +416,7 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->dma_num_channels    = 3;
     cfg->dma_bus_mode        = TU_DMA_CONFIG_BUS_INDEPENDENT;
     cfg->dma_arb_policy      = TU_DMA_CONFIG_ARB_ROUND_ROBIN;
+    cfg->dma_drr_quantum_bytes = 256;
     cfg->dma_aging_scope     = TU_DMA_CONFIG_AGING_SUBMISSION;
     cfg->dma_aging_metric    = TU_DMA_CONFIG_AGING_MISSED_GRANTS;
     cfg->dma_aging_increment = 1;
@@ -517,6 +520,9 @@ tu_runtime_config_t tu_config_to_runtime(const struct tu_config_t *cfg) {
     rt.dma_num_channels = cfg->dma_num_channels;
     rt.dma_bus_mode = cfg->dma_bus_mode;
     rt.dma_arb_policy = cfg->dma_arb_policy;
+    /* Zero preserves callers compiled before the DRR field existed. */
+    rt.dma_drr_quantum_bytes = cfg->dma_drr_quantum_bytes ?
+                               cfg->dma_drr_quantum_bytes : 256u;
     rt.dma_aging_scope = cfg->dma_aging_scope;
     rt.dma_aging_metric = cfg->dma_aging_metric;
     rt.dma_aging_increment = cfg->dma_aging_increment;
@@ -767,6 +773,8 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
         const tu_json_value_t *arb = tu_json_get(d, "arbitration");
         if (arb && arb->type == TU_JSON_STRING)
             cfg->dma_arb_policy = parse_dma_arb_policy_str(tu_json_as_string(arb, NULL));
+        if (parse_opt_int64(d, "drr_quantum_bytes", &iv))
+            cfg->dma_drr_quantum_bytes = (uint32_t)iv;
         const tu_json_value_t *aging_scope = tu_json_get(d, "aging_scope");
         if (aging_scope && aging_scope->type == TU_JSON_STRING)
             cfg->dma_aging_scope = parse_dma_aging_scope_str(
@@ -1129,10 +1137,19 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
         return -1;
     }
     if (cfg->dma_arb_policy < TU_DMA_CONFIG_ARB_ROUND_ROBIN ||
-        cfg->dma_arb_policy > TU_DMA_CONFIG_ARB_AGING_PRIORITY) {
+        cfg->dma_arb_policy > TU_DMA_CONFIG_ARB_DEFICIT_ROUND_ROBIN) {
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
-                     "DMA arbitration must be round_robin, strict_priority, or aging_priority");
+                     "DMA arbitration must be round_robin, strict_priority, aging_priority, or deficit_round_robin");
+        return -1;
+    }
+    if (cfg->dma_drr_quantum_bytes != 0u &&
+        (cfg->dma_drr_quantum_bytes < 16u ||
+         cfg->dma_drr_quantum_bytes > 65536u ||
+         (cfg->dma_drr_quantum_bytes & (cfg->dma_drr_quantum_bytes - 1u)) != 0u)) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DMA drr_quantum_bytes must be a power of two in [16,65536]");
         return -1;
     }
     if (cfg->dma_aging_scope < TU_DMA_CONFIG_AGING_SUBMISSION ||
@@ -1696,9 +1713,13 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
         cfg->dma_arb_policy == TU_DMA_CONFIG_ARB_STRICT_PRIORITY ?
         "strict_priority" :
         (cfg->dma_arb_policy == TU_DMA_CONFIG_ARB_AGING_PRIORITY ?
-         "aging_priority" : "round_robin");
-    fprintf(out, "| `dma_arbitration` | %s | enum | Shared-serial selection: round_robin, strict_priority, or aging_priority |\n",
+         "aging_priority" :
+         (cfg->dma_arb_policy == TU_DMA_CONFIG_ARB_DEFICIT_ROUND_ROBIN ?
+          "deficit_round_robin" : "round_robin"));
+    fprintf(out, "| `dma_arbitration` | %s | enum | Shared-serial selection: round_robin, strict_priority, aging_priority, or deficit_round_robin |\n",
             dma_arb_name);
+    fprintf(out, "| `dma_drr_quantum_bytes` | %u | bytes/visit | Byte credit added to each backlogged DRR channel visit |\n",
+            cfg->dma_drr_quantum_bytes);
     fprintf(out, "| `dma_aging_scope` | %s | enum | Aging starts at accepted submission or queue-head eligibility |\n",
             cfg->dma_aging_scope == TU_DMA_CONFIG_AGING_QUEUE_HEAD ?
             "queue_head" : "submission");
