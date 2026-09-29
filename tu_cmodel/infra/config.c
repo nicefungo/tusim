@@ -180,6 +180,14 @@ static int parse_dma_aging_metric_str(const char *s) {
     return -1;
 }
 
+static int parse_dma_drr_cost_mode_str(const char *s) {
+    if (!s || strcmp(s, "useful_bytes") == 0)
+        return TU_DMA_CONFIG_DRR_COST_USEFUL_BYTES;
+    if (strcmp(s, "occupied_bytes") == 0)
+        return TU_DMA_CONFIG_DRR_COST_OCCUPIED_BYTES;
+    return -1;
+}
+
 static int parse_dma_aging_quantum_domain_str(const char *s) {
     if (!s || strcmp(s, "core_cycles") == 0)
         return TU_DMA_CONFIG_AGING_QUANTUM_CORE_CYCLES;
@@ -417,6 +425,7 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->dma_bus_mode        = TU_DMA_CONFIG_BUS_INDEPENDENT;
     cfg->dma_arb_policy      = TU_DMA_CONFIG_ARB_ROUND_ROBIN;
     cfg->dma_drr_quantum_bytes = 256;
+    cfg->dma_drr_cost_mode   = TU_DMA_CONFIG_DRR_COST_USEFUL_BYTES;
     cfg->dma_aging_scope     = TU_DMA_CONFIG_AGING_SUBMISSION;
     cfg->dma_aging_metric    = TU_DMA_CONFIG_AGING_MISSED_GRANTS;
     cfg->dma_aging_increment = 1;
@@ -523,6 +532,7 @@ tu_runtime_config_t tu_config_to_runtime(const struct tu_config_t *cfg) {
     /* Zero preserves callers compiled before the DRR field existed. */
     rt.dma_drr_quantum_bytes = cfg->dma_drr_quantum_bytes ?
                                cfg->dma_drr_quantum_bytes : 256u;
+    rt.dma_drr_cost_mode = cfg->dma_drr_cost_mode;
     rt.dma_aging_scope = cfg->dma_aging_scope;
     rt.dma_aging_metric = cfg->dma_aging_metric;
     rt.dma_aging_increment = cfg->dma_aging_increment;
@@ -775,6 +785,10 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
             cfg->dma_arb_policy = parse_dma_arb_policy_str(tu_json_as_string(arb, NULL));
         if (parse_opt_int64(d, "drr_quantum_bytes", &iv))
             cfg->dma_drr_quantum_bytes = (uint32_t)iv;
+        const tu_json_value_t *drr_cost = tu_json_get(d, "drr_cost_mode");
+        if (drr_cost && drr_cost->type == TU_JSON_STRING)
+            cfg->dma_drr_cost_mode = parse_dma_drr_cost_mode_str(
+                tu_json_as_string(drr_cost, NULL));
         const tu_json_value_t *aging_scope = tu_json_get(d, "aging_scope");
         if (aging_scope && aging_scope->type == TU_JSON_STRING)
             cfg->dma_aging_scope = parse_dma_aging_scope_str(
@@ -1150,6 +1164,13 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
                      "DMA drr_quantum_bytes must be a power of two in [16,65536]");
+        return -1;
+    }
+    if (cfg->dma_drr_cost_mode < TU_DMA_CONFIG_DRR_COST_USEFUL_BYTES ||
+        cfg->dma_drr_cost_mode > TU_DMA_CONFIG_DRR_COST_OCCUPIED_BYTES) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DMA drr_cost_mode must be useful_bytes or occupied_bytes");
         return -1;
     }
     if (cfg->dma_aging_scope < TU_DMA_CONFIG_AGING_SUBMISSION ||
@@ -1720,6 +1741,9 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             dma_arb_name);
     fprintf(out, "| `dma_drr_quantum_bytes` | %u | bytes/visit | Byte credit added to each backlogged DRR channel visit |\n",
             cfg->dma_drr_quantum_bytes);
+    fprintf(out, "| `dma_drr_cost_mode` | %s | enum | DRR charges useful payload bytes or occupied interface bytes |\n",
+            cfg->dma_drr_cost_mode == TU_DMA_CONFIG_DRR_COST_OCCUPIED_BYTES ?
+            "occupied_bytes" : "useful_bytes");
     fprintf(out, "| `dma_aging_scope` | %s | enum | Aging starts at accepted submission or queue-head eligibility |\n",
             cfg->dma_aging_scope == TU_DMA_CONFIG_AGING_QUEUE_HEAD ?
             "queue_head" : "submission");

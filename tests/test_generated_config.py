@@ -63,6 +63,8 @@ def main() -> int:
             "aging_increment: 1": "aging_increment: 4",
             "aging_max_boost: 0": "aging_max_boost: 3",
             "drr_quantum_bytes: 256": "drr_quantum_bytes: 1024",
+            'drr_cost_mode: "useful_bytes"':
+                'drr_cost_mode: "occupied_bytes"',
             "aging_cycle_quantum: 1": "aging_cycle_quantum: 64",
             'aging_quantum_domain: "core_cycles"':
                 'aging_quantum_domain: "physical_ns"',
@@ -104,6 +106,7 @@ def main() -> int:
             '_Static_assert(TU_DMA_AGING_METRIC == TU_DMA_AGING_METRIC_CYCLES, "DMA aging metric");\n'
             '_Static_assert(TU_DMA_AGING_INCREMENT == 4, "DMA aging increment");\n'
             '_Static_assert(TU_DMA_AGING_MAX_BOOST == 3, "DMA aging boost cap");\n'
+            '_Static_assert(TU_DMA_DRR_COST_MODE == TU_DMA_DRR_COST_OCCUPIED_BYTES, "DMA DRR cost mode");\n'
             '_Static_assert(TU_DMA_AGING_QUANTUM_DOMAIN == TU_DMA_AGING_QUANTUM_PHYSICAL_NS, "DMA aging quantum domain");\n'
             '_Static_assert(TU_DMA_AGING_CYCLE_QUANTUM == 64, "DMA aging quantum");\n'
             '_Static_assert(TU_FP16_ROUNDING_MODE == TU_FP16_ROUNDING_STOCHASTIC, "rounding");\n'
@@ -117,6 +120,7 @@ def main() -> int:
             'c.dma_aging_increment != 4 || '
             'c.dma_aging_max_boost != 3 || '
             'c.dma_drr_quantum_bytes != 1024 || '
+            'c.dma_drr_cost_mode != TU_DMA_DRR_COST_OCCUPIED_BYTES || '
             'c.dma_aging_quantum_domain != TU_DMA_AGING_QUANTUM_PHYSICAL_NS || '
             'c.dma_aging_quantum_ns != 64.0 || '
             'c.dma_aging_cycle_quantum != 64 || '

@@ -355,6 +355,10 @@ def generate_header(config, output_path):
                'deficit_round_robin': 3}
     L(f'#define TU_DMA_ARB_POLICY       {arb_map[dma.get("arbitration", "round_robin")]}')
     L(f'#define TU_DMA_DRR_QUANTUM_BYTES {dma.get("drr_quantum_bytes", 256)}')
+    L('#define TU_DMA_DRR_COST_USEFUL_BYTES 0')
+    L('#define TU_DMA_DRR_COST_OCCUPIED_BYTES 1')
+    drr_cost_map = {'useful_bytes': 0, 'occupied_bytes': 1}
+    L(f'#define TU_DMA_DRR_COST_MODE {drr_cost_map[dma.get("drr_cost_mode", "useful_bytes")]}')
     L('#define TU_DMA_AGING_SCOPE_SUBMISSION 0')
     L('#define TU_DMA_AGING_SCOPE_QUEUE_HEAD 1')
     aging_scope_map = {'submission': 0, 'queue_head': 1}
@@ -541,6 +545,7 @@ def generate_header(config, output_path):
     L('    int      dma_bus_mode;')
     L('    int      dma_arb_policy;')
     L('    uint32_t dma_drr_quantum_bytes;')
+    L('    int      dma_drr_cost_mode;')
     L('    int      dma_aging_scope;')
     L('    int      dma_aging_metric;')
     L('    uint32_t dma_aging_increment;')
@@ -599,6 +604,7 @@ def generate_header(config, output_path):
     L(f'        .dma_bus_mode       = TU_DMA_BUS_MODE,')
     L(f'        .dma_arb_policy     = TU_DMA_ARB_POLICY,')
     L(f'        .dma_drr_quantum_bytes = TU_DMA_DRR_QUANTUM_BYTES,')
+    L(f'        .dma_drr_cost_mode = TU_DMA_DRR_COST_MODE,')
     L(f'        .dma_aging_scope    = TU_DMA_AGING_SCOPE,')
     L(f'        .dma_aging_metric   = TU_DMA_AGING_METRIC,')
     L(f'        .dma_aging_increment = TU_DMA_AGING_INCREMENT,')

@@ -1,6 +1,6 @@
 # DMA Deficit Round-Robin: Descriptor Fairness vs Byte Fairness
 
-**Date:** 2026-09-28
+**Date:** 2026-09-28; occupied-byte cost follow-up 2026-09-29
 **Mode:** pre-spec exploration
 **Evidence:** `tests/test_dma_arbitration_sweep.c`
 
@@ -17,7 +17,7 @@ Plain round-robin is a small and predictable descriptor scheduler, but one 512-b
 - `aging_priority`: effective priority rises with configured wait.
 - `deficit_round_robin`: byte-credit scheduling with `dma.drr_quantum_bytes`.
 
-`drr_quantum_bytes` is a power of two in `[16,65536]`; the default is 256 bytes. A zero field from a legacy zero-initialized caller inherits 256 bytes. Old initialization APIs also inherit 256 bytes, and existing policies ignore it. DRR charges `descriptor.total_bytes`, saturates credit arithmetic, subtracts bytes on admission, and resets credit when a queue empties. Service remains descriptor-boundary and non-preemptive.
+`drr_quantum_bytes` is a power of two in `[16,65536]`; the default is 256 bytes. A zero field from a legacy zero-initialized caller inherits 256 bytes. Old initialization APIs also inherit 256 bytes, and existing policies ignore it. `dma.drr_cost_mode` independently selects `useful_bytes` (zero/default compatibility) or `occupied_bytes`; both use saturating credit arithmetic and reset credit when a queue empties. Service remains descriptor-boundary and non-preemptive. See [`dma-drr-cost-metric.md`](dma-drr-cost-metric.md) for the placement-sensitive cost-metric experiment.
 
 ## Executable experiment
 
@@ -63,7 +63,7 @@ No policy is universally best. A simple fixed-function mover may choose round-ro
 
 ## Fidelity limits
 
-- The model charges useful descriptor bytes, not occupied interface bytes, burst commands, or predicted service cycles. Those are distinct plausible deficit units and need separate hypotheses.
+- Useful and occupied bytes are executable alternatives. Occupied charging reuses the live payload/boundary accounting, but neither mode charges base latency, issue cycles, SRAM stalls, DRAM service, or predicted total service cycles.
 - DRR is non-preemptive; a selected long descriptor blocks all channels until retirement.
 - Virtual credit rounds consume no modeled cycles. Counter/comparator timing and arbitration energy are unquantified.
 - Per-channel weights, finite command credits, backpressure, shared SRAM/DRAM contention, deadlines, and compiler-assigned service classes are unmodeled.

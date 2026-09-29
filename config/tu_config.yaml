@@ -105,6 +105,7 @@ tu:
     bus_topology: "independent"  # independent (compat) | shared_serial
     arbitration: "round_robin"   # round_robin (compat) | strict_priority | aging_priority | deficit_round_robin
     drr_quantum_bytes: 256       # DRR byte credit per visit; power of two [16,65536]
+    drr_cost_mode: "useful_bytes" # useful_bytes (compat) | occupied_bytes (interface pressure)
     aging_scope: "submission"    # submission (compat, total queued wait) | queue_head (only wait while eligible)
     aging_metric: "grants"       # grants (compat) | cycles (wall-clock wait quantized below)
     aging_increment: 1           # Priority levels gained per aging step [1,255]

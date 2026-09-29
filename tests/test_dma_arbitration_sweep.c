@@ -48,6 +48,70 @@ static void init_drr(uint32_t quantum) {
         TU_DMA_BOUNDARY_SIZE_ONLY);
 }
 
+static void init_drr_cost(int cost_mode) {
+    tu_dma_init_config_boundary_aging_policy_drr_cost(
+        true, 2, 8, TU_DMA_BUS_MODE_SHARED_SERIAL,
+        TU_DMA_ARB_DEFICIT_ROUND_ROBIN, TU_DMA_AGING_FROM_SUBMISSION,
+        TU_DMA_AGING_BY_MISSED_GRANTS, 1u, 0u, 1u, 64u, cost_mode,
+        TU_DMA_BIND_EXPLICIT, 256u, 50u, 50u, 64u, 64u, 64u,
+        0u, 0u, 0u, false, false, TU_DMA_SEGMENT_AGGREGATE,
+        TU_DMA_BASE_PER_DESCRIPTOR, TU_DMA_PAYLOAD_ALIGN_BURST_COMMAND,
+        TU_DMA_ISSUE_PAYLOAD_SERIALIZED, TU_DMA_BOUNDARY_SRAM_ADDRESS);
+}
+
+static int run_drr_cost_case(int cost_mode, uint64_t ch0_complete[2],
+                             uint64_t *ch1_complete,
+                             uint64_t *batch_complete) {
+    enum { BYTES = 64, SRAM_BYTES = 224 };
+    static uint8_t src[3][BYTES];
+    tu_sram_region_t sram;
+    tu_dma_descriptor_t *d0 = NULL, *d1 = NULL, *d2 = NULL;
+    tu_sram_init(&sram, SRAM_BYTES, "dma-drr-cost-sweep");
+    sram.banks.bw_modeling = false;
+    memset(src[0], 0x21, BYTES);
+    memset(src[1], 0x43, BYTES);
+    memset(src[2], 0x65, BYTES);
+    init_drr_cost(cost_mode);
+    if (g_tu_dma.drr_cost_mode != (tu_dma_drr_cost_mode_t)cost_mode)
+        return -1;
+    d0 = tu_dma_desc_create_linear(0, TU_DMA_DIR_HOST_TO_TU,
+                                   &sram, 0u, src[0], 1u, BYTES);
+    d1 = tu_dma_desc_create_linear(0, TU_DMA_DIR_HOST_TO_TU,
+                                   &sram, 64u, src[1], 1u, BYTES);
+    d2 = tu_dma_desc_create_linear(1, TU_DMA_DIR_HOST_TO_TU,
+                                   &sram, 129u, src[2], 1u, BYTES);
+    if (!d0 || !d1 || !d2 || !tu_dma_submit_desc(d0) ||
+        !tu_dma_submit_desc(d1) || !tu_dma_submit_desc(d2)) return -2;
+    while (g_tu_dma.total_transfers < 3u && g_tu_dma.current_cycle < 1000u)
+        tu_dma_tick();
+    while (g_tu_dma.channels[0].total_completed +
+           g_tu_dma.channels[1].total_completed < 3u &&
+           g_tu_dma.current_cycle < 1000u)
+        tu_dma_tick();
+    ch0_complete[0] = d0->cycles_completed;
+    ch0_complete[1] = d1->cycles_completed;
+    *ch1_complete = d2->cycles_completed;
+    *batch_complete = g_tu_dma.current_cycle;
+    if ((cost_mode == TU_DMA_DRR_CHARGE_USEFUL_BYTES &&
+         (ch0_complete[0] != 53u || *ch1_complete != 106u ||
+          ch0_complete[1] != 158u)) ||
+        (cost_mode == TU_DMA_DRR_CHARGE_OCCUPIED_BYTES &&
+         (ch0_complete[0] != 53u || ch0_complete[1] != 105u ||
+          *ch1_complete != 158u)) ||
+        *batch_complete != 158u ||
+        memcmp(tu_sram_raw_ptr(&sram), src[0], BYTES) != 0 ||
+        memcmp(tu_sram_raw_ptr(&sram) + 64u, src[1], BYTES) != 0 ||
+        memcmp(tu_sram_raw_ptr(&sram) + 129u, src[2], BYTES) != 0)
+        return -3;
+    tu_dma_destroy();
+    d0->next = d1->next = d2->next = NULL;
+    tu_dma_desc_destroy(d0);
+    tu_dma_desc_destroy(d1);
+    tu_dma_desc_destroy(d2);
+    tu_sram_destroy(&sram);
+    return 0;
+}
+
 static int run_drr_case(uint32_t quantum, uint64_t small_complete[4],
                         uint64_t *large_complete, uint64_t *batch_complete) {
     enum { SMALL = 64, LARGE = 512, TOTAL = 4 * SMALL + LARGE };
@@ -617,6 +681,25 @@ int main(void) {
                (unsigned long)small[3], (unsigned long)large,
                (unsigned long)batch);
     }
-    printf("PASS: exact order/cycles, aging and DRR alternatives, config conversion, and byte movement\n");
+    printf("\ndrr_cost_mode aligned0 aligned1 misaligned occupied_aligned occupied_misaligned batch\n");
+    const int drr_cost_modes[] = {
+        TU_DMA_DRR_CHARGE_USEFUL_BYTES, TU_DMA_DRR_CHARGE_OCCUPIED_BYTES
+    };
+    const char *drr_cost_names[] = {"useful_bytes", "occupied_bytes"};
+    for (uint32_t i = 0; i < 2; i++) {
+        uint64_t aligned[2] = {0}, misaligned = 0, batch = 0;
+        int rc = run_drr_cost_case(drr_cost_modes[i], aligned,
+                                   &misaligned, &batch);
+        if (rc != 0) {
+            fprintf(stderr, "FAIL drr cost=%s rc=%d\n",
+                    drr_cost_names[i], rc);
+            return 140 - rc;
+        }
+        printf("%14s %8lu %8lu %10lu %16u %19u %5lu\n",
+               drr_cost_names[i], (unsigned long)aligned[0],
+               (unsigned long)aligned[1], (unsigned long)misaligned,
+               64u, 96u, (unsigned long)batch);
+    }
+    printf("PASS: exact order/cycles, aging and DRR cost alternatives, config conversion, occupied traffic, and byte movement\n");
     return 0;
 }

@@ -66,6 +66,14 @@ typedef enum {
     TU_DMA_AGING_BY_WAIT_CYCLES = 1
 } tu_dma_aging_metric_t;
 
+/* DRR can allocate useful payload bytes or actual occupied interface bytes.
+ * Useful bytes preserve the compatibility contract; occupied bytes account
+ * for partial beats, segment alignment, and configured burst boundaries. */
+typedef enum {
+    TU_DMA_DRR_CHARGE_USEFUL_BYTES = 0,
+    TU_DMA_DRR_CHARGE_OCCUPIED_BYTES = 1
+} tu_dma_drr_cost_mode_t;
+
 /* Descriptor-to-queue binding. Explicit preserves the producer-selected
  * channel. Automatic policies rebind at accepted submission boundaries. */
 typedef enum {
@@ -210,6 +218,7 @@ typedef struct {
     uint32_t                aging_max_boost;
     uint32_t                aging_cycle_quantum;
     uint32_t                drr_quantum_bytes;
+    tu_dma_drr_cost_mode_t  drr_cost_mode;
     uint32_t                next_shared_channel;
     uint64_t                arbitration_epoch;
     tu_dma_binding_policy_t binding_policy;
@@ -438,6 +447,19 @@ void tu_dma_init_config_boundary_aging_policy_drr(
     uint32_t aging_increment, uint32_t aging_max_boost,
     uint32_t aging_cycle_quantum, uint32_t drr_quantum_bytes,
     int binding_policy, uint32_t bus_width_bits,
+    uint32_t read_latency_cycles, uint32_t write_latency_cycles,
+    uint32_t max_burst_bytes, uint32_t read_max_burst_bytes,
+    uint32_t write_max_burst_bytes, uint32_t burst_issue_cycles,
+    uint32_t read_burst_issue_cycles, uint32_t write_burst_issue_cycles,
+    bool read_issue_configured, bool write_issue_configured,
+    int burst_segmentation, int base_latency_scope, int payload_scope,
+    int issue_payload_mode, int burst_boundary_mode);
+void tu_dma_init_config_boundary_aging_policy_drr_cost(
+    bool async, uint32_t num_channels, uint32_t max_queue_depth,
+    int bus_mode, int arb_policy, int aging_scope, int aging_metric,
+    uint32_t aging_increment, uint32_t aging_max_boost,
+    uint32_t aging_cycle_quantum, uint32_t drr_quantum_bytes,
+    int drr_cost_mode, int binding_policy, uint32_t bus_width_bits,
     uint32_t read_latency_cycles, uint32_t write_latency_cycles,
     uint32_t max_burst_bytes, uint32_t read_max_burst_bytes,
     uint32_t write_max_burst_bytes, uint32_t burst_issue_cycles,

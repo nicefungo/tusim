@@ -187,6 +187,9 @@ extern "C" {
 #define TU_DMA_ARB_DEFAULT_DEFICIT_ROUND_ROBIN 3
 #define TU_DMA_ARB_POLICY       0
 #define TU_DMA_DRR_QUANTUM_BYTES 256
+#define TU_DMA_DRR_COST_USEFUL_BYTES 0
+#define TU_DMA_DRR_COST_OCCUPIED_BYTES 1
+#define TU_DMA_DRR_COST_MODE 0
 #define TU_DMA_AGING_SCOPE_SUBMISSION 0
 #define TU_DMA_AGING_SCOPE_QUEUE_HEAD 1
 #define TU_DMA_AGING_SCOPE      0
@@ -333,6 +336,7 @@ typedef struct {
     int      dma_bus_mode;
     int      dma_arb_policy;
     uint32_t dma_drr_quantum_bytes;
+    int      dma_drr_cost_mode;
     int      dma_aging_scope;
     int      dma_aging_metric;
     uint32_t dma_aging_increment;
@@ -391,6 +395,7 @@ static inline tu_runtime_config_t tu_runtime_config_default(void) {
         .dma_bus_mode       = TU_DMA_BUS_MODE,
         .dma_arb_policy     = TU_DMA_ARB_POLICY,
         .dma_drr_quantum_bytes = TU_DMA_DRR_QUANTUM_BYTES,
+        .dma_drr_cost_mode = TU_DMA_DRR_COST_MODE,
         .dma_aging_scope    = TU_DMA_AGING_SCOPE,
         .dma_aging_metric   = TU_DMA_AGING_METRIC,
         .dma_aging_increment = TU_DMA_AGING_INCREMENT,
