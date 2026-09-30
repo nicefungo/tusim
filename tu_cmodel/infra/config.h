@@ -119,7 +119,8 @@ typedef enum {
 
 typedef enum {
     TU_DMA_CONFIG_DRR_COST_USEFUL_BYTES = 0,
-    TU_DMA_CONFIG_DRR_COST_OCCUPIED_BYTES = 1
+    TU_DMA_CONFIG_DRR_COST_OCCUPIED_BYTES = 1,
+    TU_DMA_CONFIG_DRR_COST_SERVICE_CYCLES = 2
 } tu_dma_config_drr_cost_mode_t;
 
 typedef enum {
@@ -267,7 +268,8 @@ typedef struct tu_config_t {
     int      dma_bus_mode;          /* independent=0, shared_serial=1 */
     int      dma_arb_policy;        /* round_robin=0, strict=1, aging=2 */
     uint32_t dma_drr_quantum_bytes; /* byte credit per DRR visit */
-    int      dma_drr_cost_mode;     /* useful_bytes=0, occupied_bytes=1 */
+    uint32_t dma_drr_quantum_cycles;/* cycle credit per DRR visit */
+    int      dma_drr_cost_mode;     /* useful=0, occupied=1, service=2 */
     int      dma_aging_scope;       /* submission=0, queue_head=1 */
     int      dma_aging_metric;      /* missed_grants=0, wait_cycles=1 */
     uint32_t dma_aging_increment;   /* priority levels gained per aging step */

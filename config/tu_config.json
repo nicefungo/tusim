@@ -87,6 +87,7 @@
       "bus_topology": "independent",
       "arbitration": "round_robin",
       "drr_quantum_bytes": 256,
+      "drr_quantum_cycles": 64,
       "drr_cost_mode": "useful_bytes",
       "aging_scope": "submission",
       "aging_metric": "grants",

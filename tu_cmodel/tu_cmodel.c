@@ -111,7 +111,7 @@ void tu_init_with_config(const tu_runtime_config_t *cfg) {
                          cfg->sram_bw_window_cycles);
 
     /* Initialize DMA engine from the executable runtime configuration. */
-    tu_dma_init_config_boundary_aging_policy_drr_cost(cfg->dma_async_mode,
+    tu_dma_init_config_boundary_aging_policy_drr_cost_service(cfg->dma_async_mode,
                                cfg->dma_num_channels,
                                cfg->dma_max_outstanding,
                                cfg->dma_bus_mode,
@@ -123,6 +123,7 @@ void tu_init_with_config(const tu_runtime_config_t *cfg) {
                                cfg->dma_aging_cycle_quantum,
                                cfg->dma_drr_quantum_bytes,
                                cfg->dma_drr_cost_mode,
+                               cfg->dma_drr_quantum_cycles,
                                cfg->dma_binding_policy,
                                cfg->dma_bus_width_bits,
                                cfg->dma_latency_configured ?

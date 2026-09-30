@@ -49,14 +49,81 @@ static void init_drr(uint32_t quantum) {
 }
 
 static void init_drr_cost(int cost_mode) {
-    tu_dma_init_config_boundary_aging_policy_drr_cost(
+    tu_dma_init_config_boundary_aging_policy_drr_cost_service(
         true, 2, 8, TU_DMA_BUS_MODE_SHARED_SERIAL,
         TU_DMA_ARB_DEFICIT_ROUND_ROBIN, TU_DMA_AGING_FROM_SUBMISSION,
-        TU_DMA_AGING_BY_MISSED_GRANTS, 1u, 0u, 1u, 64u, cost_mode,
+        TU_DMA_AGING_BY_MISSED_GRANTS, 1u, 0u, 1u, 64u, cost_mode, 64u,
         TU_DMA_BIND_EXPLICIT, 256u, 50u, 50u, 64u, 64u, 64u,
         0u, 0u, 0u, false, false, TU_DMA_SEGMENT_AGGREGATE,
         TU_DMA_BASE_PER_DESCRIPTOR, TU_DMA_PAYLOAD_ALIGN_BURST_COMMAND,
         TU_DMA_ISSUE_PAYLOAD_SERIALIZED, TU_DMA_BOUNDARY_SRAM_ADDRESS);
+}
+
+static void init_drr_service_cost(int cost_mode) {
+    tu_dma_init_config_boundary_aging_policy_drr_cost_service(
+        true, 2, 8, TU_DMA_BUS_MODE_SHARED_SERIAL,
+        TU_DMA_ARB_DEFICIT_ROUND_ROBIN, TU_DMA_AGING_FROM_SUBMISSION,
+        TU_DMA_AGING_BY_MISSED_GRANTS, 1u, 0u, 1u, 64u, cost_mode, 64u,
+        TU_DMA_BIND_EXPLICIT, 256u, 50u, 100u, 64u, 64u, 64u,
+        0u, 0u, 0u, false, false, TU_DMA_SEGMENT_AGGREGATE,
+        TU_DMA_BASE_PER_DESCRIPTOR, TU_DMA_PAYLOAD_PACKED_DESCRIPTOR,
+        TU_DMA_ISSUE_PAYLOAD_SERIALIZED, TU_DMA_BOUNDARY_SIZE_ONLY);
+}
+
+static int run_drr_service_case(int cost_mode, uint64_t load_complete[2],
+                                uint64_t *store_complete,
+                                uint64_t *batch_complete) {
+    enum { BYTES = 64, SRAM_BYTES = 192 };
+    static uint8_t load_src[2][BYTES];
+    static uint8_t store_dst[BYTES];
+    tu_sram_region_t sram;
+    tu_dma_descriptor_t *load0 = NULL, *load1 = NULL, *store = NULL;
+    tu_sram_init(&sram, SRAM_BYTES, "dma-drr-service-sweep");
+    sram.banks.bw_modeling = false;
+    memset(load_src[0], 0x17, BYTES);
+    memset(load_src[1], 0x29, BYTES);
+    memset(store_dst, 0, BYTES);
+    memset(tu_sram_raw_ptr(&sram), 0x6d, BYTES);
+    init_drr_service_cost(cost_mode);
+    if (g_tu_dma.drr_cost_mode != (tu_dma_drr_cost_mode_t)cost_mode ||
+        g_tu_dma.drr_quantum_cycles != 64u) return -1;
+    load0 = tu_dma_desc_create_linear(0, TU_DMA_DIR_HOST_TO_TU,
+                                      &sram, 64u, load_src[0], 1u, BYTES);
+    load1 = tu_dma_desc_create_linear(0, TU_DMA_DIR_HOST_TO_TU,
+                                      &sram, 128u, load_src[1], 1u, BYTES);
+    store = tu_dma_desc_create_linear(1, TU_DMA_DIR_TU_TO_HOST,
+                                      &sram, 0u, store_dst, 1u, BYTES);
+    if (!load0 || !load1 || !store || !tu_dma_submit_desc(load0) ||
+        !tu_dma_submit_desc(load1) || !tu_dma_submit_desc(store)) return -2;
+    while (g_tu_dma.total_transfers < 3u && g_tu_dma.current_cycle < 1000u)
+        tu_dma_tick();
+    while (g_tu_dma.channels[0].total_completed +
+           g_tu_dma.channels[1].total_completed < 3u &&
+           g_tu_dma.current_cycle < 1000u)
+        tu_dma_tick();
+    load_complete[0] = load0->cycles_completed;
+    load_complete[1] = load1->cycles_completed;
+    *store_complete = store->cycles_completed;
+    *batch_complete = g_tu_dma.current_cycle;
+    for (uint32_t i = 0; i < BYTES; i++)
+        if (store_dst[i] != 0x6d) return -3;
+    if ((cost_mode == TU_DMA_DRR_CHARGE_USEFUL_BYTES &&
+         (load_complete[0] != 53u || *store_complete != 155u ||
+          load_complete[1] != 207u)) ||
+        (cost_mode == TU_DMA_DRR_CHARGE_SERVICE_CYCLES &&
+         (load_complete[0] != 53u || load_complete[1] != 105u ||
+          *store_complete != 207u)) ||
+        *batch_complete != 207u ||
+        memcmp(tu_sram_raw_ptr(&sram) + 64u, load_src[0], BYTES) != 0 ||
+        memcmp(tu_sram_raw_ptr(&sram) + 128u, load_src[1], BYTES) != 0)
+        return -4;
+    tu_dma_destroy();
+    load0->next = load1->next = store->next = NULL;
+    tu_dma_desc_destroy(load0);
+    tu_dma_desc_destroy(load1);
+    tu_dma_desc_destroy(store);
+    tu_sram_destroy(&sram);
+    return 0;
 }
 
 static int run_drr_cost_case(int cost_mode, uint64_t ch0_complete[2],
@@ -699,6 +766,23 @@ int main(void) {
                drr_cost_names[i], (unsigned long)aligned[0],
                (unsigned long)aligned[1], (unsigned long)misaligned,
                64u, 96u, (unsigned long)batch);
+    }
+    printf("\ndrr_service_metric load0 load1 store batch\n");
+    const int service_modes[] = {
+        TU_DMA_DRR_CHARGE_USEFUL_BYTES, TU_DMA_DRR_CHARGE_SERVICE_CYCLES
+    };
+    const char *service_names[] = {"useful_bytes", "service_cycles"};
+    for (uint32_t i = 0; i < 2; i++) {
+        uint64_t loads[2] = {0}, store = 0, batch = 0;
+        int rc = run_drr_service_case(service_modes[i], loads, &store, &batch);
+        if (rc != 0) {
+            fprintf(stderr, "FAIL DRR service cost=%s rc=%d\n",
+                    service_names[i], rc);
+            return 170 - rc;
+        }
+        printf("%15s %5lu %5lu %5lu %5lu\n", service_names[i],
+               (unsigned long)loads[0], (unsigned long)loads[1],
+               (unsigned long)store, (unsigned long)batch);
     }
     printf("PASS: exact order/cycles, aging and DRR cost alternatives, config conversion, occupied traffic, and byte movement\n");
     return 0;

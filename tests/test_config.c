@@ -179,6 +179,8 @@ int main(void) {
               "DMA unbounded aging boost compatibility default");
         CHECK(cfg.dma_drr_quantum_bytes == 256,
               "DMA DRR 256-byte quantum default");
+        CHECK(cfg.dma_drr_quantum_cycles == 64,
+              "DMA DRR 64-cycle quantum default");
         CHECK(cfg.dma_drr_cost_mode == TU_DMA_CONFIG_DRR_COST_USEFUL_BYTES,
               "DMA DRR useful-byte cost default");
         CHECK(cfg.dma_aging_metric == TU_DMA_CONFIG_AGING_MISSED_GRANTS &&
@@ -255,7 +257,8 @@ int main(void) {
             "    \"aging_increment\": 4,"
             "    \"aging_max_boost\": 3,"
             "    \"drr_quantum_bytes\": 1024,"
-            "    \"drr_cost_mode\": \"occupied_bytes\","
+            "    \"drr_quantum_cycles\": 128,"
+            "    \"drr_cost_mode\": \"service_cycles\","
             "    \"aging_cycle_quantum\": 64,"
             "    \"aging_quantum_domain\": \"physical_ns\","
             "    \"aging_quantum_ns\": 64.0,"
@@ -302,8 +305,11 @@ int main(void) {
         CHECK(cfg.dma_drr_quantum_bytes == 1024 &&
               rt.dma_drr_quantum_bytes == 1024,
               "DMA DRR quantum parse/runtime propagation");
-        CHECK(cfg.dma_drr_cost_mode == TU_DMA_CONFIG_DRR_COST_OCCUPIED_BYTES &&
-              rt.dma_drr_cost_mode == TU_DMA_CONFIG_DRR_COST_OCCUPIED_BYTES,
+        CHECK(cfg.dma_drr_quantum_cycles == 128 &&
+              rt.dma_drr_quantum_cycles == 128,
+              "DMA DRR cycle quantum parse/runtime propagation");
+        CHECK(cfg.dma_drr_cost_mode == TU_DMA_CONFIG_DRR_COST_SERVICE_CYCLES &&
+              rt.dma_drr_cost_mode == TU_DMA_CONFIG_DRR_COST_SERVICE_CYCLES,
               "DMA DRR cost-mode parse/runtime propagation");
         CHECK(cfg.dma_aging_metric == TU_DMA_CONFIG_AGING_WAIT_CYCLES &&
               rt.dma_aging_metric == TU_DMA_CONFIG_AGING_WAIT_CYCLES &&
@@ -696,10 +702,14 @@ int main(void) {
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
               "should reject non-power-of-two DRR quantum");
         cfg.dma_drr_quantum_bytes = 256;
-        cfg.dma_drr_cost_mode = 2;
+        cfg.dma_drr_cost_mode = 3;
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
-              "should reject DRR cost mode=2");
+              "should reject DRR cost mode=3");
         cfg.dma_drr_cost_mode = TU_DMA_CONFIG_DRR_COST_USEFUL_BYTES;
+        cfg.dma_drr_quantum_cycles = 1048577u;
+        CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
+              "should reject excessive DRR cycle quantum");
+        cfg.dma_drr_quantum_cycles = 64u;
         cfg.dma_aging_cycle_quantum = 0;
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
               "should reject aging cycle quantum=0");
@@ -918,7 +928,8 @@ int main(void) {
         cfg.dma_num_channels = 2;
         cfg.dma_bus_mode = TU_DMA_CONFIG_BUS_SHARED_SERIAL;
         cfg.dma_arb_policy = TU_DMA_CONFIG_ARB_AGING_PRIORITY;
-        cfg.dma_drr_cost_mode = TU_DMA_CONFIG_DRR_COST_OCCUPIED_BYTES;
+        cfg.dma_drr_quantum_cycles = 128;
+        cfg.dma_drr_cost_mode = TU_DMA_CONFIG_DRR_COST_SERVICE_CYCLES;
         cfg.dma_aging_scope = TU_DMA_CONFIG_AGING_QUEUE_HEAD;
         cfg.dma_aging_metric = TU_DMA_CONFIG_AGING_WAIT_CYCLES;
         cfg.dma_aging_increment = 4;
@@ -946,7 +957,9 @@ int main(void) {
               "active DMA bus topology");
         CHECK(g_tu_dma.arb_policy == TU_DMA_ARB_AGING_PRIORITY,
               "active DMA arbitration");
-        CHECK(g_tu_dma.drr_cost_mode == TU_DMA_DRR_CHARGE_OCCUPIED_BYTES,
+        CHECK(g_tu_dma.drr_quantum_cycles == 128,
+              "active DMA DRR cycle quantum");
+        CHECK(g_tu_dma.drr_cost_mode == TU_DMA_DRR_CHARGE_SERVICE_CYCLES,
               "active DMA DRR cost mode");
         CHECK(g_tu_dma.aging_scope == TU_DMA_AGING_FROM_QUEUE_HEAD,
               "active DMA aging scope");

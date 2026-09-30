@@ -84,7 +84,7 @@ The full executable path is:
 
 - Occupied bytes are the cmodel's deterministic command/beat accounting, not measured AXI/DRAM traffic.
 - Virtual deficit rounds consume no cycles. Comparator, divider/shift, boundary-evaluation timing, counter area, scheduler power, and energy are unquantified.
-- The mode does not include base latency, command issue cycles, SRAM stalls, DRAM row/refresh/turnaround service, or active remaining cycles. A service-cycle deficit is a separate possible contract.
+- The `service_cycles` follow-up in `dma-drr-service-cycle-metric.md` now includes deterministic base, command-issue, and payload timing as a third runtime cost contract. Stateful SRAM stalls, DRAM row/refresh/turnaround service, and active remaining cycles remain outside that pre-issue estimate.
 - Arbitration remains non-preemptive, so neither metric can interrupt a long active descriptor.
 - Finite command credits, backpressure, queue-aware DRAM service, per-channel weights, deadlines, and calibrated physical throughput remain unmodeled.
 

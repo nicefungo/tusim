@@ -97,7 +97,8 @@
 | `dma_bus_topology` | independent | enum | Channel data paths: independent or shared_serial |
 | `dma_arbitration` | round_robin | enum | Shared-serial selection: round_robin, strict_priority, aging_priority, or deficit_round_robin |
 | `dma_drr_quantum_bytes` | 256 | bytes/visit | Byte credit added to each backlogged DRR channel visit |
-| `dma_drr_cost_mode` | useful_bytes | enum | DRR charges useful payload bytes or occupied interface bytes |
+| `dma_drr_quantum_cycles` | 64 | cycles/visit | Cycle credit used when DRR charges modeled service time |
+| `dma_drr_cost_mode` | useful_bytes | enum | DRR charges useful bytes, occupied bytes, or modeled service cycles |
 | `dma_aging_scope` | submission | enum | Aging starts at accepted submission or queue-head eligibility |
 | `dma_aging_metric` | grants | enum | Aging measured in missed grants or quantized wait cycles |
 | `dma_aging_increment` | 1 | levels/step | Priority levels gained per aging step |

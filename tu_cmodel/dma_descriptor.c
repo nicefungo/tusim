@@ -26,7 +26,7 @@ tu_dma_engine_t g_tu_dma = {0};
  * Lifecycle
  * ================================================================ */
 
-void tu_dma_init_config_boundary_aging_policy_drr_cost(bool async, uint32_t num_channels,
+void tu_dma_init_config_boundary_aging_policy_drr_cost_service(bool async, uint32_t num_channels,
                                 uint32_t max_queue_depth, int bus_mode,
                                 int arb_policy, int aging_scope,
                                 int aging_metric, uint32_t aging_increment,
@@ -34,6 +34,7 @@ void tu_dma_init_config_boundary_aging_policy_drr_cost(bool async, uint32_t num_
                                 uint32_t aging_cycle_quantum,
                                 uint32_t drr_quantum_bytes,
                                 int drr_cost_mode,
+                                uint32_t drr_quantum_cycles,
                                 int binding_policy,
                                 uint32_t bus_width_bits,
                                 uint32_t read_latency_cycles,
@@ -117,12 +118,22 @@ void tu_dma_init_config_boundary_aging_policy_drr_cost(bool async, uint32_t num_
     }
     g_tu_dma.drr_quantum_bytes = drr_quantum_bytes;
     if (drr_cost_mode != TU_DMA_DRR_CHARGE_USEFUL_BYTES &&
-        drr_cost_mode != TU_DMA_DRR_CHARGE_OCCUPIED_BYTES) {
+        drr_cost_mode != TU_DMA_DRR_CHARGE_OCCUPIED_BYTES &&
+        drr_cost_mode != TU_DMA_DRR_CHARGE_SERVICE_CYCLES) {
         fprintf(stderr, "DMA: unsupported DRR cost mode %d\n", drr_cost_mode);
         memset(&g_tu_dma, 0, sizeof(g_tu_dma));
         return;
     }
     g_tu_dma.drr_cost_mode = (tu_dma_drr_cost_mode_t)drr_cost_mode;
+    if (drr_quantum_cycles == 0)
+        drr_quantum_cycles = 64u;
+    if (drr_quantum_cycles > 1048576u) {
+        fprintf(stderr, "DMA: DRR cycle quantum must be in [1,1048576], got %u\n",
+                drr_quantum_cycles);
+        memset(&g_tu_dma, 0, sizeof(g_tu_dma));
+        return;
+    }
+    g_tu_dma.drr_quantum_cycles = drr_quantum_cycles;
     if (binding_policy != TU_DMA_BIND_EXPLICIT &&
         binding_policy != TU_DMA_BIND_ROUND_ROBIN &&
         binding_policy != TU_DMA_BIND_LEAST_OUTSTANDING &&
@@ -234,6 +245,43 @@ void tu_dma_init_config_boundary_aging_policy_drr_cost(bool async, uint32_t num_
         g_tu_dma.channels[i].channel_id = (uint8_t)i;
         g_tu_dma.channels[i].max_depth = max_queue_depth > 0 ? max_queue_depth : TU_DMA_MAX_OUTSTANDING;
     }
+}
+
+void tu_dma_init_config_boundary_aging_policy_drr_cost(bool async, uint32_t num_channels,
+                                uint32_t max_queue_depth, int bus_mode,
+                                int arb_policy, int aging_scope,
+                                int aging_metric, uint32_t aging_increment,
+                                uint32_t aging_max_boost,
+                                uint32_t aging_cycle_quantum,
+                                uint32_t drr_quantum_bytes,
+                                int drr_cost_mode,
+                                int binding_policy,
+                                uint32_t bus_width_bits,
+                                uint32_t read_latency_cycles,
+                                uint32_t write_latency_cycles,
+                                uint32_t max_burst_bytes,
+                                uint32_t read_max_burst_bytes,
+                                uint32_t write_max_burst_bytes,
+                                uint32_t burst_issue_cycles,
+                                uint32_t read_burst_issue_cycles,
+                                uint32_t write_burst_issue_cycles,
+                                bool read_issue_configured,
+                                bool write_issue_configured,
+                                int burst_segmentation,
+                                int base_latency_scope,
+                                int payload_scope,
+                                int issue_payload_mode,
+                                int burst_boundary_mode) {
+    tu_dma_init_config_boundary_aging_policy_drr_cost_service(
+        async, num_channels, max_queue_depth, bus_mode, arb_policy,
+        aging_scope, aging_metric, aging_increment, aging_max_boost,
+        aging_cycle_quantum, drr_quantum_bytes, drr_cost_mode, 64u,
+        binding_policy, bus_width_bits, read_latency_cycles,
+        write_latency_cycles, max_burst_bytes, read_max_burst_bytes,
+        write_max_burst_bytes, burst_issue_cycles, read_burst_issue_cycles,
+        write_burst_issue_cycles, read_issue_configured,
+        write_issue_configured, burst_segmentation, base_latency_scope,
+        payload_scope, issue_payload_mode, burst_boundary_mode);
 }
 
 void tu_dma_init_config_boundary_aging_policy_drr(bool async, uint32_t num_channels,
@@ -1431,7 +1479,9 @@ static uint64_t descriptor_transfer_cycles(const tu_dma_descriptor_t *desc) {
            combine_payload_issue_cycles(payload, bursts, issue);
 }
 
-static uint64_t descriptor_drr_cost_bytes(const tu_dma_descriptor_t *desc) {
+static uint64_t descriptor_drr_cost(const tu_dma_descriptor_t *desc) {
+    if (g_tu_dma.drr_cost_mode == TU_DMA_DRR_CHARGE_SERVICE_CYCLES)
+        return descriptor_transfer_cycles(desc);
     if (g_tu_dma.drr_cost_mode == TU_DMA_DRR_CHARGE_OCCUPIED_BYTES)
         return descriptor_payload_cycles(desc) * g_tu_dma.bus_width_bytes;
     return desc->total_bytes;
@@ -1803,24 +1853,27 @@ int tu_dma_tick(void) {
                                      g_tu_dma.num_channels;
                         tu_dma_channel_state_t *ch = &g_tu_dma.channels[i];
                         if (!ch->head) {
-                            ch->drr_deficit_bytes = 0;
+                            ch->drr_deficit_credits = 0;
                             continue;
                         }
                         any = true;
-                        if (UINT64_MAX - ch->drr_deficit_bytes <
-                            g_tu_dma.drr_quantum_bytes)
-                            ch->drr_deficit_bytes = UINT64_MAX;
+                        uint32_t quantum = g_tu_dma.drr_cost_mode ==
+                                TU_DMA_DRR_CHARGE_SERVICE_CYCLES ?
+                            g_tu_dma.drr_quantum_cycles :
+                            g_tu_dma.drr_quantum_bytes;
+                        if (UINT64_MAX - ch->drr_deficit_credits < quantum)
+                            ch->drr_deficit_credits = UINT64_MAX;
                         else
-                            ch->drr_deficit_bytes += g_tu_dma.drr_quantum_bytes;
-                        uint64_t cost = descriptor_drr_cost_bytes(ch->head);
-                        if (ch->drr_deficit_bytes < cost)
+                            ch->drr_deficit_credits += quantum;
+                        uint64_t cost = descriptor_drr_cost(ch->head);
+                        if (ch->drr_deficit_credits < cost)
                             continue;
-                        ch->drr_deficit_bytes -= cost;
+                        ch->drr_deficit_credits -= cost;
                         ch->active = ch->head;
                         ch->head = ch->head->next;
                         ch->queue_depth--;
                         if (!ch->head)
-                            ch->drr_deficit_bytes = 0;
+                            ch->drr_deficit_credits = 0;
                         tu_dma_execute_desc(ch->active);
                         g_tu_dma.next_shared_channel =
                             (i + 1u) % g_tu_dma.num_channels;
