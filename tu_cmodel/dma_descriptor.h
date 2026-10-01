@@ -76,6 +76,11 @@ typedef enum {
     TU_DMA_DRR_CHARGE_SERVICE_CYCLES = 2
 } tu_dma_drr_cost_mode_t;
 
+typedef enum {
+    TU_DMA_DRR_SERVICE_INTERLEAVED = 0,
+    TU_DMA_DRR_SERVICE_WORK_CONSERVING = 1
+} tu_dma_drr_service_mode_t;
+
 /* Descriptor-to-queue binding. Explicit preserves the producer-selected
  * channel. Automatic policies rebind at accepted submission boundaries. */
 typedef enum {
@@ -222,6 +227,10 @@ typedef struct {
     uint32_t                drr_quantum_bytes;
     uint32_t                drr_quantum_cycles;
     tu_dma_drr_cost_mode_t  drr_cost_mode;
+    tu_dma_drr_service_mode_t drr_service_mode;
+    uint8_t                 drr_channel_weights[TU_DMA_ENGINE_MAX_CHANNELS];
+    bool                    drr_continue_visit;
+    uint32_t                drr_continue_channel;
     uint32_t                next_shared_channel;
     uint64_t                arbitration_epoch;
     tu_dma_binding_policy_t binding_policy;
@@ -486,6 +495,9 @@ void tu_dma_init_config_boundary_aging_policy_drr_cost_service(
     int issue_payload_mode, int burst_boundary_mode);
 void tu_dma_init(bool async);
 void tu_dma_destroy(void);
+bool tu_dma_set_drr_service(uint32_t service_mode,
+                            const uint8_t *channel_weights,
+                            uint32_t weight_count);
 
 /* ---- Descriptor Construction ---- */
 tu_dma_descriptor_t *tu_dma_desc_create_linear(

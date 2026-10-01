@@ -244,7 +244,32 @@ void tu_dma_init_config_boundary_aging_policy_drr_cost_service(bool async, uint3
     for (uint32_t i = 0; i < g_tu_dma.num_channels; i++) {
         g_tu_dma.channels[i].channel_id = (uint8_t)i;
         g_tu_dma.channels[i].max_depth = max_queue_depth > 0 ? max_queue_depth : TU_DMA_MAX_OUTSTANDING;
+        g_tu_dma.drr_channel_weights[i] = 1u;
     }
+}
+
+bool tu_dma_set_drr_service(uint32_t service_mode,
+                            const uint8_t *channel_weights,
+                            uint32_t weight_count) {
+    if (service_mode > TU_DMA_DRR_SERVICE_WORK_CONSERVING ||
+        !channel_weights || weight_count != TU_DMA_ENGINE_MAX_CHANNELS) {
+        fprintf(stderr, "DMA: invalid DRR service mode or channel-weight vector\n");
+        return false;
+    }
+    bool all_zero = true;
+    for (uint32_t i = 0; i < weight_count; i++)
+        all_zero = all_zero && channel_weights[i] == 0;
+    for (uint32_t i = 0; i < weight_count; i++) {
+        if (!all_zero && channel_weights[i] == 0) {
+            fprintf(stderr, "DMA: DRR channel weights must be in [1,255]\n");
+            return false;
+        }
+    }
+    g_tu_dma.drr_service_mode = (tu_dma_drr_service_mode_t)service_mode;
+    for (uint32_t i = 0; i < weight_count; i++)
+        g_tu_dma.drr_channel_weights[i] = all_zero ? 1u : channel_weights[i];
+    g_tu_dma.drr_continue_visit = false;
+    return true;
 }
 
 void tu_dma_init_config_boundary_aging_policy_drr_cost(bool async, uint32_t num_channels,
@@ -1854,17 +1879,29 @@ int tu_dma_tick(void) {
                         tu_dma_channel_state_t *ch = &g_tu_dma.channels[i];
                         if (!ch->head) {
                             ch->drr_deficit_credits = 0;
+                            if (g_tu_dma.drr_continue_visit &&
+                                g_tu_dma.drr_continue_channel == i)
+                                g_tu_dma.drr_continue_visit = false;
                             continue;
                         }
                         any = true;
-                        uint32_t quantum = g_tu_dma.drr_cost_mode ==
+                        uint64_t quantum = g_tu_dma.drr_cost_mode ==
                                 TU_DMA_DRR_CHARGE_SERVICE_CYCLES ?
                             g_tu_dma.drr_quantum_cycles :
                             g_tu_dma.drr_quantum_bytes;
-                        if (UINT64_MAX - ch->drr_deficit_credits < quantum)
-                            ch->drr_deficit_credits = UINT64_MAX;
-                        else
-                            ch->drr_deficit_credits += quantum;
+                        bool continuing = g_tu_dma.drr_continue_visit &&
+                                          g_tu_dma.drr_continue_channel == i;
+                        if (!continuing) {
+                            uint64_t weight = g_tu_dma.drr_channel_weights[i] ?
+                                                  g_tu_dma.drr_channel_weights[i] : 1u;
+                            uint64_t grant = quantum > UINT64_MAX / weight ?
+                                                 UINT64_MAX : quantum * weight;
+                            if (UINT64_MAX - ch->drr_deficit_credits < grant)
+                                ch->drr_deficit_credits = UINT64_MAX;
+                            else
+                                ch->drr_deficit_credits += grant;
+                        }
+                        g_tu_dma.drr_continue_visit = false;
                         uint64_t cost = descriptor_drr_cost(ch->head);
                         if (ch->drr_deficit_credits < cost)
                             continue;
@@ -1875,8 +1912,17 @@ int tu_dma_tick(void) {
                         if (!ch->head)
                             ch->drr_deficit_credits = 0;
                         tu_dma_execute_desc(ch->active);
-                        g_tu_dma.next_shared_channel =
-                            (i + 1u) % g_tu_dma.num_channels;
+                        if (g_tu_dma.drr_service_mode ==
+                                TU_DMA_DRR_SERVICE_WORK_CONSERVING &&
+                            ch->head && ch->drr_deficit_credits >=
+                                            descriptor_drr_cost(ch->head)) {
+                            g_tu_dma.next_shared_channel = i;
+                            g_tu_dma.drr_continue_visit = true;
+                            g_tu_dma.drr_continue_channel = i;
+                        } else {
+                            g_tu_dma.next_shared_channel =
+                                (i + 1u) % g_tu_dma.num_channels;
+                        }
                         g_tu_dma.arbitration_epoch++;
                         selected = true;
                         break;

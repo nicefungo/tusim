@@ -671,6 +671,28 @@ static void test_dma_shared_arbitration(void) {
         TU_DMA_ISSUE_PAYLOAD_SERIALIZED, TU_DMA_BOUNDARY_SIZE_ONLY);
     ok = ok && g_tu_dma.num_channels == 0;
     tu_dma_destroy();
+
+    {
+        const uint8_t valid_weights[TU_DMA_ENGINE_MAX_CHANNELS] =
+            {1, 2, 1, 1, 1, 1, 1, 1};
+        const uint8_t invalid_weights[TU_DMA_ENGINE_MAX_CHANNELS] =
+            {1, 0, 1, 1, 1, 1, 1, 1};
+        tu_dma_init_config_policy(true, 2, 2, TU_DMA_BUS_MODE_SHARED_SERIAL,
+                                  TU_DMA_ARB_DEFICIT_ROUND_ROBIN);
+        ok = ok && tu_dma_set_drr_service(
+            TU_DMA_DRR_SERVICE_WORK_CONSERVING, valid_weights,
+            TU_DMA_ENGINE_MAX_CHANNELS);
+        ok = ok && g_tu_dma.drr_channel_weights[1] == 2;
+        ok = ok && !tu_dma_set_drr_service(
+            2, valid_weights, TU_DMA_ENGINE_MAX_CHANNELS);
+        ok = ok && !tu_dma_set_drr_service(
+            TU_DMA_DRR_SERVICE_INTERLEAVED, invalid_weights,
+            TU_DMA_ENGINE_MAX_CHANNELS);
+        ok = ok && g_tu_dma.drr_service_mode ==
+                       TU_DMA_DRR_SERVICE_WORK_CONSERVING &&
+                   g_tu_dma.drr_channel_weights[1] == 2;
+        tu_dma_destroy();
+    }
     tu_sram_destroy(&sram);
     if (ok) PASS(); else FAIL("policy selection or rejection failed");
 }

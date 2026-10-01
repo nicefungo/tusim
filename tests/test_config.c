@@ -183,6 +183,10 @@ int main(void) {
               "DMA DRR 64-cycle quantum default");
         CHECK(cfg.dma_drr_cost_mode == TU_DMA_CONFIG_DRR_COST_USEFUL_BYTES,
               "DMA DRR useful-byte cost default");
+        CHECK(cfg.dma_drr_service_mode == TU_DMA_CONFIG_DRR_SERVICE_INTERLEAVED &&
+              cfg.dma_drr_channel_weights[0] == 1 &&
+              cfg.dma_drr_channel_weights[7] == 1,
+              "DMA DRR interleaved unit-weight defaults");
         CHECK(cfg.dma_aging_metric == TU_DMA_CONFIG_AGING_MISSED_GRANTS &&
               cfg.dma_aging_cycle_quantum == 1,
               "DMA grant aging metric default");
@@ -259,6 +263,8 @@ int main(void) {
             "    \"drr_quantum_bytes\": 1024,"
             "    \"drr_quantum_cycles\": 128,"
             "    \"drr_cost_mode\": \"service_cycles\","
+            "    \"drr_service_mode\": \"work_conserving\","
+            "    \"drr_channel_weights\": [1,2,3,4,5,6,7,8],"
             "    \"aging_cycle_quantum\": 64,"
             "    \"aging_quantum_domain\": \"physical_ns\","
             "    \"aging_quantum_ns\": 64.0,"
@@ -311,6 +317,11 @@ int main(void) {
         CHECK(cfg.dma_drr_cost_mode == TU_DMA_CONFIG_DRR_COST_SERVICE_CYCLES &&
               rt.dma_drr_cost_mode == TU_DMA_CONFIG_DRR_COST_SERVICE_CYCLES,
               "DMA DRR cost-mode parse/runtime propagation");
+        CHECK(cfg.dma_drr_service_mode == TU_DMA_CONFIG_DRR_SERVICE_WORK_CONSERVING &&
+              rt.dma_drr_service_mode == TU_DMA_CONFIG_DRR_SERVICE_WORK_CONSERVING &&
+              cfg.dma_drr_channel_weights[1] == 2 &&
+              rt.dma_drr_channel_weights[7] == 8,
+              "DMA DRR service/weight parse/runtime propagation");
         CHECK(cfg.dma_aging_metric == TU_DMA_CONFIG_AGING_WAIT_CYCLES &&
               rt.dma_aging_metric == TU_DMA_CONFIG_AGING_WAIT_CYCLES &&
               cfg.dma_aging_cycle_quantum == 64 &&
@@ -710,6 +721,21 @@ int main(void) {
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
               "should reject excessive DRR cycle quantum");
         cfg.dma_drr_quantum_cycles = 64u;
+        cfg.dma_drr_service_mode = 2;
+        CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
+              "should reject DRR service mode=2");
+        cfg.dma_drr_service_mode = TU_DMA_CONFIG_DRR_SERVICE_INTERLEAVED;
+        cfg.dma_drr_channel_weights[3] = 0;
+        CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
+              "should reject zero DRR channel weight");
+        cfg.dma_drr_channel_weights[3] = 1;
+        memset(cfg.dma_drr_channel_weights, 0,
+               sizeof(cfg.dma_drr_channel_weights));
+        CHECK(tu_config_validate(&cfg, NULL, 0) == 0 &&
+              tu_config_to_runtime(&cfg).dma_drr_channel_weights[3] == 1,
+              "all-zero legacy DRR weights inherit unit weights");
+        for (uint32_t i = 0; i < TU_DMA_ENGINE_MAX_CHANNELS; i++)
+            cfg.dma_drr_channel_weights[i] = 1;
         cfg.dma_aging_cycle_quantum = 0;
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
               "should reject aging cycle quantum=0");
@@ -930,6 +956,8 @@ int main(void) {
         cfg.dma_arb_policy = TU_DMA_CONFIG_ARB_AGING_PRIORITY;
         cfg.dma_drr_quantum_cycles = 128;
         cfg.dma_drr_cost_mode = TU_DMA_CONFIG_DRR_COST_SERVICE_CYCLES;
+        cfg.dma_drr_service_mode = TU_DMA_CONFIG_DRR_SERVICE_WORK_CONSERVING;
+        cfg.dma_drr_channel_weights[1] = 3;
         cfg.dma_aging_scope = TU_DMA_CONFIG_AGING_QUEUE_HEAD;
         cfg.dma_aging_metric = TU_DMA_CONFIG_AGING_WAIT_CYCLES;
         cfg.dma_aging_increment = 4;
@@ -961,6 +989,9 @@ int main(void) {
               "active DMA DRR cycle quantum");
         CHECK(g_tu_dma.drr_cost_mode == TU_DMA_DRR_CHARGE_SERVICE_CYCLES,
               "active DMA DRR cost mode");
+        CHECK(g_tu_dma.drr_service_mode == TU_DMA_DRR_SERVICE_WORK_CONSERVING &&
+              g_tu_dma.drr_channel_weights[1] == 3,
+              "active DMA weighted work-conserving service");
         CHECK(g_tu_dma.aging_scope == TU_DMA_AGING_FROM_QUEUE_HEAD,
               "active DMA aging scope");
         CHECK(g_tu_dma.aging_increment == 4,

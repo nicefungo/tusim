@@ -124,6 +124,11 @@ typedef enum {
 } tu_dma_config_drr_cost_mode_t;
 
 typedef enum {
+    TU_DMA_CONFIG_DRR_SERVICE_INTERLEAVED = 0,
+    TU_DMA_CONFIG_DRR_SERVICE_WORK_CONSERVING = 1
+} tu_dma_config_drr_service_mode_t;
+
+typedef enum {
     TU_DMA_CONFIG_AGING_QUANTUM_CORE_CYCLES = 0,
     TU_DMA_CONFIG_AGING_QUANTUM_PHYSICAL_NS = 1
 } tu_dma_config_aging_quantum_domain_t;
@@ -270,6 +275,8 @@ typedef struct tu_config_t {
     uint32_t dma_drr_quantum_bytes; /* byte credit per DRR visit */
     uint32_t dma_drr_quantum_cycles;/* cycle credit per DRR visit */
     int      dma_drr_cost_mode;     /* useful=0, occupied=1, service=2 */
+    int      dma_drr_service_mode;  /* interleaved=0, work-conserving=1 */
+    uint8_t  dma_drr_channel_weights[TU_DMA_ENGINE_MAX_CHANNELS];
     int      dma_aging_scope;       /* submission=0, queue_head=1 */
     int      dma_aging_metric;      /* missed_grants=0, wait_cycles=1 */
     uint32_t dma_aging_increment;   /* priority levels gained per aging step */

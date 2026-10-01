@@ -66,6 +66,10 @@ def main() -> int:
             "drr_quantum_cycles: 64": "drr_quantum_cycles: 128",
             'drr_cost_mode: "useful_bytes"':
                 'drr_cost_mode: "service_cycles"',
+            'drr_service_mode: "interleaved"':
+                'drr_service_mode: "work_conserving"',
+            'drr_channel_weights: [1, 1, 1, 1, 1, 1, 1, 1]':
+                'drr_channel_weights: [1, 2, 3, 4, 5, 6, 7, 8]',
             "aging_cycle_quantum: 1": "aging_cycle_quantum: 64",
             'aging_quantum_domain: "core_cycles"':
                 'aging_quantum_domain: "physical_ns"',
@@ -109,6 +113,7 @@ def main() -> int:
             '_Static_assert(TU_DMA_AGING_MAX_BOOST == 3, "DMA aging boost cap");\n'
             '_Static_assert(TU_DMA_DRR_QUANTUM_CYCLES == 128, "DMA DRR cycle quantum");\n'
             '_Static_assert(TU_DMA_DRR_COST_MODE == TU_DMA_DRR_COST_SERVICE_CYCLES, "DMA DRR cost mode");\n'
+            '_Static_assert(TU_DMA_DRR_SERVICE_MODE == TU_DMA_DRR_SERVICE_DEFAULT_WORK_CONSERVING, "DMA DRR service mode");\n'
             '_Static_assert(TU_DMA_AGING_QUANTUM_DOMAIN == TU_DMA_AGING_QUANTUM_PHYSICAL_NS, "DMA aging quantum domain");\n'
             '_Static_assert(TU_DMA_AGING_CYCLE_QUANTUM == 64, "DMA aging quantum");\n'
             '_Static_assert(TU_FP16_ROUNDING_MODE == TU_FP16_ROUNDING_STOCHASTIC, "rounding");\n'
@@ -124,6 +129,8 @@ def main() -> int:
             'c.dma_drr_quantum_bytes != 1024 || '
             'c.dma_drr_quantum_cycles != 128 || '
             'c.dma_drr_cost_mode != TU_DMA_DRR_COST_SERVICE_CYCLES || '
+            'c.dma_drr_service_mode != TU_DMA_DRR_SERVICE_WORK_CONSERVING || '
+            'c.dma_drr_channel_weights[0] != 1 || c.dma_drr_channel_weights[7] != 8 || '
             'c.dma_aging_quantum_domain != TU_DMA_AGING_QUANTUM_PHYSICAL_NS || '
             'c.dma_aging_quantum_ns != 64.0 || '
             'c.dma_aging_cycle_quantum != 64 || '

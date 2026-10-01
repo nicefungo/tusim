@@ -190,6 +190,14 @@ static int parse_dma_drr_cost_mode_str(const char *s) {
     return -1;
 }
 
+static int parse_dma_drr_service_mode_str(const char *s) {
+    if (!s || strcmp(s, "interleaved") == 0)
+        return TU_DMA_CONFIG_DRR_SERVICE_INTERLEAVED;
+    if (strcmp(s, "work_conserving") == 0)
+        return TU_DMA_CONFIG_DRR_SERVICE_WORK_CONSERVING;
+    return -1;
+}
+
 static int parse_dma_aging_quantum_domain_str(const char *s) {
     if (!s || strcmp(s, "core_cycles") == 0)
         return TU_DMA_CONFIG_AGING_QUANTUM_CORE_CYCLES;
@@ -429,6 +437,9 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->dma_drr_quantum_bytes = 256;
     cfg->dma_drr_quantum_cycles = 64;
     cfg->dma_drr_cost_mode   = TU_DMA_CONFIG_DRR_COST_USEFUL_BYTES;
+    cfg->dma_drr_service_mode = TU_DMA_CONFIG_DRR_SERVICE_INTERLEAVED;
+    for (uint32_t i = 0; i < TU_DMA_ENGINE_MAX_CHANNELS; i++)
+        cfg->dma_drr_channel_weights[i] = 1;
     cfg->dma_aging_scope     = TU_DMA_CONFIG_AGING_SUBMISSION;
     cfg->dma_aging_metric    = TU_DMA_CONFIG_AGING_MISSED_GRANTS;
     cfg->dma_aging_increment = 1;
@@ -538,6 +549,10 @@ tu_runtime_config_t tu_config_to_runtime(const struct tu_config_t *cfg) {
     rt.dma_drr_quantum_cycles = cfg->dma_drr_quantum_cycles ?
                                 cfg->dma_drr_quantum_cycles : 64u;
     rt.dma_drr_cost_mode = cfg->dma_drr_cost_mode;
+    rt.dma_drr_service_mode = cfg->dma_drr_service_mode;
+    for (uint32_t i = 0; i < TU_DMA_ENGINE_MAX_CHANNELS; i++)
+        rt.dma_drr_channel_weights[i] = cfg->dma_drr_channel_weights[i] ?
+                                            cfg->dma_drr_channel_weights[i] : 1u;
     rt.dma_aging_scope = cfg->dma_aging_scope;
     rt.dma_aging_metric = cfg->dma_aging_metric;
     rt.dma_aging_increment = cfg->dma_aging_increment;
@@ -796,6 +811,33 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
         if (drr_cost && drr_cost->type == TU_JSON_STRING)
             cfg->dma_drr_cost_mode = parse_dma_drr_cost_mode_str(
                 tu_json_as_string(drr_cost, NULL));
+        const tu_json_value_t *drr_service = tu_json_get(d, "drr_service_mode");
+        if (drr_service && drr_service->type == TU_JSON_STRING)
+            cfg->dma_drr_service_mode = parse_dma_drr_service_mode_str(
+                tu_json_as_string(drr_service, NULL));
+        const tu_json_value_t *drr_weights = tu_json_get(d, "drr_channel_weights");
+        if (drr_weights) {
+            if (drr_weights->type != TU_JSON_ARRAY ||
+                drr_weights->array.count != TU_DMA_ENGINE_MAX_CHANNELS) {
+                cfg->dma_drr_channel_weights[0] = 0;
+            } else {
+                uint8_t parsed_weights[TU_DMA_ENGINE_MAX_CHANNELS] = {0};
+                bool valid_weights = true;
+                for (uint32_t i = 0; i < TU_DMA_ENGINE_MAX_CHANNELS; i++) {
+                    const tu_json_value_t *weight = &drr_weights->array.items[i];
+                    int64_t value = weight->type == TU_JSON_INT ?
+                                        tu_json_as_int(weight) : 0;
+                    valid_weights = valid_weights &&
+                                    value >= 1 && value <= UINT8_MAX;
+                    parsed_weights[i] = valid_weights ? (uint8_t)value : 1u;
+                }
+                if (valid_weights)
+                    memcpy(cfg->dma_drr_channel_weights, parsed_weights,
+                           sizeof(parsed_weights));
+                else
+                    cfg->dma_drr_channel_weights[0] = 0;
+            }
+        }
         const tu_json_value_t *aging_scope = tu_json_get(d, "aging_scope");
         if (aging_scope && aging_scope->type == TU_JSON_STRING)
             cfg->dma_aging_scope = parse_dma_aging_scope_str(
@@ -1186,6 +1228,24 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
             snprintf(error_buf, error_size,
                      "DMA drr_quantum_cycles must be in [1,1048576]");
         return -1;
+    }
+    if (cfg->dma_drr_service_mode < TU_DMA_CONFIG_DRR_SERVICE_INTERLEAVED ||
+        cfg->dma_drr_service_mode > TU_DMA_CONFIG_DRR_SERVICE_WORK_CONSERVING) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DMA drr_service_mode must be interleaved or work_conserving");
+        return -1;
+    }
+    bool any_drr_weight = false;
+    for (uint32_t i = 0; i < TU_DMA_ENGINE_MAX_CHANNELS; i++)
+        any_drr_weight = any_drr_weight || cfg->dma_drr_channel_weights[i] != 0;
+    for (uint32_t i = 0; i < TU_DMA_ENGINE_MAX_CHANNELS; i++) {
+        if (any_drr_weight && cfg->dma_drr_channel_weights[i] == 0) {
+            if (error_buf && error_size > 0)
+                snprintf(error_buf, error_size,
+                         "DMA drr_channel_weights must contain 8 values in [1,255]");
+            return -1;
+        }
     }
     if (cfg->dma_aging_scope < TU_DMA_CONFIG_AGING_SUBMISSION ||
         cfg->dma_aging_scope > TU_DMA_CONFIG_AGING_QUEUE_HEAD) {
@@ -1763,6 +1823,14 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             "service_cycles" : "useful_bytes");
     fprintf(out, "| `dma_drr_cost_mode` | %s | enum | DRR charges useful bytes, occupied bytes, or modeled service cycles |\n",
             drr_cost_name);
+    fprintf(out, "| `dma_drr_service_mode` | %s | enum | Rotate after one descriptor or spend residual credit while the current channel remains eligible |\n",
+            cfg->dma_drr_service_mode == TU_DMA_CONFIG_DRR_SERVICE_WORK_CONSERVING ?
+            "work_conserving" : "interleaved");
+    fprintf(out, "| `dma_drr_channel_weights` | [%u,%u,%u,%u,%u,%u,%u,%u] | uint8[8] | Per-channel DRR quantum multipliers in [1,255] |\n",
+            cfg->dma_drr_channel_weights[0], cfg->dma_drr_channel_weights[1],
+            cfg->dma_drr_channel_weights[2], cfg->dma_drr_channel_weights[3],
+            cfg->dma_drr_channel_weights[4], cfg->dma_drr_channel_weights[5],
+            cfg->dma_drr_channel_weights[6], cfg->dma_drr_channel_weights[7]);
     fprintf(out, "| `dma_aging_scope` | %s | enum | Aging starts at accepted submission or queue-head eligibility |\n",
             cfg->dma_aging_scope == TU_DMA_CONFIG_AGING_QUEUE_HEAD ?
             "queue_head" : "submission");

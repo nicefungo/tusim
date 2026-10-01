@@ -99,6 +99,8 @@
 | `dma_drr_quantum_bytes` | 256 | bytes/visit | Byte credit added to each backlogged DRR channel visit |
 | `dma_drr_quantum_cycles` | 64 | cycles/visit | Cycle credit used when DRR charges modeled service time |
 | `dma_drr_cost_mode` | useful_bytes | enum | DRR charges useful bytes, occupied bytes, or modeled service cycles |
+| `dma_drr_service_mode` | interleaved | enum | Rotate after one descriptor or spend residual credit while the current channel remains eligible |
+| `dma_drr_channel_weights` | [1,1,1,1,1,1,1,1] | uint8[8] | Per-channel DRR quantum multipliers in [1,255] |
 | `dma_aging_scope` | submission | enum | Aging starts at accepted submission or queue-head eligibility |
 | `dma_aging_metric` | grants | enum | Aging measured in missed grants or quantized wait cycles |
 | `dma_aging_increment` | 1 | levels/step | Priority levels gained per aging step |

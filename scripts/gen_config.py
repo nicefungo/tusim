@@ -361,6 +361,14 @@ def generate_header(config, output_path):
     L('#define TU_DMA_DRR_COST_SERVICE_CYCLES 2')
     drr_cost_map = {'useful_bytes': 0, 'occupied_bytes': 1, 'service_cycles': 2}
     L(f'#define TU_DMA_DRR_COST_MODE {drr_cost_map[dma.get("drr_cost_mode", "useful_bytes")]}')
+    L('#define TU_DMA_DRR_SERVICE_DEFAULT_INTERLEAVED 0')
+    L('#define TU_DMA_DRR_SERVICE_DEFAULT_WORK_CONSERVING 1')
+    drr_service_map = {'interleaved': 0, 'work_conserving': 1}
+    L(f'#define TU_DMA_DRR_SERVICE_MODE {drr_service_map[dma.get("drr_service_mode", "interleaved")]}')
+    drr_weights = [int(x) for x in dma.get('drr_channel_weights', ['1'] * 8)]
+    if len(drr_weights) != 8 or any(x < 1 or x > 255 for x in drr_weights):
+        raise ValueError('dma.drr_channel_weights must contain 8 integers in [1,255]')
+    L('#define TU_DMA_DRR_CHANNEL_WEIGHTS {' + ', '.join(str(x) for x in drr_weights) + '}')
     L('#define TU_DMA_AGING_SCOPE_SUBMISSION 0')
     L('#define TU_DMA_AGING_SCOPE_QUEUE_HEAD 1')
     aging_scope_map = {'submission': 0, 'queue_head': 1}
@@ -549,6 +557,8 @@ def generate_header(config, output_path):
     L('    uint32_t dma_drr_quantum_bytes;')
     L('    uint32_t dma_drr_quantum_cycles;')
     L('    int      dma_drr_cost_mode;')
+    L('    int      dma_drr_service_mode;')
+    L('    uint8_t  dma_drr_channel_weights[TU_DMA_ENGINE_MAX_CHANNELS];')
     L('    int      dma_aging_scope;')
     L('    int      dma_aging_metric;')
     L('    uint32_t dma_aging_increment;')
@@ -609,6 +619,8 @@ def generate_header(config, output_path):
     L(f'        .dma_drr_quantum_bytes = TU_DMA_DRR_QUANTUM_BYTES,')
     L(f'        .dma_drr_quantum_cycles = TU_DMA_DRR_QUANTUM_CYCLES,')
     L(f'        .dma_drr_cost_mode = TU_DMA_DRR_COST_MODE,')
+    L(f'        .dma_drr_service_mode = TU_DMA_DRR_SERVICE_MODE,')
+    L(f'        .dma_drr_channel_weights = TU_DMA_DRR_CHANNEL_WEIGHTS,')
     L(f'        .dma_aging_scope    = TU_DMA_AGING_SCOPE,')
     L(f'        .dma_aging_metric   = TU_DMA_AGING_METRIC,')
     L(f'        .dma_aging_increment = TU_DMA_AGING_INCREMENT,')

@@ -233,6 +233,66 @@ static int run_drr_case(uint32_t quantum, uint64_t small_complete[4],
     return 0;
 }
 
+static int run_weighted_drr_case(uint32_t service_mode,
+                                 uint64_t complete[2][4],
+                                 uint64_t *batch_complete) {
+    enum { CHANNELS = 2, PER_CHANNEL = 4, BYTES = 64, TOTAL = 512 };
+    static uint8_t src[CHANNELS][PER_CHANNEL][BYTES];
+    const uint8_t weights[TU_DMA_ENGINE_MAX_CHANNELS] =
+        {1u, 2u, 1u, 1u, 1u, 1u, 1u, 1u};
+    tu_sram_region_t sram;
+    tu_dma_descriptor_t *desc[CHANNELS][PER_CHANNEL] = {{0}};
+    tu_sram_init(&sram, TOTAL, "dma-weighted-drr-sweep");
+    sram.banks.bw_modeling = false;
+    init_drr(64u);
+    if (!tu_dma_set_drr_service(service_mode, weights,
+                                TU_DMA_ENGINE_MAX_CHANNELS)) return -1;
+    if (g_tu_dma.drr_service_mode != (tu_dma_drr_service_mode_t)service_mode ||
+        g_tu_dma.drr_channel_weights[1] != 2u) return -2;
+
+    for (uint32_t ch = 0; ch < CHANNELS; ch++) {
+        for (uint32_t i = 0; i < PER_CHANNEL; i++) {
+            memset(src[ch][i], (int)(0x20u + ch * 8u + i), BYTES);
+            uint32_t offset = (ch * PER_CHANNEL + i) * BYTES;
+            desc[ch][i] = tu_dma_desc_create_linear(
+                (uint8_t)ch, TU_DMA_DIR_HOST_TO_TU, &sram, offset,
+                src[ch][i], 1u, BYTES);
+            if (!desc[ch][i] || !tu_dma_submit_desc(desc[ch][i])) return -3;
+        }
+    }
+    while (g_tu_dma.channels[0].total_completed +
+               g_tu_dma.channels[1].total_completed < 8u &&
+           g_tu_dma.current_cycle < 1000u)
+        tu_dma_tick();
+    for (uint32_t ch = 0; ch < CHANNELS; ch++)
+        for (uint32_t i = 0; i < PER_CHANNEL; i++)
+            complete[ch][i] = desc[ch][i]->cycles_completed;
+    *batch_complete = g_tu_dma.current_cycle;
+
+    const uint64_t interleaved[2][4] = {
+        {53u, 157u, 261u, 365u}, {105u, 209u, 313u, 417u}
+    };
+    const uint64_t work_conserving[2][4] = {
+        {53u, 209u, 365u, 417u}, {105u, 157u, 261u, 313u}
+    };
+    const uint64_t (*expected)[4] =
+        service_mode == TU_DMA_DRR_SERVICE_WORK_CONSERVING ?
+            work_conserving : interleaved;
+    if (*batch_complete != 417u ||
+        memcmp(complete, expected, sizeof(interleaved)) != 0 ||
+        memcmp(tu_sram_raw_ptr(&sram), src, sizeof(src)) != 0)
+        return -4;
+
+    tu_dma_destroy();
+    for (uint32_t ch = 0; ch < CHANNELS; ch++)
+        for (uint32_t i = 0; i < PER_CHANNEL; i++) {
+            desc[ch][i]->next = NULL;
+            tu_dma_desc_destroy(desc[ch][i]);
+        }
+    tu_sram_destroy(&sram);
+    return 0;
+}
+
 static int run_case(int policy, uint64_t completed[STREAMS]) {
     tu_sram_region_t sram;
     tu_dma_descriptor_t *desc[STREAMS] = {0};
@@ -784,6 +844,28 @@ int main(void) {
                (unsigned long)loads[0], (unsigned long)loads[1],
                (unsigned long)store, (unsigned long)batch);
     }
-    printf("PASS: exact order/cycles, aging and DRR cost alternatives, config conversion, occupied traffic, and byte movement\n");
+    printf("\ndrr_service_mode ch0_0 ch0_1 ch0_2 ch0_3 ch1_0 ch1_1 ch1_2 ch1_3 batch\n");
+    const uint32_t drr_service_modes[] = {
+        TU_DMA_DRR_SERVICE_INTERLEAVED,
+        TU_DMA_DRR_SERVICE_WORK_CONSERVING
+    };
+    const char *drr_service_names[] = {"interleaved", "work_conserving"};
+    for (uint32_t i = 0; i < 2; i++) {
+        uint64_t complete[2][4] = {{0}}, batch = 0;
+        int rc = run_weighted_drr_case(drr_service_modes[i], complete, &batch);
+        if (rc != 0) {
+            fprintf(stderr, "FAIL weighted DRR service=%s rc=%d\n",
+                    drr_service_names[i], rc);
+            return 190 - rc;
+        }
+        printf("%17s %5lu %5lu %5lu %5lu %5lu %5lu %5lu %5lu %5lu\n",
+               drr_service_names[i],
+               (unsigned long)complete[0][0], (unsigned long)complete[0][1],
+               (unsigned long)complete[0][2], (unsigned long)complete[0][3],
+               (unsigned long)complete[1][0], (unsigned long)complete[1][1],
+               (unsigned long)complete[1][2], (unsigned long)complete[1][3],
+               (unsigned long)batch);
+    }
+    printf("PASS: exact order/cycles, aging, DRR cost/service/weight alternatives, config conversion, occupied traffic, and byte movement\n");
     return 0;
 }
