@@ -90,6 +90,7 @@
       "drr_quantum_cycles": 64,
       "drr_cost_mode": "useful_bytes",
       "drr_service_mode": "interleaved",
+      "drr_idle_policy": "reset",
       "drr_channel_weights": [1, 1, 1, 1, 1, 1, 1, 1],
       "aging_scope": "submission",
       "aging_metric": "grants",

@@ -146,6 +146,7 @@ void tu_init_with_config(const tu_runtime_config_t *cfg) {
     tu_dma_set_drr_service(cfg->dma_drr_service_mode,
                            cfg->dma_drr_channel_weights,
                            TU_DMA_ENGINE_MAX_CHANNELS);
+    tu_dma_set_drr_idle_policy(cfg->dma_drr_idle_policy);
 
     /* Initialize command queue */
     g_tu.cmdq = tu_cmdq_create(TU_ISA_QUEUE_DEPTH, TU_CYCLE_MODEL == TU_CYCLE_MODEL_FUNCTIONAL);

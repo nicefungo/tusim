@@ -272,6 +272,23 @@ bool tu_dma_set_drr_service(uint32_t service_mode,
     return true;
 }
 
+bool tu_dma_set_drr_idle_policy(uint32_t idle_policy) {
+    if (idle_policy > TU_DMA_DRR_IDLE_RETAIN_RESIDUAL) {
+        fprintf(stderr, "DMA: unsupported DRR idle-credit policy %u\n",
+                idle_policy);
+        return false;
+    }
+    g_tu_dma.drr_idle_policy = (tu_dma_drr_idle_policy_t)idle_policy;
+    if (g_tu_dma.drr_idle_policy == TU_DMA_DRR_IDLE_RESET) {
+        for (uint32_t i = 0; i < g_tu_dma.num_channels; i++) {
+            tu_dma_channel_state_t *ch = &g_tu_dma.channels[i];
+            if (!ch->head && !ch->active)
+                ch->drr_deficit_credits = 0;
+        }
+    }
+    return true;
+}
+
 void tu_dma_init_config_boundary_aging_policy_drr_cost(bool async, uint32_t num_channels,
                                 uint32_t max_queue_depth, int bus_mode,
                                 int arb_policy, int aging_scope,
@@ -1878,7 +1895,8 @@ int tu_dma_tick(void) {
                                      g_tu_dma.num_channels;
                         tu_dma_channel_state_t *ch = &g_tu_dma.channels[i];
                         if (!ch->head) {
-                            ch->drr_deficit_credits = 0;
+                            if (g_tu_dma.drr_idle_policy == TU_DMA_DRR_IDLE_RESET)
+                                ch->drr_deficit_credits = 0;
                             if (g_tu_dma.drr_continue_visit &&
                                 g_tu_dma.drr_continue_channel == i)
                                 g_tu_dma.drr_continue_visit = false;
@@ -1909,7 +1927,8 @@ int tu_dma_tick(void) {
                         ch->active = ch->head;
                         ch->head = ch->head->next;
                         ch->queue_depth--;
-                        if (!ch->head)
+                        if (!ch->head &&
+                            g_tu_dma.drr_idle_policy == TU_DMA_DRR_IDLE_RESET)
                             ch->drr_deficit_credits = 0;
                         tu_dma_execute_desc(ch->active);
                         if (g_tu_dma.drr_service_mode ==

@@ -293,6 +293,82 @@ static int run_weighted_drr_case(uint32_t service_mode,
     return 0;
 }
 
+static int run_drr_idle_credit_case(uint32_t idle_policy,
+                                    uint64_t second_complete[2],
+                                    uint64_t *batch_complete) {
+    enum { FIRST = 64, LARGE = 160, SMALL = 64, TOTAL = 352 };
+    static uint8_t first_src[2][FIRST];
+    static uint8_t second_src[2][LARGE];
+    tu_sram_region_t sram;
+    tu_dma_descriptor_t *first[2] = {0};
+    tu_dma_descriptor_t *second[2] = {0};
+
+    tu_sram_init(&sram, TOTAL, "dma-drr-idle-credit-sweep");
+    sram.banks.bw_modeling = false;
+    memset(first_src[0], 0x31, FIRST);
+    memset(first_src[1], 0x42, FIRST);
+    memset(second_src[0], 0x53, LARGE);
+    memset(second_src[1], 0x64, SMALL);
+    init_drr(128u);
+    if (!tu_dma_set_drr_idle_policy(idle_policy) ||
+        g_tu_dma.drr_idle_policy != (tu_dma_drr_idle_policy_t)idle_policy)
+        return -1;
+
+    for (uint32_t ch = 0; ch < 2; ch++) {
+        first[ch] = tu_dma_desc_create_linear(
+            (uint8_t)ch, TU_DMA_DIR_HOST_TO_TU, &sram, ch * FIRST,
+            first_src[ch], 1u, FIRST);
+        if (!first[ch] || !tu_dma_submit_desc(first[ch])) return -2;
+    }
+    while (g_tu_dma.channels[0].total_completed +
+               g_tu_dma.channels[1].total_completed < 2u &&
+           g_tu_dma.current_cycle < 500u)
+        tu_dma_tick();
+    if (g_tu_dma.current_cycle != 105u ||
+        (idle_policy == TU_DMA_DRR_IDLE_RESET &&
+         g_tu_dma.channels[0].drr_deficit_credits != 0u) ||
+        (idle_policy == TU_DMA_DRR_IDLE_RETAIN_RESIDUAL &&
+         g_tu_dma.channels[0].drr_deficit_credits != 64u))
+        return -3;
+
+    second[0] = tu_dma_desc_create_linear(
+        0u, TU_DMA_DIR_HOST_TO_TU, &sram, 128u,
+        second_src[0], 1u, LARGE);
+    second[1] = tu_dma_desc_create_linear(
+        1u, TU_DMA_DIR_HOST_TO_TU, &sram, 288u,
+        second_src[1], 1u, SMALL);
+    if (!second[0] || !second[1] || !tu_dma_submit_desc(second[0]) ||
+        !tu_dma_submit_desc(second[1])) return -4;
+    while (g_tu_dma.channels[0].total_completed +
+               g_tu_dma.channels[1].total_completed < 4u &&
+           g_tu_dma.current_cycle < 1000u)
+        tu_dma_tick();
+    second_complete[0] = second[0]->cycles_completed;
+    second_complete[1] = second[1]->cycles_completed;
+    *batch_complete = g_tu_dma.current_cycle;
+
+    const uint64_t expected_reset[2] = {213u, 158u};
+    const uint64_t expected_retain[2] = {161u, 213u};
+    const uint64_t *expected = idle_policy == TU_DMA_DRR_IDLE_RETAIN_RESIDUAL ?
+                                   expected_retain : expected_reset;
+    if (*batch_complete != 213u ||
+        memcmp(second_complete, expected, sizeof(expected_reset)) != 0 ||
+        memcmp(tu_sram_raw_ptr(&sram), first_src, sizeof(first_src)) != 0 ||
+        memcmp(tu_sram_raw_ptr(&sram) + 128u, second_src[0], LARGE) != 0 ||
+        memcmp(tu_sram_raw_ptr(&sram) + 288u, second_src[1], SMALL) != 0)
+        return -5;
+
+    tu_dma_destroy();
+    for (uint32_t ch = 0; ch < 2; ch++) {
+        first[ch]->next = NULL;
+        second[ch]->next = NULL;
+        tu_dma_desc_destroy(first[ch]);
+        tu_dma_desc_destroy(second[ch]);
+    }
+    tu_sram_destroy(&sram);
+    return 0;
+}
+
 static int run_case(int policy, uint64_t completed[STREAMS]) {
     tu_sram_region_t sram;
     tu_dma_descriptor_t *desc[STREAMS] = {0};
@@ -866,6 +942,23 @@ int main(void) {
                (unsigned long)complete[1][2], (unsigned long)complete[1][3],
                (unsigned long)batch);
     }
-    printf("PASS: exact order/cycles, aging, DRR cost/service/weight alternatives, config conversion, occupied traffic, and byte movement\n");
+    printf("\ndrr_idle_policy ch0_second ch1_second batch\n");
+    const uint32_t idle_policies[] = {
+        TU_DMA_DRR_IDLE_RESET, TU_DMA_DRR_IDLE_RETAIN_RESIDUAL
+    };
+    const char *idle_names[] = {"reset", "retain_residual"};
+    for (uint32_t i = 0; i < 2; i++) {
+        uint64_t complete[2] = {0}, batch = 0;
+        int rc = run_drr_idle_credit_case(idle_policies[i], complete, &batch);
+        if (rc != 0) {
+            fprintf(stderr, "FAIL DRR idle policy=%s rc=%d\n",
+                    idle_names[i], rc);
+            return 210 - rc;
+        }
+        printf("%16s %10lu %10lu %5lu\n", idle_names[i],
+               (unsigned long)complete[0], (unsigned long)complete[1],
+               (unsigned long)batch);
+    }
+    printf("PASS: exact order/cycles, aging, DRR cost/service/weight/idle alternatives, config conversion, occupied traffic, and byte movement\n");
     return 0;
 }

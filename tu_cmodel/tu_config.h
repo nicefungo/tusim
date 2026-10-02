@@ -195,6 +195,9 @@ extern "C" {
 #define TU_DMA_DRR_SERVICE_DEFAULT_INTERLEAVED 0
 #define TU_DMA_DRR_SERVICE_DEFAULT_WORK_CONSERVING 1
 #define TU_DMA_DRR_SERVICE_MODE 0
+#define TU_DMA_DRR_IDLE_POLICY_RESET 0
+#define TU_DMA_DRR_IDLE_POLICY_RETAIN_RESIDUAL 1
+#define TU_DMA_DRR_IDLE_POLICY 0
 #define TU_DMA_DRR_CHANNEL_WEIGHTS {1, 1, 1, 1, 1, 1, 1, 1}
 #define TU_DMA_AGING_SCOPE_SUBMISSION 0
 #define TU_DMA_AGING_SCOPE_QUEUE_HEAD 1
@@ -345,6 +348,7 @@ typedef struct {
     uint32_t dma_drr_quantum_cycles;
     int      dma_drr_cost_mode;
     int      dma_drr_service_mode;
+    int      dma_drr_idle_policy;
     uint8_t  dma_drr_channel_weights[TU_DMA_ENGINE_MAX_CHANNELS];
     int      dma_aging_scope;
     int      dma_aging_metric;
@@ -407,6 +411,7 @@ static inline tu_runtime_config_t tu_runtime_config_default(void) {
         .dma_drr_quantum_cycles = TU_DMA_DRR_QUANTUM_CYCLES,
         .dma_drr_cost_mode = TU_DMA_DRR_COST_MODE,
         .dma_drr_service_mode = TU_DMA_DRR_SERVICE_MODE,
+        .dma_drr_idle_policy = TU_DMA_DRR_IDLE_POLICY,
         .dma_drr_channel_weights = TU_DMA_DRR_CHANNEL_WEIGHTS,
         .dma_aging_scope    = TU_DMA_AGING_SCOPE,
         .dma_aging_metric   = TU_DMA_AGING_METRIC,

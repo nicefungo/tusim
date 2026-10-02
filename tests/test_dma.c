@@ -683,6 +683,14 @@ static void test_dma_shared_arbitration(void) {
             TU_DMA_DRR_SERVICE_WORK_CONSERVING, valid_weights,
             TU_DMA_ENGINE_MAX_CHANNELS);
         ok = ok && g_tu_dma.drr_channel_weights[1] == 2;
+        ok = ok && tu_dma_set_drr_idle_policy(
+            TU_DMA_DRR_IDLE_RETAIN_RESIDUAL);
+        ok = ok && !tu_dma_set_drr_idle_policy(2);
+        ok = ok && g_tu_dma.drr_idle_policy ==
+                       TU_DMA_DRR_IDLE_RETAIN_RESIDUAL;
+        g_tu_dma.channels[0].drr_deficit_credits = 64u;
+        ok = ok && tu_dma_set_drr_idle_policy(TU_DMA_DRR_IDLE_RESET);
+        ok = ok && g_tu_dma.channels[0].drr_deficit_credits == 0u;
         ok = ok && !tu_dma_set_drr_service(
             2, valid_weights, TU_DMA_ENGINE_MAX_CHANNELS);
         ok = ok && !tu_dma_set_drr_service(
