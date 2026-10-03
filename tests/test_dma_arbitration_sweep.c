@@ -369,6 +369,75 @@ static int run_drr_idle_credit_case(uint32_t idle_policy,
     return 0;
 }
 
+static int run_drr_cost_granularity_case(uint32_t granularity,
+                                         uint64_t small_complete[4],
+                                         uint64_t *large_complete,
+                                         uint64_t *batch_complete) {
+    enum { SMALL = 16, LARGE = 64, TOTAL = 4 * SMALL + LARGE };
+    static uint8_t small_src[4][SMALL];
+    static uint8_t large_src[LARGE];
+    tu_sram_region_t sram;
+    tu_dma_descriptor_t *small[4] = {0}, *large = NULL;
+
+    tu_sram_init(&sram, TOTAL, "dma-drr-cost-granularity-sweep");
+    sram.banks.bw_modeling = false;
+    memset(small_src, 0x75, sizeof(small_src));
+    memset(large_src, 0x86, sizeof(large_src));
+    init_drr(64u);
+    const uint8_t weights[TU_DMA_ENGINE_MAX_CHANNELS] =
+        {1u, 1u, 1u, 1u, 1u, 1u, 1u, 1u};
+    if (!tu_dma_set_drr_service(TU_DMA_DRR_SERVICE_WORK_CONSERVING,
+                                weights, TU_DMA_ENGINE_MAX_CHANNELS) ||
+        !tu_dma_set_drr_cost_granularity(granularity) ||
+        g_tu_dma.drr_cost_granularity !=
+            (tu_dma_drr_cost_granularity_t)granularity)
+        return -1;
+
+    for (uint32_t i = 0; i < 4; i++) {
+        small[i] = tu_dma_desc_create_linear(
+            0u, TU_DMA_DIR_HOST_TO_TU, &sram, i * SMALL,
+            small_src[i], 1u, SMALL);
+        if (!small[i] || !tu_dma_submit_desc(small[i])) return -2;
+    }
+    large = tu_dma_desc_create_linear(
+        1u, TU_DMA_DIR_HOST_TO_TU, &sram, 4u * SMALL,
+        large_src, 1u, LARGE);
+    if (!large || !tu_dma_submit_desc(large)) return -3;
+
+    while (g_tu_dma.channels[0].total_completed +
+               g_tu_dma.channels[1].total_completed < 5u &&
+           g_tu_dma.current_cycle < 1000u)
+        tu_dma_tick();
+    for (uint32_t i = 0; i < 4; i++)
+        small_complete[i] = small[i]->cycles_completed;
+    *large_complete = large->cycles_completed;
+    *batch_complete = g_tu_dma.current_cycle;
+
+    const uint64_t exact_small[4] = {52u, 103u, 154u, 205u};
+    const uint64_t rounded_small[4] = {52u, 155u, 206u, 257u};
+    const uint64_t *expected_small =
+        granularity == TU_DMA_DRR_COST_QUANTUM_ROUNDED ?
+            rounded_small : exact_small;
+    const uint64_t expected_large =
+        granularity == TU_DMA_DRR_COST_QUANTUM_ROUNDED ? 104u : 257u;
+    if (*batch_complete != 257u || *large_complete != expected_large ||
+        memcmp(small_complete, expected_small, sizeof(exact_small)) != 0 ||
+        memcmp(tu_sram_raw_ptr(&sram), small_src, sizeof(small_src)) != 0 ||
+        memcmp(tu_sram_raw_ptr(&sram) + 4u * SMALL,
+               large_src, LARGE) != 0)
+        return -4;
+
+    tu_dma_destroy();
+    for (uint32_t i = 0; i < 4; i++) {
+        small[i]->next = NULL;
+        tu_dma_desc_destroy(small[i]);
+    }
+    large->next = NULL;
+    tu_dma_desc_destroy(large);
+    tu_sram_destroy(&sram);
+    return 0;
+}
+
 static int run_case(int policy, uint64_t completed[STREAMS]) {
     tu_sram_region_t sram;
     tu_dma_descriptor_t *desc[STREAMS] = {0};
@@ -959,6 +1028,26 @@ int main(void) {
                (unsigned long)complete[0], (unsigned long)complete[1],
                (unsigned long)batch);
     }
-    printf("PASS: exact order/cycles, aging, DRR cost/service/weight/idle alternatives, config conversion, occupied traffic, and byte movement\n");
+    printf("\ndrr_cost_granularity small0 small1 small2 small3 large batch\n");
+    const uint32_t granularities[] = {
+        TU_DMA_DRR_COST_EXACT, TU_DMA_DRR_COST_QUANTUM_ROUNDED
+    };
+    const char *granularity_names[] = {"exact", "quantum_rounded"};
+    for (uint32_t i = 0; i < 2; i++) {
+        uint64_t small[4] = {0}, large = 0, batch = 0;
+        int rc = run_drr_cost_granularity_case(
+            granularities[i], small, &large, &batch);
+        if (rc != 0) {
+            fprintf(stderr, "FAIL DRR cost granularity=%s rc=%d\n",
+                    granularity_names[i], rc);
+            return 230 - rc;
+        }
+        printf("%20s %6lu %6lu %6lu %6lu %5lu %5lu\n",
+               granularity_names[i], (unsigned long)small[0],
+               (unsigned long)small[1], (unsigned long)small[2],
+               (unsigned long)small[3], (unsigned long)large,
+               (unsigned long)batch);
+    }
+    printf("PASS: exact order/cycles, aging, DRR cost/service/weight/idle/granularity alternatives, config conversion, occupied traffic, and byte movement\n");
     return 0;
 }

@@ -206,6 +206,14 @@ static int parse_dma_drr_idle_policy_str(const char *s) {
     return -1;
 }
 
+static int parse_dma_drr_cost_granularity_str(const char *s) {
+    if (!s || strcmp(s, "exact") == 0)
+        return TU_DMA_CONFIG_DRR_COST_EXACT;
+    if (strcmp(s, "quantum_rounded") == 0)
+        return TU_DMA_CONFIG_DRR_COST_QUANTUM_ROUNDED;
+    return -1;
+}
+
 static int parse_dma_aging_quantum_domain_str(const char *s) {
     if (!s || strcmp(s, "core_cycles") == 0)
         return TU_DMA_CONFIG_AGING_QUANTUM_CORE_CYCLES;
@@ -447,6 +455,7 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->dma_drr_cost_mode   = TU_DMA_CONFIG_DRR_COST_USEFUL_BYTES;
     cfg->dma_drr_service_mode = TU_DMA_CONFIG_DRR_SERVICE_INTERLEAVED;
     cfg->dma_drr_idle_policy = TU_DMA_CONFIG_DRR_IDLE_RESET;
+    cfg->dma_drr_cost_granularity = TU_DMA_CONFIG_DRR_COST_EXACT;
     for (uint32_t i = 0; i < TU_DMA_ENGINE_MAX_CHANNELS; i++)
         cfg->dma_drr_channel_weights[i] = 1;
     cfg->dma_aging_scope     = TU_DMA_CONFIG_AGING_SUBMISSION;
@@ -560,6 +569,7 @@ tu_runtime_config_t tu_config_to_runtime(const struct tu_config_t *cfg) {
     rt.dma_drr_cost_mode = cfg->dma_drr_cost_mode;
     rt.dma_drr_service_mode = cfg->dma_drr_service_mode;
     rt.dma_drr_idle_policy = cfg->dma_drr_idle_policy;
+    rt.dma_drr_cost_granularity = cfg->dma_drr_cost_granularity;
     for (uint32_t i = 0; i < TU_DMA_ENGINE_MAX_CHANNELS; i++)
         rt.dma_drr_channel_weights[i] = cfg->dma_drr_channel_weights[i] ?
                                             cfg->dma_drr_channel_weights[i] : 1u;
@@ -829,6 +839,12 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
         if (drr_idle && drr_idle->type == TU_JSON_STRING)
             cfg->dma_drr_idle_policy = parse_dma_drr_idle_policy_str(
                 tu_json_as_string(drr_idle, NULL));
+        const tu_json_value_t *drr_granularity =
+            tu_json_get(d, "drr_cost_granularity");
+        if (drr_granularity && drr_granularity->type == TU_JSON_STRING)
+            cfg->dma_drr_cost_granularity =
+                parse_dma_drr_cost_granularity_str(
+                    tu_json_as_string(drr_granularity, NULL));
         const tu_json_value_t *drr_weights = tu_json_get(d, "drr_channel_weights");
         if (drr_weights) {
             if (drr_weights->type != TU_JSON_ARRAY ||
@@ -1255,6 +1271,14 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
                      "DMA drr_idle_policy must be reset or retain_residual");
+        return -1;
+    }
+    if (cfg->dma_drr_cost_granularity < TU_DMA_CONFIG_DRR_COST_EXACT ||
+        cfg->dma_drr_cost_granularity >
+            TU_DMA_CONFIG_DRR_COST_QUANTUM_ROUNDED) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DMA drr_cost_granularity must be exact or quantum_rounded");
         return -1;
     }
     bool any_drr_weight = false;
@@ -1850,6 +1874,10 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
     fprintf(out, "| `dma_drr_idle_policy` | %s | enum | Reset unused deficit on an empty queue or retain residual credit across idle periods |\n",
             cfg->dma_drr_idle_policy == TU_DMA_CONFIG_DRR_IDLE_RETAIN_RESIDUAL ?
             "retain_residual" : "reset");
+    fprintf(out, "| `dma_drr_cost_granularity` | %s | enum | Charge exact descriptor cost or round each charge up to whole DRR quantum units |\n",
+            cfg->dma_drr_cost_granularity ==
+                    TU_DMA_CONFIG_DRR_COST_QUANTUM_ROUNDED ?
+                "quantum_rounded" : "exact");
     fprintf(out, "| `dma_drr_channel_weights` | [%u,%u,%u,%u,%u,%u,%u,%u] | uint8[8] | Per-channel DRR quantum multipliers in [1,255] |\n",
             cfg->dma_drr_channel_weights[0], cfg->dma_drr_channel_weights[1],
             cfg->dma_drr_channel_weights[2], cfg->dma_drr_channel_weights[3],

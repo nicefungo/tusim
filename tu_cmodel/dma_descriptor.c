@@ -289,6 +289,23 @@ bool tu_dma_set_drr_idle_policy(uint32_t idle_policy) {
     return true;
 }
 
+bool tu_dma_set_drr_cost_granularity(uint32_t granularity) {
+    if (granularity > TU_DMA_DRR_COST_QUANTUM_ROUNDED) {
+        fprintf(stderr, "DMA: unsupported DRR cost granularity %u\n",
+                granularity);
+        return false;
+    }
+    tu_dma_drr_cost_granularity_t next =
+        (tu_dma_drr_cost_granularity_t)granularity;
+    if (g_tu_dma.drr_cost_granularity != next) {
+        for (uint32_t i = 0; i < g_tu_dma.num_channels; i++)
+            g_tu_dma.channels[i].drr_deficit_credits = 0u;
+        g_tu_dma.drr_continue_visit = false;
+    }
+    g_tu_dma.drr_cost_granularity = next;
+    return true;
+}
+
 void tu_dma_init_config_boundary_aging_policy_drr_cost(bool async, uint32_t num_channels,
                                 uint32_t max_queue_depth, int bus_mode,
                                 int arb_policy, int aging_scope,
@@ -1522,11 +1539,22 @@ static uint64_t descriptor_transfer_cycles(const tu_dma_descriptor_t *desc) {
 }
 
 static uint64_t descriptor_drr_cost(const tu_dma_descriptor_t *desc) {
+    uint64_t cost;
+    uint64_t quantum;
     if (g_tu_dma.drr_cost_mode == TU_DMA_DRR_CHARGE_SERVICE_CYCLES)
-        return descriptor_transfer_cycles(desc);
-    if (g_tu_dma.drr_cost_mode == TU_DMA_DRR_CHARGE_OCCUPIED_BYTES)
-        return descriptor_payload_cycles(desc) * g_tu_dma.bus_width_bytes;
-    return desc->total_bytes;
+        cost = descriptor_transfer_cycles(desc);
+    else if (g_tu_dma.drr_cost_mode == TU_DMA_DRR_CHARGE_OCCUPIED_BYTES)
+        cost = descriptor_payload_cycles(desc) * g_tu_dma.bus_width_bytes;
+    else
+        cost = desc->total_bytes;
+    if (cost == 0u ||
+        g_tu_dma.drr_cost_granularity == TU_DMA_DRR_COST_EXACT)
+        return cost;
+    quantum = g_tu_dma.drr_cost_mode == TU_DMA_DRR_CHARGE_SERVICE_CYCLES ?
+                  g_tu_dma.drr_quantum_cycles : g_tu_dma.drr_quantum_bytes;
+    if (cost > UINT64_MAX - (quantum - 1u))
+        return UINT64_MAX;
+    return ((cost + quantum - 1u) / quantum) * quantum;
 }
 
 void tu_dma_execute_desc(tu_dma_descriptor_t *desc) {

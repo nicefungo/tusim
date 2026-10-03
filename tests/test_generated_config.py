@@ -70,6 +70,8 @@ def main() -> int:
                 'drr_service_mode: "work_conserving"',
             'drr_idle_policy: "reset"':
                 'drr_idle_policy: "retain_residual"',
+            'drr_cost_granularity: "exact"':
+                'drr_cost_granularity: "quantum_rounded"',
             'drr_channel_weights: [1, 1, 1, 1, 1, 1, 1, 1]':
                 'drr_channel_weights: [1, 2, 3, 4, 5, 6, 7, 8]',
             "aging_cycle_quantum: 1": "aging_cycle_quantum: 64",
@@ -117,6 +119,7 @@ def main() -> int:
             '_Static_assert(TU_DMA_DRR_COST_MODE == TU_DMA_DRR_COST_SERVICE_CYCLES, "DMA DRR cost mode");\n'
             '_Static_assert(TU_DMA_DRR_SERVICE_MODE == TU_DMA_DRR_SERVICE_DEFAULT_WORK_CONSERVING, "DMA DRR service mode");\n'
             '_Static_assert(TU_DMA_DRR_IDLE_POLICY == TU_DMA_DRR_IDLE_POLICY_RETAIN_RESIDUAL, "DMA DRR idle policy");\n'
+            '_Static_assert(TU_DMA_DRR_COST_GRANULARITY == TU_DMA_DRR_COST_GRANULARITY_QUANTUM_ROUNDED, "DMA DRR cost granularity");\n'
             '_Static_assert(TU_DMA_AGING_QUANTUM_DOMAIN == TU_DMA_AGING_QUANTUM_PHYSICAL_NS, "DMA aging quantum domain");\n'
             '_Static_assert(TU_DMA_AGING_CYCLE_QUANTUM == 64, "DMA aging quantum");\n'
             '_Static_assert(TU_FP16_ROUNDING_MODE == TU_FP16_ROUNDING_STOCHASTIC, "rounding");\n'
