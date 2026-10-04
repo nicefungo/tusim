@@ -456,6 +456,7 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->dma_drr_service_mode = TU_DMA_CONFIG_DRR_SERVICE_INTERLEAVED;
     cfg->dma_drr_idle_policy = TU_DMA_CONFIG_DRR_IDLE_RESET;
     cfg->dma_drr_cost_granularity = TU_DMA_CONFIG_DRR_COST_EXACT;
+    cfg->dma_drr_round_issue_cycles = 0;
     for (uint32_t i = 0; i < TU_DMA_ENGINE_MAX_CHANNELS; i++)
         cfg->dma_drr_channel_weights[i] = 1;
     cfg->dma_aging_scope     = TU_DMA_CONFIG_AGING_SUBMISSION;
@@ -570,6 +571,7 @@ tu_runtime_config_t tu_config_to_runtime(const struct tu_config_t *cfg) {
     rt.dma_drr_service_mode = cfg->dma_drr_service_mode;
     rt.dma_drr_idle_policy = cfg->dma_drr_idle_policy;
     rt.dma_drr_cost_granularity = cfg->dma_drr_cost_granularity;
+    rt.dma_drr_round_issue_cycles = cfg->dma_drr_round_issue_cycles;
     for (uint32_t i = 0; i < TU_DMA_ENGINE_MAX_CHANNELS; i++)
         rt.dma_drr_channel_weights[i] = cfg->dma_drr_channel_weights[i] ?
                                             cfg->dma_drr_channel_weights[i] : 1u;
@@ -845,6 +847,9 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
             cfg->dma_drr_cost_granularity =
                 parse_dma_drr_cost_granularity_str(
                     tu_json_as_string(drr_granularity, NULL));
+        if (parse_opt_int64(d, "drr_round_issue_cycles", &iv))
+            cfg->dma_drr_round_issue_cycles =
+                (iv < 0 || iv > 1024) ? 1025u : (uint32_t)iv;
         const tu_json_value_t *drr_weights = tu_json_get(d, "drr_channel_weights");
         if (drr_weights) {
             if (drr_weights->type != TU_JSON_ARRAY ||
@@ -1279,6 +1284,12 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
                      "DMA drr_cost_granularity must be exact or quantum_rounded");
+        return -1;
+    }
+    if (cfg->dma_drr_round_issue_cycles > 1024u) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size,
+                     "DMA drr_round_issue_cycles must be in [0,1024]");
         return -1;
     }
     bool any_drr_weight = false;
@@ -1878,6 +1889,8 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             cfg->dma_drr_cost_granularity ==
                     TU_DMA_CONFIG_DRR_COST_QUANTUM_ROUNDED ?
                 "quantum_rounded" : "exact");
+    fprintf(out, "| `dma_drr_round_issue_cycles` | %u | cycles/unsuccessful round | Scheduler delay for each complete DRR credit round that selects no descriptor |\n",
+            cfg->dma_drr_round_issue_cycles);
     fprintf(out, "| `dma_drr_channel_weights` | [%u,%u,%u,%u,%u,%u,%u,%u] | uint8[8] | Per-channel DRR quantum multipliers in [1,255] |\n",
             cfg->dma_drr_channel_weights[0], cfg->dma_drr_channel_weights[1],
             cfg->dma_drr_channel_weights[2], cfg->dma_drr_channel_weights[3],

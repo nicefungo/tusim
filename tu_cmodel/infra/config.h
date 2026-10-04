@@ -288,6 +288,7 @@ typedef struct tu_config_t {
     int      dma_drr_service_mode;  /* interleaved=0, work-conserving=1 */
     int      dma_drr_idle_policy;   /* reset=0, retain residual=1 */
     int      dma_drr_cost_granularity; /* exact=0, quantum-rounded=1 */
+    uint32_t dma_drr_round_issue_cycles; /* cycles per unsuccessful full DRR round */
     uint8_t  dma_drr_channel_weights[TU_DMA_ENGINE_MAX_CHANNELS];
     int      dma_aging_scope;       /* submission=0, queue_head=1 */
     int      dma_aging_metric;      /* missed_grants=0, wait_cycles=1 */

@@ -240,6 +240,7 @@ typedef struct {
     tu_dma_drr_service_mode_t drr_service_mode;
     tu_dma_drr_idle_policy_t drr_idle_policy;
     tu_dma_drr_cost_granularity_t drr_cost_granularity;
+    uint32_t                drr_round_issue_cycles;
     uint8_t                 drr_channel_weights[TU_DMA_ENGINE_MAX_CHANNELS];
     bool                    drr_continue_visit;
     uint32_t                drr_continue_channel;
@@ -512,6 +513,7 @@ bool tu_dma_set_drr_service(uint32_t service_mode,
                             uint32_t weight_count);
 bool tu_dma_set_drr_idle_policy(uint32_t idle_policy);
 bool tu_dma_set_drr_cost_granularity(uint32_t granularity);
+bool tu_dma_set_drr_round_issue_cycles(uint32_t cycles);
 
 /* ---- Descriptor Construction ---- */
 tu_dma_descriptor_t *tu_dma_desc_create_linear(

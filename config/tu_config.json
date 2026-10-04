@@ -92,6 +92,7 @@
       "drr_service_mode": "interleaved",
       "drr_idle_policy": "reset",
       "drr_cost_granularity": "exact",
+      "drr_round_issue_cycles": 0,
       "drr_channel_weights": [1, 1, 1, 1, 1, 1, 1, 1],
       "aging_scope": "submission",
       "aging_metric": "grants",

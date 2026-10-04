@@ -438,6 +438,41 @@ static int run_drr_cost_granularity_case(uint32_t granularity,
     return 0;
 }
 
+static int run_drr_round_issue_case(uint32_t issue_cycles,
+                                    uint64_t *completion,
+                                    uint64_t *batch_complete) {
+    enum { BYTES = 256 };
+    static uint8_t src[BYTES];
+    tu_sram_region_t sram;
+    tu_dma_descriptor_t *desc = NULL;
+
+    tu_sram_init(&sram, BYTES, "dma-drr-round-issue-sweep");
+    sram.banks.bw_modeling = false;
+    memset(src, 0x97, sizeof(src));
+    init_drr(64u);
+    if (!tu_dma_set_drr_round_issue_cycles(issue_cycles) ||
+        g_tu_dma.drr_round_issue_cycles != issue_cycles)
+        return -1;
+    desc = tu_dma_desc_create_linear(0u, TU_DMA_DIR_HOST_TO_TU,
+                                     &sram, 0u, src, 1u, BYTES);
+    if (!desc || !tu_dma_submit_desc(desc)) return -2;
+    while (g_tu_dma.channels[0].total_completed < 1u &&
+           g_tu_dma.current_cycle < 1000u)
+        tu_dma_tick();
+    *completion = desc->cycles_completed;
+    *batch_complete = g_tu_dma.current_cycle;
+    uint64_t expected = 59u + 3u * issue_cycles;
+    if (*completion != expected || *batch_complete != expected ||
+        memcmp(tu_sram_raw_ptr(&sram), src, BYTES) != 0)
+        return -3;
+
+    tu_dma_destroy();
+    desc->next = NULL;
+    tu_dma_desc_destroy(desc);
+    tu_sram_destroy(&sram);
+    return 0;
+}
+
 static int run_case(int policy, uint64_t completed[STREAMS]) {
     tu_sram_region_t sram;
     tu_dma_descriptor_t *desc[STREAMS] = {0};
@@ -1048,6 +1083,20 @@ int main(void) {
                (unsigned long)small[3], (unsigned long)large,
                (unsigned long)batch);
     }
-    printf("PASS: exact order/cycles, aging, DRR cost/service/weight/idle/granularity alternatives, config conversion, occupied traffic, and byte movement\n");
+    printf("\ndrr_round_issue_cycles completion batch\n");
+    const uint32_t round_issue_cycles[] = {0u, 1u, 4u};
+    for (uint32_t i = 0; i < 3; i++) {
+        uint64_t completion = 0, batch = 0;
+        int rc = run_drr_round_issue_case(round_issue_cycles[i],
+                                          &completion, &batch);
+        if (rc != 0) {
+            fprintf(stderr, "FAIL DRR round issue cycles=%u rc=%d\n",
+                    round_issue_cycles[i], rc);
+            return 250 - rc;
+        }
+        printf("%22u %10lu %5lu\n", round_issue_cycles[i],
+               (unsigned long)completion, (unsigned long)batch);
+    }
+    printf("PASS: exact order/cycles, aging, DRR cost/service/weight/idle/granularity/round-latency alternatives, config conversion, occupied traffic, and byte movement\n");
     return 0;
 }

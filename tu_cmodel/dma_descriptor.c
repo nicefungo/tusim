@@ -306,6 +306,20 @@ bool tu_dma_set_drr_cost_granularity(uint32_t granularity) {
     return true;
 }
 
+bool tu_dma_set_drr_round_issue_cycles(uint32_t cycles) {
+    if (cycles > 1024u) {
+        fprintf(stderr, "DMA: DRR round issue cycles must be in [0,1024]\n");
+        return false;
+    }
+    if (g_tu_dma.drr_round_issue_cycles != cycles) {
+        for (uint32_t i = 0; i < g_tu_dma.num_channels; i++)
+            g_tu_dma.channels[i].drr_deficit_credits = 0u;
+        g_tu_dma.drr_continue_visit = false;
+    }
+    g_tu_dma.drr_round_issue_cycles = cycles;
+    return true;
+}
+
 void tu_dma_init_config_boundary_aging_policy_drr_cost(bool async, uint32_t num_channels,
                                 uint32_t max_queue_depth, int bus_mode,
                                 int arb_policy, int aging_scope,
@@ -1975,6 +1989,12 @@ int tu_dma_tick(void) {
                         break;
                     }
                     if (!any) break;
+                    if (!selected && g_tu_dma.drr_round_issue_cycles != 0u) {
+                        uint64_t delay = g_tu_dma.drr_round_issue_cycles;
+                        g_tu_dma.current_cycle =
+                            UINT64_MAX - g_tu_dma.current_cycle < delay ?
+                                UINT64_MAX : g_tu_dma.current_cycle + delay;
+                    }
                 }
             } else {
             uint8_t best_priority = 0;

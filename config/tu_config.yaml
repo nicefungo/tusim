@@ -110,6 +110,7 @@ tu:
     drr_service_mode: "interleaved" # interleaved (compat, rotate after one descriptor) | work_conserving (spend residual credit)
     drr_idle_policy: "reset" # reset (compat/fair) | retain_residual (preserve unused visit credit)
     drr_cost_granularity: "exact" # exact (compat, charge true cost) | quantum_rounded (charge whole quantum units)
+    drr_round_issue_cycles: 0 # Scheduler cycles per unsuccessful full deficit round [0,1024]; 0 is instant compatibility
     drr_channel_weights: [1, 1, 1, 1, 1, 1, 1, 1] # Per-channel quantum multipliers [1,255]
     aging_scope: "submission"    # submission (compat, total queued wait) | queue_head (only wait while eligible)
     aging_metric: "grants"       # grants (compat) | cycles (wall-clock wait quantized below)
