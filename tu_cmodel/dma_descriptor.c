@@ -320,6 +320,21 @@ bool tu_dma_set_drr_round_issue_cycles(uint32_t cycles) {
     return true;
 }
 
+bool tu_dma_set_drr_round_cost_mode(uint32_t mode) {
+    if (mode > TU_DMA_DRR_ROUND_COST_PER_CHANNEL) {
+        fprintf(stderr, "DMA: unsupported DRR round cost mode %u\n", mode);
+        return false;
+    }
+    tu_dma_drr_round_cost_mode_t next = (tu_dma_drr_round_cost_mode_t)mode;
+    if (g_tu_dma.drr_round_cost_mode != next) {
+        for (uint32_t i = 0; i < g_tu_dma.num_channels; i++)
+            g_tu_dma.channels[i].drr_deficit_credits = 0u;
+        g_tu_dma.drr_continue_visit = false;
+    }
+    g_tu_dma.drr_round_cost_mode = next;
+    return true;
+}
+
 void tu_dma_init_config_boundary_aging_policy_drr_cost(bool async, uint32_t num_channels,
                                 uint32_t max_queue_depth, int bus_mode,
                                 int arb_policy, int aging_scope,
@@ -1991,6 +2006,11 @@ int tu_dma_tick(void) {
                     if (!any) break;
                     if (!selected && g_tu_dma.drr_round_issue_cycles != 0u) {
                         uint64_t delay = g_tu_dma.drr_round_issue_cycles;
+                        if (g_tu_dma.drr_round_cost_mode ==
+                                TU_DMA_DRR_ROUND_COST_PER_CHANNEL) {
+                            delay = delay > UINT64_MAX / g_tu_dma.num_channels ?
+                                UINT64_MAX : delay * g_tu_dma.num_channels;
+                        }
                         g_tu_dma.current_cycle =
                             UINT64_MAX - g_tu_dma.current_cycle < delay ?
                                 UINT64_MAX : g_tu_dma.current_cycle + delay;

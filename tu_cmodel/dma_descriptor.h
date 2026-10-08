@@ -91,6 +91,11 @@ typedef enum {
     TU_DMA_DRR_COST_QUANTUM_ROUNDED = 1
 } tu_dma_drr_cost_granularity_t;
 
+typedef enum {
+    TU_DMA_DRR_ROUND_COST_FIXED = 0,
+    TU_DMA_DRR_ROUND_COST_PER_CHANNEL = 1
+} tu_dma_drr_round_cost_mode_t;
+
 /* Descriptor-to-queue binding. Explicit preserves the producer-selected
  * channel. Automatic policies rebind at accepted submission boundaries. */
 typedef enum {
@@ -241,6 +246,7 @@ typedef struct {
     tu_dma_drr_idle_policy_t drr_idle_policy;
     tu_dma_drr_cost_granularity_t drr_cost_granularity;
     uint32_t                drr_round_issue_cycles;
+    tu_dma_drr_round_cost_mode_t drr_round_cost_mode;
     uint8_t                 drr_channel_weights[TU_DMA_ENGINE_MAX_CHANNELS];
     bool                    drr_continue_visit;
     uint32_t                drr_continue_channel;
@@ -514,6 +520,7 @@ bool tu_dma_set_drr_service(uint32_t service_mode,
 bool tu_dma_set_drr_idle_policy(uint32_t idle_policy);
 bool tu_dma_set_drr_cost_granularity(uint32_t granularity);
 bool tu_dma_set_drr_round_issue_cycles(uint32_t cycles);
+bool tu_dma_set_drr_round_cost_mode(uint32_t mode);
 
 /* ---- Descriptor Construction ---- */
 tu_dma_descriptor_t *tu_dma_desc_create_linear(

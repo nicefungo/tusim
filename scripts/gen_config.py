@@ -377,6 +377,10 @@ def generate_header(config, output_path):
     if drr_round_issue_cycles < 0 or drr_round_issue_cycles > 1024:
         raise ValueError('dma.drr_round_issue_cycles must be in [0,1024]')
     L(f'#define TU_DMA_DRR_ROUND_ISSUE_CYCLES {drr_round_issue_cycles}')
+    L('#define TU_DMA_DRR_ROUND_COST_DEFAULT_FIXED 0')
+    L('#define TU_DMA_DRR_ROUND_COST_DEFAULT_PER_CHANNEL 1')
+    drr_round_cost_map = {'fixed': 0, 'per_channel': 1}
+    L(f'#define TU_DMA_DRR_ROUND_COST_MODE {drr_round_cost_map[dma.get("drr_round_cost_mode", "fixed")]}')
     drr_weights = [int(x) for x in dma.get('drr_channel_weights', ['1'] * 8)]
     if len(drr_weights) != 8 or any(x < 1 or x > 255 for x in drr_weights):
         raise ValueError('dma.drr_channel_weights must contain 8 integers in [1,255]')
@@ -573,6 +577,7 @@ def generate_header(config, output_path):
     L('    int      dma_drr_idle_policy;')
     L('    int      dma_drr_cost_granularity;')
     L('    uint32_t dma_drr_round_issue_cycles;')
+    L('    int      dma_drr_round_cost_mode;')
     L('    uint8_t  dma_drr_channel_weights[TU_DMA_ENGINE_MAX_CHANNELS];')
     L('    int      dma_aging_scope;')
     L('    int      dma_aging_metric;')
@@ -638,6 +643,7 @@ def generate_header(config, output_path):
     L(f'        .dma_drr_idle_policy = TU_DMA_DRR_IDLE_POLICY,')
     L(f'        .dma_drr_cost_granularity = TU_DMA_DRR_COST_GRANULARITY,')
     L(f'        .dma_drr_round_issue_cycles = TU_DMA_DRR_ROUND_ISSUE_CYCLES,')
+    L(f'        .dma_drr_round_cost_mode = TU_DMA_DRR_ROUND_COST_MODE,')
     L(f'        .dma_drr_channel_weights = TU_DMA_DRR_CHANNEL_WEIGHTS,')
     L(f'        .dma_aging_scope    = TU_DMA_AGING_SCOPE,')
     L(f'        .dma_aging_metric   = TU_DMA_AGING_METRIC,')

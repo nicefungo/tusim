@@ -34,9 +34,9 @@ static const char *policy_name(int policy) {
     return "round_robin";
 }
 
-static void init_drr(uint32_t quantum) {
+static void init_drr_channels(uint32_t quantum, uint32_t channels) {
     tu_dma_init_config_boundary_aging_policy_drr(
-        true, 2, 8, TU_DMA_BUS_MODE_SHARED_SERIAL,
+        true, channels, 8, TU_DMA_BUS_MODE_SHARED_SERIAL,
         TU_DMA_ARB_DEFICIT_ROUND_ROBIN, TU_DMA_AGING_FROM_SUBMISSION,
         TU_DMA_AGING_BY_MISSED_GRANTS, 1u, 0u, 1u, quantum,
         TU_DMA_BIND_EXPLICIT, TU_DMA_BUS_WIDTH_BITS,
@@ -46,6 +46,10 @@ static void init_drr(uint32_t quantum) {
         TU_DMA_SEGMENT_AGGREGATE, TU_DMA_BASE_PER_DESCRIPTOR,
         TU_DMA_PAYLOAD_PACKED_DESCRIPTOR, TU_DMA_ISSUE_PAYLOAD_SERIALIZED,
         TU_DMA_BOUNDARY_SIZE_ONLY);
+}
+
+static void init_drr(uint32_t quantum) {
+    init_drr_channels(quantum, 2u);
 }
 
 static void init_drr_cost(int cost_mode) {
@@ -439,6 +443,8 @@ static int run_drr_cost_granularity_case(uint32_t granularity,
 }
 
 static int run_drr_round_issue_case(uint32_t issue_cycles,
+                                    uint32_t cost_mode,
+                                    uint32_t channels,
                                     uint64_t *completion,
                                     uint64_t *batch_complete) {
     enum { BYTES = 256 };
@@ -449,9 +455,12 @@ static int run_drr_round_issue_case(uint32_t issue_cycles,
     tu_sram_init(&sram, BYTES, "dma-drr-round-issue-sweep");
     sram.banks.bw_modeling = false;
     memset(src, 0x97, sizeof(src));
-    init_drr(64u);
+    init_drr_channels(64u, channels);
     if (!tu_dma_set_drr_round_issue_cycles(issue_cycles) ||
-        g_tu_dma.drr_round_issue_cycles != issue_cycles)
+        !tu_dma_set_drr_round_cost_mode(cost_mode) ||
+        g_tu_dma.drr_round_issue_cycles != issue_cycles ||
+        g_tu_dma.drr_round_cost_mode !=
+            (tu_dma_drr_round_cost_mode_t)cost_mode)
         return -1;
     desc = tu_dma_desc_create_linear(0u, TU_DMA_DIR_HOST_TO_TU,
                                      &sram, 0u, src, 1u, BYTES);
@@ -461,7 +470,9 @@ static int run_drr_round_issue_case(uint32_t issue_cycles,
         tu_dma_tick();
     *completion = desc->cycles_completed;
     *batch_complete = g_tu_dma.current_cycle;
-    uint64_t expected = 59u + 3u * issue_cycles;
+    uint64_t multiplier = cost_mode == TU_DMA_DRR_ROUND_COST_PER_CHANNEL ?
+                              channels : 1u;
+    uint64_t expected = 59u + 3u * issue_cycles * multiplier;
     if (*completion != expected || *batch_complete != expected ||
         memcmp(tu_sram_raw_ptr(&sram), src, BYTES) != 0)
         return -3;
@@ -470,6 +481,22 @@ static int run_drr_round_issue_case(uint32_t issue_cycles,
     desc->next = NULL;
     tu_dma_desc_destroy(desc);
     tu_sram_destroy(&sram);
+    return 0;
+}
+
+static int run_drr_round_cost_control_case(void) {
+    init_drr(64u);
+    g_tu_dma.channels[0].drr_deficit_credits = 17u;
+    g_tu_dma.drr_continue_visit = true;
+    g_tu_dma.drr_continue_channel = 0u;
+    if (!tu_dma_set_drr_round_cost_mode(TU_DMA_DRR_ROUND_COST_PER_CHANNEL) ||
+        g_tu_dma.channels[0].drr_deficit_credits != 0u ||
+        g_tu_dma.drr_continue_visit)
+        return -1;
+    if (tu_dma_set_drr_round_cost_mode(2u) ||
+        g_tu_dma.drr_round_cost_mode != TU_DMA_DRR_ROUND_COST_PER_CHANNEL)
+        return -2;
+    tu_dma_destroy();
     return 0;
 }
 
@@ -1088,6 +1115,7 @@ int main(void) {
     for (uint32_t i = 0; i < 3; i++) {
         uint64_t completion = 0, batch = 0;
         int rc = run_drr_round_issue_case(round_issue_cycles[i],
+                                          TU_DMA_DRR_ROUND_COST_FIXED, 2u,
                                           &completion, &batch);
         if (rc != 0) {
             fprintf(stderr, "FAIL DRR round issue cycles=%u rc=%d\n",
@@ -1097,6 +1125,33 @@ int main(void) {
         printf("%22u %10lu %5lu\n", round_issue_cycles[i],
                (unsigned long)completion, (unsigned long)batch);
     }
-    printf("PASS: exact order/cycles, aging, DRR cost/service/weight/idle/granularity/round-latency alternatives, config conversion, occupied traffic, and byte movement\n");
+    printf("\ndrr_round_cost_mode channels completion batch\n");
+    const uint32_t round_cost_modes[] = {
+        TU_DMA_DRR_ROUND_COST_FIXED, TU_DMA_DRR_ROUND_COST_PER_CHANNEL
+    };
+    const char *round_cost_names[] = {"fixed", "per_channel"};
+    const uint32_t channel_counts[] = {1u, 2u, 4u, 8u};
+    for (uint32_t m = 0; m < 2; m++) {
+        for (uint32_t c = 0; c < 4; c++) {
+            uint64_t completion = 0, batch = 0;
+            int rc = run_drr_round_issue_case(1u, round_cost_modes[m],
+                                              channel_counts[c],
+                                              &completion, &batch);
+            if (rc != 0) {
+                fprintf(stderr, "FAIL DRR round cost=%s channels=%u rc=%d\n",
+                        round_cost_names[m], channel_counts[c], rc);
+                return 270 - rc;
+            }
+            printf("%19s %8u %10lu %5lu\n", round_cost_names[m],
+                   channel_counts[c], (unsigned long)completion,
+                   (unsigned long)batch);
+        }
+    }
+    int control_rc = run_drr_round_cost_control_case();
+    if (control_rc != 0) {
+        fprintf(stderr, "FAIL DRR round cost control rc=%d\n", control_rc);
+        return 290 - control_rc;
+    }
+    printf("PASS: exact order/cycles, aging, DRR cost/service/weight/idle/granularity/round-latency/scan-cost alternatives, config conversion, occupied traffic, and byte movement\n");
     return 0;
 }
