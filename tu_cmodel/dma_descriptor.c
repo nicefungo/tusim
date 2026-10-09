@@ -335,6 +335,15 @@ bool tu_dma_set_drr_round_cost_mode(uint32_t mode) {
     return true;
 }
 
+bool tu_dma_set_drr_select_issue_cycles(uint32_t cycles) {
+    if (cycles > 1024u) {
+        fprintf(stderr, "DMA: DRR select issue cycles must be in [0,1024]\n");
+        return false;
+    }
+    g_tu_dma.drr_select_issue_cycles = cycles;
+    return true;
+}
+
 void tu_dma_init_config_boundary_aging_policy_drr_cost(bool async, uint32_t num_channels,
                                 uint32_t max_queue_depth, int bus_mode,
                                 int arb_policy, int aging_scope,
@@ -1909,6 +1918,16 @@ static uint8_t descriptor_effective_priority(
     return (uint8_t)((uint64_t)desc->priority + boost);
 }
 
+static void drr_charge_scheduler_delay(uint32_t cycles) {
+    uint64_t delay = cycles;
+    if (g_tu_dma.drr_round_cost_mode == TU_DMA_DRR_ROUND_COST_PER_CHANNEL) {
+        delay = delay > UINT64_MAX / g_tu_dma.num_channels ?
+                    UINT64_MAX : delay * g_tu_dma.num_channels;
+    }
+    g_tu_dma.current_cycle = UINT64_MAX - g_tu_dma.current_cycle < delay ?
+                                 UINT64_MAX : g_tu_dma.current_cycle + delay;
+}
+
 int tu_dma_tick(void) {
     g_tu_dma.current_cycle++;
     int completed = 0;
@@ -1981,6 +2000,8 @@ int tu_dma_tick(void) {
                         if (ch->drr_deficit_credits < cost)
                             continue;
                         ch->drr_deficit_credits -= cost;
+                        drr_charge_scheduler_delay(
+                            g_tu_dma.drr_select_issue_cycles);
                         ch->active = ch->head;
                         ch->head = ch->head->next;
                         ch->queue_depth--;
@@ -2004,17 +2025,9 @@ int tu_dma_tick(void) {
                         break;
                     }
                     if (!any) break;
-                    if (!selected && g_tu_dma.drr_round_issue_cycles != 0u) {
-                        uint64_t delay = g_tu_dma.drr_round_issue_cycles;
-                        if (g_tu_dma.drr_round_cost_mode ==
-                                TU_DMA_DRR_ROUND_COST_PER_CHANNEL) {
-                            delay = delay > UINT64_MAX / g_tu_dma.num_channels ?
-                                UINT64_MAX : delay * g_tu_dma.num_channels;
-                        }
-                        g_tu_dma.current_cycle =
-                            UINT64_MAX - g_tu_dma.current_cycle < delay ?
-                                UINT64_MAX : g_tu_dma.current_cycle + delay;
-                    }
+                    if (!selected)
+                        drr_charge_scheduler_delay(
+                            g_tu_dma.drr_round_issue_cycles);
                 }
             } else {
             uint8_t best_priority = 0;

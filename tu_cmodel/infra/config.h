@@ -295,6 +295,7 @@ typedef struct tu_config_t {
     int      dma_drr_cost_granularity; /* exact=0, quantum-rounded=1 */
     uint32_t dma_drr_round_issue_cycles; /* cycles per unsuccessful full DRR round */
     int      dma_drr_round_cost_mode; /* fixed=0, per configured channel=1 */
+    uint32_t dma_drr_select_issue_cycles; /* cycles before each successful DRR issue */
     uint8_t  dma_drr_channel_weights[TU_DMA_ENGINE_MAX_CHANNELS];
     int      dma_aging_scope;       /* submission=0, queue_head=1 */
     int      dma_aging_metric;      /* missed_grants=0, wait_cycles=1 */

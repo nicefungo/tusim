@@ -703,6 +703,11 @@ static void test_dma_shared_arbitration(void) {
                    g_tu_dma.channels[0].drr_deficit_credits == 0u;
         ok = ok && !tu_dma_set_drr_round_issue_cycles(1025u);
         ok = ok && g_tu_dma.drr_round_issue_cycles == 4u;
+        ok = ok && tu_dma_set_drr_select_issue_cycles(1024u);
+        ok = ok && g_tu_dma.drr_select_issue_cycles == 1024u;
+        ok = ok && tu_dma_set_drr_select_issue_cycles(3u);
+        ok = ok && !tu_dma_set_drr_select_issue_cycles(1025u);
+        ok = ok && g_tu_dma.drr_select_issue_cycles == 3u;
         g_tu_dma.channels[0].drr_deficit_credits = 64u;
         ok = ok && tu_dma_set_drr_idle_policy(TU_DMA_DRR_IDLE_RESET);
         ok = ok && g_tu_dma.channels[0].drr_deficit_credits == 0u;

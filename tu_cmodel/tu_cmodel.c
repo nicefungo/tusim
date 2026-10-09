@@ -150,6 +150,7 @@ void tu_init_with_config(const tu_runtime_config_t *cfg) {
     tu_dma_set_drr_cost_granularity(cfg->dma_drr_cost_granularity);
     tu_dma_set_drr_round_issue_cycles(cfg->dma_drr_round_issue_cycles);
     tu_dma_set_drr_round_cost_mode(cfg->dma_drr_round_cost_mode);
+    tu_dma_set_drr_select_issue_cycles(cfg->dma_drr_select_issue_cycles);
 
     /* Initialize command queue */
     g_tu.cmdq = tu_cmdq_create(TU_ISA_QUEUE_DEPTH, TU_CYCLE_MODEL == TU_CYCLE_MODEL_FUNCTIONAL);

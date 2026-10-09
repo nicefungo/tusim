@@ -443,6 +443,7 @@ static int run_drr_cost_granularity_case(uint32_t granularity,
 }
 
 static int run_drr_round_issue_case(uint32_t issue_cycles,
+                                    uint32_t select_cycles,
                                     uint32_t cost_mode,
                                     uint32_t channels,
                                     uint64_t *completion,
@@ -457,8 +458,10 @@ static int run_drr_round_issue_case(uint32_t issue_cycles,
     memset(src, 0x97, sizeof(src));
     init_drr_channels(64u, channels);
     if (!tu_dma_set_drr_round_issue_cycles(issue_cycles) ||
+        !tu_dma_set_drr_select_issue_cycles(select_cycles) ||
         !tu_dma_set_drr_round_cost_mode(cost_mode) ||
         g_tu_dma.drr_round_issue_cycles != issue_cycles ||
+        g_tu_dma.drr_select_issue_cycles != select_cycles ||
         g_tu_dma.drr_round_cost_mode !=
             (tu_dma_drr_round_cost_mode_t)cost_mode)
         return -1;
@@ -472,7 +475,8 @@ static int run_drr_round_issue_case(uint32_t issue_cycles,
     *batch_complete = g_tu_dma.current_cycle;
     uint64_t multiplier = cost_mode == TU_DMA_DRR_ROUND_COST_PER_CHANNEL ?
                               channels : 1u;
-    uint64_t expected = 59u + 3u * issue_cycles * multiplier;
+    uint64_t expected = 59u +
+        (3u * issue_cycles + select_cycles) * multiplier;
     if (*completion != expected || *batch_complete != expected ||
         memcmp(tu_sram_raw_ptr(&sram), src, BYTES) != 0)
         return -3;
@@ -1114,7 +1118,7 @@ int main(void) {
     const uint32_t round_issue_cycles[] = {0u, 1u, 4u};
     for (uint32_t i = 0; i < 3; i++) {
         uint64_t completion = 0, batch = 0;
-        int rc = run_drr_round_issue_case(round_issue_cycles[i],
+        int rc = run_drr_round_issue_case(round_issue_cycles[i], 0u,
                                           TU_DMA_DRR_ROUND_COST_FIXED, 2u,
                                           &completion, &batch);
         if (rc != 0) {
@@ -1125,6 +1129,22 @@ int main(void) {
         printf("%22u %10lu %5lu\n", round_issue_cycles[i],
                (unsigned long)completion, (unsigned long)batch);
     }
+    printf("\ndrr_select_issue_cycles cost_mode channels completion batch\n");
+    const uint32_t select_issue_cycles[] = {0u, 1u, 4u};
+    for (uint32_t i = 0; i < 3; i++) {
+        uint64_t completion = 0, batch = 0;
+        int rc = run_drr_round_issue_case(0u, select_issue_cycles[i],
+                                          TU_DMA_DRR_ROUND_COST_FIXED, 2u,
+                                          &completion, &batch);
+        if (rc != 0) {
+            fprintf(stderr, "FAIL DRR select issue cycles=%u rc=%d\n",
+                    select_issue_cycles[i], rc);
+            return 260 - rc;
+        }
+        printf("%23u %9s %8u %10lu %5lu\n", select_issue_cycles[i],
+               "fixed", 2u, (unsigned long)completion,
+               (unsigned long)batch);
+    }
     printf("\ndrr_round_cost_mode channels completion batch\n");
     const uint32_t round_cost_modes[] = {
         TU_DMA_DRR_ROUND_COST_FIXED, TU_DMA_DRR_ROUND_COST_PER_CHANNEL
@@ -1134,7 +1154,7 @@ int main(void) {
     for (uint32_t m = 0; m < 2; m++) {
         for (uint32_t c = 0; c < 4; c++) {
             uint64_t completion = 0, batch = 0;
-            int rc = run_drr_round_issue_case(1u, round_cost_modes[m],
+            int rc = run_drr_round_issue_case(1u, 0u, round_cost_modes[m],
                                               channel_counts[c],
                                               &completion, &batch);
             if (rc != 0) {
@@ -1147,11 +1167,24 @@ int main(void) {
                    (unsigned long)batch);
         }
     }
+    for (uint32_t m = 0; m < 2; m++) {
+        uint64_t completion = 0, batch = 0;
+        int rc = run_drr_round_issue_case(0u, 1u, round_cost_modes[m], 8u,
+                                          &completion, &batch);
+        if (rc != 0) {
+            fprintf(stderr, "FAIL DRR select cost=%s rc=%d\n",
+                    round_cost_names[m], rc);
+            return 285 - rc;
+        }
+        printf("select_cost %19s %8u %10lu %5lu\n",
+               round_cost_names[m], 8u, (unsigned long)completion,
+               (unsigned long)batch);
+    }
     int control_rc = run_drr_round_cost_control_case();
     if (control_rc != 0) {
         fprintf(stderr, "FAIL DRR round cost control rc=%d\n", control_rc);
         return 290 - control_rc;
     }
-    printf("PASS: exact order/cycles, aging, DRR cost/service/weight/idle/granularity/round-latency/scan-cost alternatives, config conversion, occupied traffic, and byte movement\n");
+    printf("PASS: exact order/cycles, aging, DRR cost/service/weight/idle/granularity/round/select-latency/scan-cost alternatives, config conversion, occupied traffic, and byte movement\n");
     return 0;
 }

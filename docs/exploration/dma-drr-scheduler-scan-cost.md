@@ -82,7 +82,7 @@ A high-throughput mover may spend area on parallel eligibility to decouple queue
 
 - `per_channel` charges every configured channel in each unsuccessful round. It does not skip clock-gated empty queues or stop early after a partial scan.
 - The model does not distinguish parallel trees, multi-bank queue-state RAM, two- or four-probe-per-cycle scanners, or pipelined overlap between rounds. Those would require an explicit scheduler-width contract rather than more names for the same two endpoints.
-- Successful-round selection has no separate probe latency; the existing setting models only complete unsuccessful rounds.
+- Successful-round selection has a separate optional `drr_select_issue_cycles` cost; it shares the fixed/per-channel scaling mode but does not distinguish early-stop probe position.
 - Producer injection cannot occur during the aggregate delay inside one `tu_dma_tick()` call.
 - Arbitration remains descriptor-boundary and non-preemptive.
 - Physical selector area, queue-state SRAM ports, timing, power/energy, finite credits/backpressure, shared-memory contention, and calibration remain unquantified.

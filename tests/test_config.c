@@ -188,6 +188,7 @@ int main(void) {
               cfg.dma_drr_cost_granularity == TU_DMA_CONFIG_DRR_COST_EXACT &&
               cfg.dma_drr_round_issue_cycles == 0 &&
               cfg.dma_drr_round_cost_mode == TU_DMA_CONFIG_DRR_ROUND_COST_FIXED &&
+              cfg.dma_drr_select_issue_cycles == 0 &&
               cfg.dma_drr_channel_weights[0] == 1 &&
               cfg.dma_drr_channel_weights[7] == 1,
               "DMA DRR interleaved/reset/exact/instant/fixed unit-weight defaults");
@@ -272,6 +273,7 @@ int main(void) {
             "    \"drr_cost_granularity\": \"quantum_rounded\","
             "    \"drr_round_issue_cycles\": 4,"
             "    \"drr_round_cost_mode\": \"per_channel\","
+            "    \"drr_select_issue_cycles\": 3,"
             "    \"drr_channel_weights\": [1,2,3,4,5,6,7,8],"
             "    \"aging_cycle_quantum\": 64,"
             "    \"aging_quantum_domain\": \"physical_ns\","
@@ -335,6 +337,8 @@ int main(void) {
               rt.dma_drr_round_issue_cycles == 4 &&
               cfg.dma_drr_round_cost_mode == TU_DMA_CONFIG_DRR_ROUND_COST_PER_CHANNEL &&
               rt.dma_drr_round_cost_mode == TU_DMA_CONFIG_DRR_ROUND_COST_PER_CHANNEL &&
+              cfg.dma_drr_select_issue_cycles == 3 &&
+              rt.dma_drr_select_issue_cycles == 3 &&
               cfg.dma_drr_channel_weights[1] == 2 &&
               rt.dma_drr_channel_weights[7] == 8,
               "DMA DRR service/idle/granularity/weight parse/runtime propagation");
@@ -760,6 +764,13 @@ int main(void) {
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
               "should reject DRR round cost mode=2");
         cfg.dma_drr_round_cost_mode = TU_DMA_CONFIG_DRR_ROUND_COST_FIXED;
+        cfg.dma_drr_select_issue_cycles = 1024u;
+        CHECK(tu_config_validate(&cfg, NULL, 0) == 0,
+              "should accept DRR select issue cycles=1024");
+        cfg.dma_drr_select_issue_cycles = 1025u;
+        CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
+              "should reject DRR select issue cycles=1025");
+        cfg.dma_drr_select_issue_cycles = 0u;
         cfg.dma_drr_channel_weights[3] = 0;
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
               "should reject zero DRR channel weight");
@@ -996,6 +1007,7 @@ int main(void) {
         cfg.dma_drr_cost_granularity = TU_DMA_CONFIG_DRR_COST_QUANTUM_ROUNDED;
         cfg.dma_drr_round_issue_cycles = 4;
         cfg.dma_drr_round_cost_mode = TU_DMA_CONFIG_DRR_ROUND_COST_PER_CHANNEL;
+        cfg.dma_drr_select_issue_cycles = 3;
         cfg.dma_drr_channel_weights[1] = 3;
         cfg.dma_aging_scope = TU_DMA_CONFIG_AGING_QUEUE_HEAD;
         cfg.dma_aging_metric = TU_DMA_CONFIG_AGING_WAIT_CYCLES;
@@ -1033,6 +1045,7 @@ int main(void) {
               g_tu_dma.drr_cost_granularity == TU_DMA_DRR_COST_QUANTUM_ROUNDED &&
               g_tu_dma.drr_round_issue_cycles == 4 &&
               g_tu_dma.drr_round_cost_mode == TU_DMA_DRR_ROUND_COST_PER_CHANNEL &&
+              g_tu_dma.drr_select_issue_cycles == 3 &&
               g_tu_dma.drr_channel_weights[1] == 3,
               "active DMA rounded weighted work-conserving retained-credit service");
         CHECK(g_tu_dma.aging_scope == TU_DMA_AGING_FROM_QUEUE_HEAD,
