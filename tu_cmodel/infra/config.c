@@ -219,6 +219,8 @@ static int parse_dma_drr_round_cost_mode_str(const char *s) {
         return TU_DMA_CONFIG_DRR_ROUND_COST_FIXED;
     if (strcmp(s, "per_channel") == 0)
         return TU_DMA_CONFIG_DRR_ROUND_COST_PER_CHANNEL;
+    if (strcmp(s, "per_visited_channel") == 0)
+        return TU_DMA_CONFIG_DRR_ROUND_COST_PER_VISITED_CHANNEL;
     return -1;
 }
 
@@ -1314,10 +1316,10 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
     }
     if (cfg->dma_drr_round_cost_mode < TU_DMA_CONFIG_DRR_ROUND_COST_FIXED ||
         cfg->dma_drr_round_cost_mode >
-            TU_DMA_CONFIG_DRR_ROUND_COST_PER_CHANNEL) {
+            TU_DMA_CONFIG_DRR_ROUND_COST_PER_VISITED_CHANNEL) {
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
-                     "DMA drr_round_cost_mode must be fixed or per_channel");
+                     "DMA drr_round_cost_mode must be fixed, per_channel, or per_visited_channel");
         return -1;
     }
     if (cfg->dma_drr_select_issue_cycles > 1024u) {
@@ -1925,11 +1927,14 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
                 "quantum_rounded" : "exact");
     fprintf(out, "| `dma_drr_round_issue_cycles` | %u | cycles/unsuccessful round | Scheduler delay for each complete DRR credit round that selects no descriptor |\n",
             cfg->dma_drr_round_issue_cycles);
-    fprintf(out, "| `dma_drr_round_cost_mode` | %s | enum | Charge unsuccessful-round latency once or once per configured channel probe |\n",
+    fprintf(out, "| `dma_drr_round_cost_mode` | %s | enum | Charge latency once, once per configured channel, or per visited channel until successful selection |\n",
             cfg->dma_drr_round_cost_mode ==
+                    TU_DMA_CONFIG_DRR_ROUND_COST_PER_VISITED_CHANNEL ?
+                "per_visited_channel" :
+            (cfg->dma_drr_round_cost_mode ==
                     TU_DMA_CONFIG_DRR_ROUND_COST_PER_CHANNEL ?
-                "per_channel" : "fixed");
-    fprintf(out, "| `dma_drr_select_issue_cycles` | %u | cycles/successful selection | Scheduler delay before each selected DRR descriptor; round cost mode controls fixed versus per-channel scaling |\n",
+                "per_channel" : "fixed"));
+    fprintf(out, "| `dma_drr_select_issue_cycles` | %u | cycles/successful selection | Scheduler delay before each selected DRR descriptor; cost mode controls fixed, full-scan, or visited-probe scaling |\n",
             cfg->dma_drr_select_issue_cycles);
     fprintf(out, "| `dma_drr_channel_weights` | [%u,%u,%u,%u,%u,%u,%u,%u] | uint8[8] | Per-channel DRR quantum multipliers in [1,255] |\n",
             cfg->dma_drr_channel_weights[0], cfg->dma_drr_channel_weights[1],

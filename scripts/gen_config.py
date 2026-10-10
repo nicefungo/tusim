@@ -379,7 +379,8 @@ def generate_header(config, output_path):
     L(f'#define TU_DMA_DRR_ROUND_ISSUE_CYCLES {drr_round_issue_cycles}')
     L('#define TU_DMA_DRR_ROUND_COST_DEFAULT_FIXED 0')
     L('#define TU_DMA_DRR_ROUND_COST_DEFAULT_PER_CHANNEL 1')
-    drr_round_cost_map = {'fixed': 0, 'per_channel': 1}
+    L('#define TU_DMA_DRR_ROUND_COST_DEFAULT_PER_VISITED_CHANNEL 2')
+    drr_round_cost_map = {'fixed': 0, 'per_channel': 1, 'per_visited_channel': 2}
     L(f'#define TU_DMA_DRR_ROUND_COST_MODE {drr_round_cost_map[dma.get("drr_round_cost_mode", "fixed")]}')
     drr_select_issue_cycles = int(dma.get('drr_select_issue_cycles', 0))
     if drr_select_issue_cycles < 0 or drr_select_issue_cycles > 1024:

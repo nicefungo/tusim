@@ -140,7 +140,8 @@ typedef enum {
 
 typedef enum {
     TU_DMA_CONFIG_DRR_ROUND_COST_FIXED = 0,
-    TU_DMA_CONFIG_DRR_ROUND_COST_PER_CHANNEL = 1
+    TU_DMA_CONFIG_DRR_ROUND_COST_PER_CHANNEL = 1,
+    TU_DMA_CONFIG_DRR_ROUND_COST_PER_VISITED_CHANNEL = 2
 } tu_dma_config_drr_round_cost_mode_t;
 
 typedef enum {
@@ -294,7 +295,7 @@ typedef struct tu_config_t {
     int      dma_drr_idle_policy;   /* reset=0, retain residual=1 */
     int      dma_drr_cost_granularity; /* exact=0, quantum-rounded=1 */
     uint32_t dma_drr_round_issue_cycles; /* cycles per unsuccessful full DRR round */
-    int      dma_drr_round_cost_mode; /* fixed=0, per configured channel=1 */
+    int      dma_drr_round_cost_mode; /* fixed=0, all channels=1, visited channels=2 */
     uint32_t dma_drr_select_issue_cycles; /* cycles before each successful DRR issue */
     uint8_t  dma_drr_channel_weights[TU_DMA_ENGINE_MAX_CHANNELS];
     int      dma_aging_scope;       /* submission=0, queue_head=1 */

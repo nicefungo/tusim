@@ -74,7 +74,7 @@ def main() -> int:
                 'drr_cost_granularity: "quantum_rounded"',
             "drr_round_issue_cycles: 0": "drr_round_issue_cycles: 4",
             'drr_round_cost_mode: "fixed"':
-                'drr_round_cost_mode: "per_channel"',
+                'drr_round_cost_mode: "per_visited_channel"',
             "drr_select_issue_cycles: 0": "drr_select_issue_cycles: 3",
             'drr_channel_weights: [1, 1, 1, 1, 1, 1, 1, 1]':
                 'drr_channel_weights: [1, 2, 3, 4, 5, 6, 7, 8]',
@@ -144,7 +144,7 @@ def main() -> int:
             'c.dma_drr_service_mode != TU_DMA_DRR_SERVICE_WORK_CONSERVING || '
             'c.dma_drr_idle_policy != TU_DMA_DRR_IDLE_RETAIN_RESIDUAL || '
             'c.dma_drr_round_issue_cycles != 4 || '
-            'c.dma_drr_round_cost_mode != TU_DMA_DRR_ROUND_COST_DEFAULT_PER_CHANNEL || '
+            'c.dma_drr_round_cost_mode != TU_DMA_DRR_ROUND_COST_DEFAULT_PER_VISITED_CHANNEL || '
             'c.dma_drr_select_issue_cycles != 3 || '
             'c.dma_drr_channel_weights[0] != 1 || c.dma_drr_channel_weights[7] != 8 || '
             'c.dma_aging_quantum_domain != TU_DMA_AGING_QUANTUM_PHYSICAL_NS || '

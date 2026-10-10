@@ -272,7 +272,7 @@ int main(void) {
             "    \"drr_idle_policy\": \"retain_residual\","
             "    \"drr_cost_granularity\": \"quantum_rounded\","
             "    \"drr_round_issue_cycles\": 4,"
-            "    \"drr_round_cost_mode\": \"per_channel\","
+            "    \"drr_round_cost_mode\": \"per_visited_channel\","
             "    \"drr_select_issue_cycles\": 3,"
             "    \"drr_channel_weights\": [1,2,3,4,5,6,7,8],"
             "    \"aging_cycle_quantum\": 64,"
@@ -335,8 +335,8 @@ int main(void) {
               rt.dma_drr_cost_granularity == TU_DMA_CONFIG_DRR_COST_QUANTUM_ROUNDED &&
               cfg.dma_drr_round_issue_cycles == 4 &&
               rt.dma_drr_round_issue_cycles == 4 &&
-              cfg.dma_drr_round_cost_mode == TU_DMA_CONFIG_DRR_ROUND_COST_PER_CHANNEL &&
-              rt.dma_drr_round_cost_mode == TU_DMA_CONFIG_DRR_ROUND_COST_PER_CHANNEL &&
+              cfg.dma_drr_round_cost_mode == TU_DMA_CONFIG_DRR_ROUND_COST_PER_VISITED_CHANNEL &&
+              rt.dma_drr_round_cost_mode == TU_DMA_CONFIG_DRR_ROUND_COST_PER_VISITED_CHANNEL &&
               cfg.dma_drr_select_issue_cycles == 3 &&
               rt.dma_drr_select_issue_cycles == 3 &&
               cfg.dma_drr_channel_weights[1] == 2 &&
@@ -760,9 +760,9 @@ int main(void) {
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
               "should reject DRR round issue cycles=1025");
         cfg.dma_drr_round_issue_cycles = 0u;
-        cfg.dma_drr_round_cost_mode = 2;
+        cfg.dma_drr_round_cost_mode = 3;
         CHECK(tu_config_validate(&cfg, NULL, 0) != 0,
-              "should reject DRR round cost mode=2");
+              "should reject DRR round cost mode=3");
         cfg.dma_drr_round_cost_mode = TU_DMA_CONFIG_DRR_ROUND_COST_FIXED;
         cfg.dma_drr_select_issue_cycles = 1024u;
         CHECK(tu_config_validate(&cfg, NULL, 0) == 0,

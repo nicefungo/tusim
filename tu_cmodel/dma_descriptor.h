@@ -93,7 +93,8 @@ typedef enum {
 
 typedef enum {
     TU_DMA_DRR_ROUND_COST_FIXED = 0,
-    TU_DMA_DRR_ROUND_COST_PER_CHANNEL = 1
+    TU_DMA_DRR_ROUND_COST_PER_CHANNEL = 1,
+    TU_DMA_DRR_ROUND_COST_PER_VISITED_CHANNEL = 2
 } tu_dma_drr_round_cost_mode_t;
 
 /* Descriptor-to-queue binding. Explicit preserves the producer-selected

@@ -321,7 +321,7 @@ bool tu_dma_set_drr_round_issue_cycles(uint32_t cycles) {
 }
 
 bool tu_dma_set_drr_round_cost_mode(uint32_t mode) {
-    if (mode > TU_DMA_DRR_ROUND_COST_PER_CHANNEL) {
+    if (mode > TU_DMA_DRR_ROUND_COST_PER_VISITED_CHANNEL) {
         fprintf(stderr, "DMA: unsupported DRR round cost mode %u\n", mode);
         return false;
     }
@@ -1918,12 +1918,25 @@ static uint8_t descriptor_effective_priority(
     return (uint8_t)((uint64_t)desc->priority + boost);
 }
 
-static void drr_charge_scheduler_delay(uint32_t cycles) {
+static void drr_charge_round_delay(uint32_t cycles) {
     uint64_t delay = cycles;
-    if (g_tu_dma.drr_round_cost_mode == TU_DMA_DRR_ROUND_COST_PER_CHANNEL) {
+    if (g_tu_dma.drr_round_cost_mode != TU_DMA_DRR_ROUND_COST_FIXED) {
         delay = delay > UINT64_MAX / g_tu_dma.num_channels ?
                     UINT64_MAX : delay * g_tu_dma.num_channels;
     }
+    g_tu_dma.current_cycle = UINT64_MAX - g_tu_dma.current_cycle < delay ?
+                                 UINT64_MAX : g_tu_dma.current_cycle + delay;
+}
+
+static void drr_charge_select_delay(uint32_t cycles, uint32_t probes) {
+    uint64_t multiplier = 1u;
+    if (g_tu_dma.drr_round_cost_mode == TU_DMA_DRR_ROUND_COST_PER_CHANNEL)
+        multiplier = g_tu_dma.num_channels;
+    else if (g_tu_dma.drr_round_cost_mode ==
+             TU_DMA_DRR_ROUND_COST_PER_VISITED_CHANNEL)
+        multiplier = probes;
+    uint64_t delay = cycles > UINT64_MAX / multiplier ?
+                         UINT64_MAX : (uint64_t)cycles * multiplier;
     g_tu_dma.current_cycle = UINT64_MAX - g_tu_dma.current_cycle < delay ?
                                  UINT64_MAX : g_tu_dma.current_cycle + delay;
 }
@@ -2000,8 +2013,8 @@ int tu_dma_tick(void) {
                         if (ch->drr_deficit_credits < cost)
                             continue;
                         ch->drr_deficit_credits -= cost;
-                        drr_charge_scheduler_delay(
-                            g_tu_dma.drr_select_issue_cycles);
+                        drr_charge_select_delay(
+                            g_tu_dma.drr_select_issue_cycles, probe + 1u);
                         ch->active = ch->head;
                         ch->head = ch->head->next;
                         ch->queue_depth--;
@@ -2026,7 +2039,7 @@ int tu_dma_tick(void) {
                     }
                     if (!any) break;
                     if (!selected)
-                        drr_charge_scheduler_delay(
+                        drr_charge_round_delay(
                             g_tu_dma.drr_round_issue_cycles);
                 }
             } else {

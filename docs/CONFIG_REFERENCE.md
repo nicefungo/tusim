@@ -103,8 +103,8 @@
 | `dma_drr_idle_policy` | reset | enum | Reset unused deficit on an empty queue or retain residual credit across idle periods |
 | `dma_drr_cost_granularity` | exact | enum | Charge exact descriptor cost or round each charge up to whole DRR quantum units |
 | `dma_drr_round_issue_cycles` | 0 | cycles/unsuccessful round | Scheduler delay for each complete DRR credit round that selects no descriptor |
-| `dma_drr_round_cost_mode` | fixed | enum | Charge unsuccessful-round latency once or once per configured channel probe |
-| `dma_drr_select_issue_cycles` | 0 | cycles/successful selection | Scheduler delay before each selected DRR descriptor; round cost mode controls fixed versus per-channel scaling |
+| `dma_drr_round_cost_mode` | fixed | enum | Charge latency once, once per configured channel, or per visited channel until successful selection |
+| `dma_drr_select_issue_cycles` | 0 | cycles/successful selection | Scheduler delay before each selected DRR descriptor; cost mode controls fixed, full-scan, or visited-probe scaling |
 | `dma_drr_channel_weights` | [1,1,1,1,1,1,1,1] | uint8[8] | Per-channel DRR quantum multipliers in [1,255] |
 | `dma_aging_scope` | submission | enum | Aging starts at accepted submission or queue-head eligibility |
 | `dma_aging_metric` | grants | enum | Aging measured in missed grants or quantized wait cycles |
