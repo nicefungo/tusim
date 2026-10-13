@@ -54,6 +54,7 @@ void tu_dma_init_config_boundary_aging_policy_drr_cost_service(bool async, uint3
                                 int burst_boundary_mode) {
     memset(&g_tu_dma, 0, sizeof(g_tu_dma));
     g_tu_dma.async_mode = async;
+    g_tu_dma.drr_scan_width = 1u;
     if (bus_mode != TU_DMA_BUS_MODE_INDEPENDENT &&
         bus_mode != TU_DMA_BUS_MODE_SHARED_SERIAL) {
         fprintf(stderr, "DMA: unsupported bus mode %d\n", bus_mode);
@@ -1918,11 +1919,28 @@ static uint8_t descriptor_effective_priority(
     return (uint8_t)((uint64_t)desc->priority + boost);
 }
 
+bool tu_dma_set_drr_scan_width(uint32_t width) {
+    if (width > TU_DMA_ENGINE_MAX_CHANNELS) {
+        fprintf(stderr, "DMA: DRR scan width must be in [0,8]\n");
+        return false;
+    }
+    g_tu_dma.drr_scan_width = width ? width : 1u;
+    return true;
+}
+
+/* A group evaluates up to width consecutive cursor-relative queue positions.
+ * Lowest eligible position wins; wider groups do not alter credit/order. */
+static uint64_t drr_scan_groups(uint32_t probes) {
+    uint32_t width = g_tu_dma.drr_scan_width ? g_tu_dma.drr_scan_width : 1u;
+    return probes / width + (probes % width != 0u);
+}
+
 static void drr_charge_round_delay(uint32_t cycles) {
     uint64_t delay = cycles;
     if (g_tu_dma.drr_round_cost_mode != TU_DMA_DRR_ROUND_COST_FIXED) {
-        delay = delay > UINT64_MAX / g_tu_dma.num_channels ?
-                    UINT64_MAX : delay * g_tu_dma.num_channels;
+        uint64_t groups = drr_scan_groups(g_tu_dma.num_channels);
+        delay = groups && delay > UINT64_MAX / groups ?
+                    UINT64_MAX : delay * groups;
     }
     g_tu_dma.current_cycle = UINT64_MAX - g_tu_dma.current_cycle < delay ?
                                  UINT64_MAX : g_tu_dma.current_cycle + delay;
@@ -1931,10 +1949,10 @@ static void drr_charge_round_delay(uint32_t cycles) {
 static void drr_charge_select_delay(uint32_t cycles, uint32_t probes) {
     uint64_t multiplier = 1u;
     if (g_tu_dma.drr_round_cost_mode == TU_DMA_DRR_ROUND_COST_PER_CHANNEL)
-        multiplier = g_tu_dma.num_channels;
+        multiplier = drr_scan_groups(g_tu_dma.num_channels);
     else if (g_tu_dma.drr_round_cost_mode ==
              TU_DMA_DRR_ROUND_COST_PER_VISITED_CHANNEL)
-        multiplier = probes;
+        multiplier = drr_scan_groups(probes);
     uint64_t delay = cycles > UINT64_MAX / multiplier ?
                          UINT64_MAX : (uint64_t)cycles * multiplier;
     g_tu_dma.current_cycle = UINT64_MAX - g_tu_dma.current_cycle < delay ?

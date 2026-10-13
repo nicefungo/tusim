@@ -249,6 +249,7 @@ typedef struct {
     uint32_t                drr_round_issue_cycles;
     tu_dma_drr_round_cost_mode_t drr_round_cost_mode;
     uint32_t                drr_select_issue_cycles;
+    uint32_t                drr_scan_width; /* queues examined per scan group */
     uint8_t                 drr_channel_weights[TU_DMA_ENGINE_MAX_CHANNELS];
     bool                    drr_continue_visit;
     uint32_t                drr_continue_channel;
@@ -524,6 +525,9 @@ bool tu_dma_set_drr_cost_granularity(uint32_t granularity);
 bool tu_dma_set_drr_round_issue_cycles(uint32_t cycles);
 bool tu_dma_set_drr_round_cost_mode(uint32_t mode);
 bool tu_dma_set_drr_select_issue_cycles(uint32_t cycles);
+/* Width 0 inherits the compatibility width of one; explicit widths 1..8.
+ * Changes timing only, preserving credit, continuation, cursor, and ownership. */
+bool tu_dma_set_drr_scan_width(uint32_t width);
 
 /* ---- Descriptor Construction ---- */
 tu_dma_descriptor_t *tu_dma_desc_create_linear(

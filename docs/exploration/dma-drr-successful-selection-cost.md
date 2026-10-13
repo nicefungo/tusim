@@ -85,9 +85,11 @@ No mode is universally preferred. A throughput-oriented mover may spend comparat
 
 ## Fidelity limits
 
-- `per_visited_channel` counts logical probes in the existing loop; it does not model individual queue-state read ports or a multi-probe-per-cycle scanner.
+The 2026-10-13 follow-up `dma-drr-scan-width.md` now implements shared-stage intermediate scanner widths 1..8. Historical rows above retain width 1. Group costs use `ceil(probes/width)` (or configured queues for full scans); fixed costs remain width-independent. This is aggregate control timing, not executable queue-state read ports or a physical throughput claim.
+
+- `per_visited_channel` counts logical probes in the existing loop; configurable width groups their timing, but individual queue-state read ports remain unmodeled.
 - The same cost-mode selector applies to unsuccessful rounds and successful selections. Independent stage widths would need a stronger scheduler microarchitecture contract.
-- Intermediate scanner widths, clock-gated empty queues, pipelined overlap, queue-state SRAM port conflicts, and producer injection during aggregate delay are unmodeled.
+- Clock-gated empty queues, pipelined overlap, queue-state SRAM port conflicts, and producer injection during aggregate delay are unmodeled. Intermediate aggregate scanner widths are covered by the follow-up, not by the original width-1 matrix.
 - Selection delay is represented as an atomic cycle advance inside one `tu_dma_tick()` call; no concurrent event can arrive during it.
 - Arbitration remains descriptor-boundary and non-preemptive.
 - Physical selector area, timing closure, power/energy, finite credits/backpressure, shared-memory contention, and calibration are unquantified.

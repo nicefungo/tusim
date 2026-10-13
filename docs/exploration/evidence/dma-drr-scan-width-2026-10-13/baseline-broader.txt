@@ -1,0 +1,110 @@
+make: Entering directory '/tmp/tusim-width-baseline.ncd17v'
+cc -O2 -Wall -Wextra -std=c11 -fPIC -I. -Itu_cmodel -o test-agen tests/test_address_gen.c -L. -ltucmodel -lm
+./test-agen
+
+===========================================
+  Address Generator Tests (Gap M3)
+===========================================
+
+  TEST linear addressing ... PASS
+  TEST strided 2D addressing ... PASS
+  TEST strided 3D addressing ... PASS
+  TEST tiled 2D addressing ... PASS
+  TEST im2col addressing ... PASS
+  TEST block interleaved addressing ... PASS
+  TEST transposed (column-major) addressing ... FAIL: col 0, row 1
+  expected 272, got 268
+  TEST bulk address generation ... PASS
+  TEST contiguous range generation ... PASS
+  TEST im2col dimension computation ... PASS
+  TEST tiling computation ... PASS
+  TEST inline address helpers ... PASS
+  TEST im2col single address computation ... PASS
+
+-------------------------------------------
+  Results: 12/13 passed, 1 FAILED
+-------------------------------------------
+make: *** [Makefile:467: test-agen] Error 1
+cc -O2 -Wall -Wextra -std=c11 -fPIC -I. -Itu_cmodel -o test-multicast tests/test_multicast.c -L. -ltucmodel -lm
+./test-multicast
+DMA: descriptor SRAM span exceeds region capacity
+=== Multicast/Broadcast DMA Tests (DM4) ===
+
+  Create multicast descriptor                          PASS
+  Multicast single target                              PASS
+  Multicast three regions                              PASS
+  Multicast bounds exact fit                           PASS
+  Multicast bounds overflow                            FAIL: desc should be marked completed
+  Multicast null inputs                                PASS
+  Multicast destroy frees arrays                       PASS
+  Multicast performance counter                        PASS
+  Multicast 16-target fanout                           PASS
+  Multicast chained after linear                       PASS
+
+=== Results: 9/10 passed ===
+make: *** [Makefile:507: test-multicast] Error 1
+cc -O2 -Wall -Wextra -std=c11 -fPIC -I. -Itu_cmodel -o test-attention tests/test_attention.c -L. -ltucmodel -lm
+./test-attention
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention auto-tile: tile_m=16, tile_n=16 (head_dim=8, Q_len=4, KV_len=4)
+[       0] CORE  [1;32mINFO [0m Attention: M=4 N=4 d=8 scale=0.353553 tile_m=16 tile_n=16 Q=256B K=256B KT=256B S=1024B O=512B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=256 B, MMA tiles=2, FLOPs=512, cycles=308 (compute=276, dma=32), util=0.90
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention auto-tile: tile_m=16, tile_n=16 (head_dim=16, Q_len=3, KV_len=5)
+[       0] CORE  [1;32mINFO [0m Attention: M=3 N=5 d=16 scale=0.250000 tile_m=16 tile_n=16 Q=512B K=512B KT=512B S=1024B O=1024B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=512 B, MMA tiles=2, FLOPs=960, cycles=513 (compute=451, dma=62), util=0.88
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention auto-tile: tile_m=16, tile_n=16 (head_dim=8, Q_len=4, KV_len=4)
+[       0] CORE  [1;32mINFO [0m Attention: M=4 N=4 d=8 scale=0.353553 tile_m=16 tile_n=16 Q=256B K=256B KT=256B S=1024B O=512B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=256 B, MMA tiles=2, FLOPs=512, cycles=372 (compute=340, dma=32), util=0.91
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention auto-tile: tile_m=16, tile_n=16 (head_dim=8, Q_len=4, KV_len=4)
+[       0] CORE  [1;32mINFO [0m Attention: M=4 N=4 d=8 scale=0.353553 tile_m=16 tile_n=16 Q=256B K=256B KT=256B S=1024B O=512B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=512 B, MMA tiles=4, FLOPs=1024, cycles=712 (compute=584, dma=128), util=0.82
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention auto-tile: tile_m=64, tile_n=64 (head_dim=64, Q_len=64, KV_len=64)
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention auto-tile: tile_m=16, tile_n=16 (head_dim=8, Q_len=1, KV_len=1)
+[       0] CORE  [1;32mINFO [0m Attention: M=1 N=1 d=8 scale=0.353553 tile_m=16 tile_n=16 Q=256B K=256B KT=256B S=1024B O=512B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=64 B, MMA tiles=2, FLOPs=32, cycles=67 (compute=65, dma=2), util=0.97
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention auto-tile: tile_m=16, tile_n=16 (head_dim=8, Q_len=2, KV_len=3)
+[       0] CORE  [1;32mINFO [0m Attention: M=2 N=3 d=8 scale=0.500000 tile_m=16 tile_n=16 Q=256B K=256B KT=256B S=1024B O=512B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=160 B, MMA tiles=2, FLOPs=192, cycles=173 (compute=161, dma=12), util=0.93
+[       0] CORE  [1;32mINFO [0m Attention auto-tile: tile_m=16, tile_n=16 (head_dim=8, Q_len=2, KV_len=3)
+[       0] CORE  [1;32mINFO [0m Attention: M=2 N=3 d=8 scale=2.000000 tile_m=16 tile_n=16 Q=256B K=256B KT=256B S=1024B O=512B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=160 B, MMA tiles=2, FLOPs=192, cycles=229 (compute=185, dma=44), util=0.81
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention auto-tile: tile_m=16, tile_n=16 (head_dim=16, Q_len=8, KV_len=8)
+[       0] CORE  [1;32mINFO [0m Attention: M=8 N=8 d=16 scale=0.250000 tile_m=16 tile_n=16 Q=512B K=512B KT=512B S=1024B O=1024B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=1024 B, MMA tiles=2, FLOPs=4096, cycles=1448 (compute=1128, dma=320), util=0.78
+[       0] CORE  [1;31mERROR[0m Attention: null descriptor
+
+═══════════════════════════════════════════
+  TU Attention Engine Tests (Gap O3)
+═══════════════════════════════════════════
+
+  Identity-style attention (all-ones K, uniform V)       PASS
+  Deterministic small attention (M=3,N=5,d=16)           FAIL: max_err=inf > 0.25
+  Causal mask (M=4,N=4,d=8)                              FAIL: max_err=inf > 1.5
+  Multi-head (2 heads, M=4,N=4,d=8)                      PASS
+  Auto-tiling produces valid tile sizes                  PASS
+  Edge case: M=1,N=1,d=8                                 PASS
+  Scale differentiation (0.5 vs 2.0)                     PASS
+  Performance counters populated                         PASS
+  Descriptor validation                                  PASS
+
+═══════════════════════════════════════════
+  Test Suite Complete
+  7/9 tests passed
+═══════════════════════════════════════════
+make: *** [Makefile:447: test-attention] Error 1
+make: Leaving directory '/tmp/tusim-width-baseline.ncd17v'

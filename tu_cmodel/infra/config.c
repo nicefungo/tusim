@@ -469,6 +469,7 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->dma_drr_round_issue_cycles = 0;
     cfg->dma_drr_round_cost_mode = TU_DMA_CONFIG_DRR_ROUND_COST_FIXED;
     cfg->dma_drr_select_issue_cycles = 0;
+    cfg->dma_drr_scan_width = 1;
     for (uint32_t i = 0; i < TU_DMA_ENGINE_MAX_CHANNELS; i++)
         cfg->dma_drr_channel_weights[i] = 1;
     cfg->dma_aging_scope     = TU_DMA_CONFIG_AGING_SUBMISSION;
@@ -586,6 +587,7 @@ tu_runtime_config_t tu_config_to_runtime(const struct tu_config_t *cfg) {
     rt.dma_drr_round_issue_cycles = cfg->dma_drr_round_issue_cycles;
     rt.dma_drr_round_cost_mode = cfg->dma_drr_round_cost_mode;
     rt.dma_drr_select_issue_cycles = cfg->dma_drr_select_issue_cycles;
+    rt.dma_drr_scan_width = cfg->dma_drr_scan_width ? cfg->dma_drr_scan_width : 1u;
     for (uint32_t i = 0; i < TU_DMA_ENGINE_MAX_CHANNELS; i++)
         rt.dma_drr_channel_weights[i] = cfg->dma_drr_channel_weights[i] ?
                                             cfg->dma_drr_channel_weights[i] : 1u;
@@ -873,6 +875,11 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
             cfg->dma_drr_select_issue_cycles =
                 (iv < 0 || iv > 1024) ? 1025u : (uint32_t)iv;
         const tu_json_value_t *drr_weights = tu_json_get(d, "drr_channel_weights");
+        const tu_json_value_t *scan_width = tu_json_get(d, "drr_scan_width");
+        if (scan_width) {
+            iv = scan_width->type == TU_JSON_INT ? tu_json_as_int(scan_width) : -1;
+            cfg->dma_drr_scan_width = (iv < 0 || iv > 8) ? 9u : (uint32_t)iv;
+        }
         if (drr_weights) {
             if (drr_weights->type != TU_JSON_ARRAY ||
                 drr_weights->array.count != TU_DMA_ENGINE_MAX_CHANNELS) {
@@ -1329,6 +1336,11 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
         return -1;
     }
     bool any_drr_weight = false;
+    if (cfg->dma_drr_scan_width > TU_DMA_ENGINE_MAX_CHANNELS) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size, "DMA drr_scan_width must be in [0,8]");
+        return -1;
+    }
     for (uint32_t i = 0; i < TU_DMA_ENGINE_MAX_CHANNELS; i++)
         any_drr_weight = any_drr_weight || cfg->dma_drr_channel_weights[i] != 0;
     for (uint32_t i = 0; i < TU_DMA_ENGINE_MAX_CHANNELS; i++) {
@@ -1936,6 +1948,8 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
                 "per_channel" : "fixed"));
     fprintf(out, "| `dma_drr_select_issue_cycles` | %u | cycles/successful selection | Scheduler delay before each selected DRR descriptor; cost mode controls fixed, full-scan, or visited-probe scaling |\n",
             cfg->dma_drr_select_issue_cycles);
+    fprintf(out, "| `dma_drr_scan_width` | %u | queues/scan group | 0 inherits 1; 1..8 cursor-relative probes per group; fixed cost ignores width |\n",
+            cfg->dma_drr_scan_width);
     fprintf(out, "| `dma_drr_channel_weights` | [%u,%u,%u,%u,%u,%u,%u,%u] | uint8[8] | Per-channel DRR quantum multipliers in [1,255] |\n",
             cfg->dma_drr_channel_weights[0], cfg->dma_drr_channel_weights[1],
             cfg->dma_drr_channel_weights[2], cfg->dma_drr_channel_weights[3],
