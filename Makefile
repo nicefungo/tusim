@@ -468,7 +468,7 @@ test-pipeline: tests/test_pipeline.c libtucmodel.a
 
 # ---- Test: Address Generator (M3) ----
 test-agen: tests/test_address_gen.c libtucmodel.a
-	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< ./libtucmodel.a $(LDFLAGS)
 	./test-agen
 
 # ---- Test: Power/Energy Model (E4) ----
@@ -696,7 +696,7 @@ test: test-config-generation test-cmodel test-reinit test-cmdq test-dma test-dma
 	@echo "═══════════════════════════════════════════"
 
 # Quick smoke test (pre-commit)
-test-quick: test-config-generation test-cmodel test-reinit test-cmdq test-dma test-dma-drr-scan-width test-dma-burst-boundary-sweep test-dma-external-boundary-sweep test-asm
+test-quick: test-config-generation test-cmodel test-reinit test-agen test-cmdq test-dma test-dma-drr-scan-width test-dma-burst-boundary-sweep test-dma-external-boundary-sweep test-asm
 	@echo ""
 	@echo "═══ Quick smoke test passed ═══"
 

@@ -214,6 +214,60 @@ static void test_transposed(void) {
     PASS();
 }
 
+/* Full permutation gate: traversal changes, row-major storage does not. */
+static void test_transposed_matrix(void) {
+    TEST("transposed tall/wide/square/vector/empty permutation matrix");
+    const uint32_t shapes[][2] = {
+        {3, 4}, {4, 3}, {4, 4}, {1, 7}, {7, 1}, {0, 5}, {5, 0}
+    };
+    const uint32_t sizes[] = {1, 2, 4, 8, 0}; /* zero retains 4-byte default */
+    unsigned cases = 0;
+    for (unsigned s = 0; s < sizeof(shapes) / sizeof(shapes[0]); s++) {
+        for (unsigned e = 0; e < sizeof(sizes) / sizeof(sizes[0]); e++) {
+            uint32_t rows = shapes[s][0], cols = shapes[s][1];
+            uint32_t config[3] = {rows, cols, sizes[e]};
+            uint32_t width = sizes[e] ? sizes[e] : 4;
+            const uint32_t base = 0x123;
+            tu_agen_iterator_t it;
+            uint32_t expected[64], actual[64];
+            bool seen[64] = {false};
+            unsigned n = 0;
+            ASSERT_EQ(tu_agen_iterator_init(&it, TU_AGEN_MODE_TRANSPOSED,
+                                           base, config), 0, "matrix init");
+            ASSERT_EQ(tu_agen_total(&it), rows * cols, "matrix total");
+            for (uint32_t c = 0; c < cols; c++) {
+                for (uint32_t r = 0; r < rows; r++) {
+                    expected[n] = base + (r * cols + c) * width;
+                    ASSERT_TRUE(tu_agen_has_next(&it), "not exhausted early");
+                    uint32_t addr = tu_agen_next(&it);
+                    ASSERT_EQ(addr, expected[n], "column walk over row storage");
+                    ASSERT_TRUE(addr >= base && addr < base + rows * cols * width,
+                                "address in tensor");
+                    uint32_t index = (addr - base) / width;
+                    ASSERT_TRUE(!seen[index], "no duplicate element");
+                    seen[index] = true;
+                    n++;
+                }
+            }
+            for (uint32_t i = 0; i < rows * cols; i++)
+                ASSERT_TRUE(seen[i], "complete permutation");
+            ASSERT_TRUE(!tu_agen_has_next(&it), "exhausted exactly");
+            ASSERT_EQ(tu_agen_next(&it), UINT32_MAX, "end sentinel");
+            ASSERT_EQ(tu_agen_next(&it), UINT32_MAX, "stable end sentinel");
+            ASSERT_EQ(it.current_idx, n, "end does not advance state");
+            tu_agen_reset(&it);
+            for (unsigned i = 0; i < n; i++)
+                ASSERT_EQ(tu_agen_next(&it), expected[i], "reset replays order");
+            ASSERT_EQ(tu_agen_generate_all(&it, actual, 64), n, "bulk count");
+            for (unsigned i = 0; i < n; i++)
+                ASSERT_EQ(actual[i], expected[i], "bulk order");
+            cases++;
+        }
+    }
+    printf("[%u cases] ", cases);
+    PASS();
+}
+
 /* ---- Test 8: Bulk address generation ---- */
 static void test_bulk_generation(void) {
     TEST("bulk address generation");
@@ -334,6 +388,7 @@ int main(void) {
     test_im2col();
     test_block_interleaved();
     test_transposed();
+    test_transposed_matrix();
     test_bulk_generation();
     test_range_generation();
     test_im2col_dims();

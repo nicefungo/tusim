@@ -141,6 +141,8 @@ void tu_agen_compute_tiling(tu_agen_tiling_t *tiling);
  * mode:    which addressing pattern to use
  * base:    base byte address in memory
  * config:  pattern-specific parameters (cast to appropriate type)
+ *          TRANSPOSED uses uint32_t[3] = {rows, cols, elem_size};
+ *          storage is row-major, traversal is column-first, size 0 means 4 B.
  *
  * Returns 0 on success, -1 on invalid parameters.
  */

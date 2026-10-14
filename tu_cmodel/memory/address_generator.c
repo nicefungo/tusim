@@ -196,7 +196,7 @@ int tu_agen_iterator_init(tu_agen_iterator_t *it,
         it->dims[0] = cfg[1];  /* iterate cols first */
         it->dims[1] = cfg[0];  /* then rows */
         it->strides[0] = 1;
-        it->strides[1] = cfg[0]; /* column stride = original row count */
+        it->strides[1] = cfg[1]; /* row-major pitch = original column count */
         it->elem_size = cfg[2] ? cfg[2] : 4;
         it->total_elements = cfg[0] * cfg[1];
         break;
