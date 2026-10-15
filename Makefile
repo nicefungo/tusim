@@ -508,7 +508,7 @@ test-multicore-dataflow-sweep: tests/test_multicore_dataflow_sweep.c libtucmodel
 
 # ---- Test: Multicast/Broadcast DMA (DM4) ----
 test-multicast: tests/test_multicast.c libtucmodel.a
-	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< ./libtucmodel.a $(LDFLAGS)
 	./test-multicast
 
 # ---- Test: Scatter/Gather DMA (DM3) ----
@@ -696,7 +696,7 @@ test: test-config-generation test-cmodel test-reinit test-cmdq test-dma test-dma
 	@echo "═══════════════════════════════════════════"
 
 # Quick smoke test (pre-commit)
-test-quick: test-config-generation test-cmodel test-reinit test-agen test-cmdq test-dma test-dma-drr-scan-width test-dma-burst-boundary-sweep test-dma-external-boundary-sweep test-asm
+test-quick: test-config-generation test-cmodel test-reinit test-agen test-multicast test-cmdq test-dma test-dma-drr-scan-width test-dma-burst-boundary-sweep test-dma-external-boundary-sweep test-asm
 	@echo ""
 	@echo "═══ Quick smoke test passed ═══"
 
@@ -738,6 +738,7 @@ config-docs: libtucmodel.a
 
 # ---- Clean ----
 clean:
+	rm -f test-multicast
 	rm -f test-dma-drr-scan-width
 	rm -f $(TU_DIR)/*.o $(TU_DIR)/memory/*.o $(TU_DIR)/sparsity/*.o $(TU_DIR)/isa/*.o $(TU_DIR)/compute/*.o $(TU_DIR)/compute/dataflow/*.o $(TU_DIR)/infra/*.o $(TU_DIR)/perf/*.o $(TU_DIR)/bindings/*.o libtucmodel.a libtucmodel.so
 	rm -f test-cmodel test-reinit test-cmdq test-dma test-dma-channel-sweep test-dma-arbitration-sweep test-dma-binding-sweep test-dma-bus-width-sweep test-dma-directional-latency-sweep test-dma-burst-issue-sweep test-dma-directional-burst-sweep test-dma-directional-issue-sweep test-dma-segmentation-sweep test-dma-base-scope-sweep test-dma-payload-scope-sweep test-dma-issue-payload-overlap-sweep test-dma-burst-boundary-sweep test-dma-external-boundary-sweep test-dram test-sram-issue-sweep test-dram-row-policy-sweep test-dram-row-timeout-sweep test-dram-row-timeout-domain-sweep test-dram-turnaround-sweep test-dram-turnaround-idle-sweep test-dram-directional-burst-sweep test-dram-burst-alignment-sweep test-dram-zero-byte-sweep test-dram-address-mapping-sweep test-dram-refresh-sweep test-dram-refresh-phase-sweep test-dram-refresh-debt-sweep test-dram-core-clock-sweep test-isa test-golden test-golden-full

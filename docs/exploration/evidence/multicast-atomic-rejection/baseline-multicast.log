@@ -1,0 +1,18 @@
+cc -O2 -Wall -Wextra -std=c11 -fPIC -I. -Itu_cmodel -o test-multicast tests/test_multicast.c -L. -ltucmodel -lm
+./test-multicast
+DMA: descriptor SRAM span exceeds region capacity
+=== Multicast/Broadcast DMA Tests (DM4) ===
+
+  Create multicast descriptor                          PASS
+  Multicast single target                              PASS
+  Multicast three regions                              PASS
+  Multicast bounds exact fit                           PASS
+  Multicast bounds overflow                            FAIL: desc should be marked completed
+  Multicast null inputs                                PASS
+  Multicast destroy frees arrays                       PASS
+  Multicast performance counter                        PASS
+  Multicast 16-target fanout                           PASS
+  Multicast chained after linear                       PASS
+
+=== Results: 9/10 passed ===
+make: *** [Makefile:512: test-multicast] Error 1

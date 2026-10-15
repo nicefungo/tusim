@@ -146,30 +146,113 @@ static void test_multicast_bounds_exact(void) {
     PASS();
 }
 
-/* ---- Test 5: Bounds checking — overflow skipped gracefully ---- */
+/* ---- Test 5: Every destination is validated before any write ---- */
 static void test_multicast_bounds_overflow(void) {
-    TEST("Multicast bounds overflow");
+    const unsigned char src[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+    /* Direct execution retains ownership; rejected submission destroys it.
+     * Test all invalid-target positions, including null target metadata. */
+    for (int surface = 0; surface < 3; ++surface) {
+        for (int null_target = 0; null_target < 2; ++null_target) {
+            for (int bad = 0; bad < 3; ++bad) {
+                TEST("Multicast rejects all targets atomically");
+                tu_sram_region_t r[3];
+                tu_sram_region_t *regions[3] = {&r[0], &r[1], &r[2]};
+                uint32_t offsets[3] = {0, 16, 56};
+                tu_dma_descriptor_t *desc = NULL;
+                unsigned char before[3][64];
+                tu_dma_init_full(surface == 2, 3, 8);
+                for (int i = 0; i < 3; ++i) {
+                    tu_sram_init(&r[i], 64, "atomic");
+                    memset(before[i], 0xA0 + i, sizeof(before[i]));
+                    memcpy(tu_sram_raw_ptr(&r[i]), before[i], sizeof(before[i]));
+                }
+                if (null_target) regions[bad] = NULL;
+                else offsets[bad] = 57; /* one byte beyond exact end */
+                desc = tu_dma_desc_create_multicast(
+                    0, src, regions, offsets, 3, 1, sizeof(src));
+                if (!desc) { FAIL("creation failed"); goto cleanup; }
+                unsigned char engine_before[sizeof(g_tu_dma)];
+                memcpy(engine_before, &g_tu_dma, sizeof(engine_before));
+                if (surface == 0) {
+                    tu_dma_execute_desc(desc);
+                    if (desc->completed || desc->cycles_issued || desc->cycles_completed) {
+                        FAIL("rejected direct descriptor acquired completion state");
+                        goto cleanup;
+                    }
+                } else {
+                    uint32_t id = tu_dma_submit_desc(desc);
+                    /* Rejection consumes the descriptor; never dereference it. */
+                    if (id != 0) {
+                        FAIL("invalid submission accepted");
+                        /* Drain accepted work before releasing its SRAM. */
+                        tu_dma_flush_all();
+                        goto cleanup;
+                    }
+                    desc = NULL;
+                }
+                if (memcmp(&g_tu_dma, engine_before, sizeof(engine_before)) != 0) {
+                    FAIL("rejection mutated engine/queue/accounting state");
+                    goto cleanup;
+                }
+                for (int i = 0; i < 3; ++i) {
+                    if (memcmp(tu_sram_raw_ptr(&r[i]), before[i], sizeof(before[i]))) {
+                        FAIL("surface=%d null=%d bad=%d target=%d copied a prefix",
+                             surface, null_target, bad, i);
+                        goto cleanup;
+                    }
+                }
+                PASS();
+cleanup:
+                tu_dma_desc_destroy(desc);
+                for (int i = 0; i < 3; ++i) tu_sram_destroy(&r[i]);
+            }
+        }
+    }
+}
 
-    tu_dma_init_full(false, 3, 8);
-    tu_sram_region_t r;
-    tu_sram_init(&r, 256, "small");
-
-    const float src_data[16] = {0};
-    uint32_t bad_offset = 250;  /* only 6 bytes left, need 64 */
-    tu_sram_region_t *regions[1] = {&r};
-
-    tu_dma_descriptor_t *desc = tu_dma_desc_create_multicast(
-        0, src_data, regions, &bad_offset, 1, sizeof(float), 16);
-
-    if (!desc) { FAIL("creation failed"); tu_sram_destroy(&r); return; }
-    /* Should print warning but not crash */
-    tu_dma_execute_desc(desc);
-    /* Overflow was skipped, but desc is still marked completed */
-    if (!desc->completed) { FAIL("desc should be marked completed"); tu_dma_desc_destroy(desc); tu_sram_destroy(&r); return; }
-
-    tu_dma_desc_destroy(desc);
-    tu_sram_destroy(&r);
-    PASS();
+static void test_multicast_multi_exact_end(void) {
+    const unsigned char src[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+    for (int surface = 0; surface < 3; ++surface) {
+        TEST("Multicast three exact-end targets accepted");
+        tu_sram_region_t r[3];
+        tu_sram_region_t *regions[3] = {&r[0], &r[1], &r[2]};
+        uint32_t offsets[3] = {56, 120, 248};
+        unsigned char expected[3][256];
+        tu_dma_descriptor_t *desc = NULL;
+        tu_dma_init_full(surface == 2, 3, 8);
+        for (int i = 0; i < 3; ++i) {
+            tu_sram_init(&r[i], 64u << i, "exact-end");
+            memset(expected[i], 0xA0 + i, sizeof(expected[i]));
+            memcpy(tu_sram_raw_ptr(&r[i]), expected[i], r[i].total_size);
+            memcpy(expected[i] + offsets[i], src, sizeof(src));
+        }
+        desc = tu_dma_desc_create_multicast(0, src, regions, offsets, 3, 1, sizeof(src));
+        if (!desc) { FAIL("creation failed"); goto cleanup; }
+        if (surface == 0) tu_dma_execute_desc(desc);
+        else if (tu_dma_submit_desc(desc) == 0) {
+            desc = NULL; /* rejection owns/frees the chain */
+            FAIL("exact-end submission rejected");
+            goto cleanup;
+        }
+        if (surface == 2) tu_dma_flush_all();
+        if (!desc->completed || !desc->cycles_completed ||
+            g_tu_dma.total_transfers != 1 || g_tu_dma.total_bytes != 24 ||
+            g_tu_dma.total_occupied_bytes != 32 ||
+            g_tu_dma.estimated_cycles != 51) {
+            FAIL("completion or compatibility accounting mismatch");
+            goto cleanup;
+        }
+        for (int i = 0; i < 3; ++i) {
+            if (memcmp(tu_sram_raw_ptr(&r[i]), expected[i], r[i].total_size)) {
+                FAIL("target %d payload/guard mismatch", i);
+                goto cleanup;
+            }
+        }
+        PASS();
+cleanup:
+        tu_dma_desc_destroy(desc);
+        for (int i = 0; i < 3; ++i) tu_sram_destroy(&r[i]);
+    }
 }
 
 /* ---- Test 6: Null handling ---- */
@@ -337,7 +420,8 @@ static void test_multicast_chained(void) {
     if (fabsf(r128[0]-99) > 1e-6f || fabsf(r256[1]-100) > 1e-6f)
         { FAIL("multicast step failed"); tu_sram_destroy(&r); return; }
 
-    /* d1/d2 freed by chain */
+    /* Synchronous submission detaches but does not destroy the chain. */
+    tu_dma_desc_destroy(d1);
     tu_sram_destroy(&r);
     PASS();
 }
@@ -351,6 +435,7 @@ int main(void) {
     test_multicast_multi_target();
     test_multicast_bounds_exact();
     test_multicast_bounds_overflow();
+    test_multicast_multi_exact_end();
     test_multicast_null_inputs();
     test_multicast_destroy_frees();
     test_multicast_perf_counter();
