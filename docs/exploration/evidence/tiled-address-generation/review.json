@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "security_concerns": [],
+  "logic_errors": [],
+  "suggestions": [
+    "Optionally add a valid near-limit geometry test that samples initial and final addresses without enumerating the entire tensor, complementing the rejection tests with large valid ordinal-product coverage.",
+    "Keep the documented descriptor-chain range-capacity defect tracked separately as P0; the safe producer probe does not establish consumer safety."
+  ],
+  "summary": "Static review of the supplied diff, new files and evidence excerpts found no blocking issue introduced by this change. The clipped depth/row/column slab decomposition preserves compact tile-major order. Validation bounds nonempty intermediate products, byte multiplication and base addition, reserves the exhaustion sentinel, and avoids overflowing ceiling division. Public signatures and layouts are unchanged; stricter invalid-geometry handling is documented. The independent nested-loop oracle covers order, permutation, replay, exhaustion and ranges, with isolated overflow and boundary tests. The runner uses argument lists, bounded subprocess calls and temporary isolation. Added lines contain no secret assignments, shell=True, eval/exec, pickle or SQL construction. Documentation appropriately limits sanitizer, integration and performance claims and records the baseline-reproduced attention 7/9 failure rather than claiming full-suite success. No tools or commands were used, no files were changed, and neither execution results nor manifest hashes were independently verified."
+}

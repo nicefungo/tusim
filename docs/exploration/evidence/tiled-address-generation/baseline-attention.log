@@ -1,0 +1,66 @@
+make: Entering directory '/home/zxy/.hermes/cache/scratch/tusim-20261016/baseline-archive'
+cc -O2 -Wall -Wextra -std=c11 -fPIC -I. -Itu_cmodel -o test-attention tests/test_attention.c -L. -ltucmodel -lm
+./test-attention
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention auto-tile: tile_m=16, tile_n=16 (head_dim=8, Q_len=4, KV_len=4)
+[       0] CORE  [1;32mINFO [0m Attention: M=4 N=4 d=8 scale=0.353553 tile_m=16 tile_n=16 Q=256B K=256B KT=256B S=1024B O=512B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=256 B, MMA tiles=2, FLOPs=512, cycles=308 (compute=276, dma=32), util=0.90
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention auto-tile: tile_m=16, tile_n=16 (head_dim=16, Q_len=3, KV_len=5)
+[       0] CORE  [1;32mINFO [0m Attention: M=3 N=5 d=16 scale=0.250000 tile_m=16 tile_n=16 Q=512B K=512B KT=512B S=1024B O=1024B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=512 B, MMA tiles=2, FLOPs=960, cycles=513 (compute=451, dma=62), util=0.88
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention auto-tile: tile_m=16, tile_n=16 (head_dim=8, Q_len=4, KV_len=4)
+[       0] CORE  [1;32mINFO [0m Attention: M=4 N=4 d=8 scale=0.353553 tile_m=16 tile_n=16 Q=256B K=256B KT=256B S=1024B O=512B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=256 B, MMA tiles=2, FLOPs=512, cycles=372 (compute=340, dma=32), util=0.91
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention auto-tile: tile_m=16, tile_n=16 (head_dim=8, Q_len=4, KV_len=4)
+[       0] CORE  [1;32mINFO [0m Attention: M=4 N=4 d=8 scale=0.353553 tile_m=16 tile_n=16 Q=256B K=256B KT=256B S=1024B O=512B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=512 B, MMA tiles=4, FLOPs=1024, cycles=712 (compute=584, dma=128), util=0.82
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention auto-tile: tile_m=64, tile_n=64 (head_dim=64, Q_len=64, KV_len=64)
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention auto-tile: tile_m=16, tile_n=16 (head_dim=8, Q_len=1, KV_len=1)
+[       0] CORE  [1;32mINFO [0m Attention: M=1 N=1 d=8 scale=0.353553 tile_m=16 tile_n=16 Q=256B K=256B KT=256B S=1024B O=512B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=64 B, MMA tiles=2, FLOPs=32, cycles=67 (compute=65, dma=2), util=0.97
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention auto-tile: tile_m=16, tile_n=16 (head_dim=8, Q_len=2, KV_len=3)
+[       0] CORE  [1;32mINFO [0m Attention: M=2 N=3 d=8 scale=0.500000 tile_m=16 tile_n=16 Q=256B K=256B KT=256B S=1024B O=512B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=160 B, MMA tiles=2, FLOPs=192, cycles=173 (compute=161, dma=12), util=0.93
+[       0] CORE  [1;32mINFO [0m Attention auto-tile: tile_m=16, tile_n=16 (head_dim=8, Q_len=2, KV_len=3)
+[       0] CORE  [1;32mINFO [0m Attention: M=2 N=3 d=8 scale=2.000000 tile_m=16 tile_n=16 Q=256B K=256B KT=256B S=1024B O=512B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=160 B, MMA tiles=2, FLOPs=192, cycles=229 (compute=185, dma=44), util=0.81
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention auto-tile: tile_m=16, tile_n=16 (head_dim=16, Q_len=8, KV_len=8)
+[       0] CORE  [1;32mINFO [0m Attention: M=8 N=8 d=16 scale=0.250000 tile_m=16 tile_n=16 Q=512B K=512B KT=512B S=1024B O=1024B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=1024 B, MMA tiles=2, FLOPs=4096, cycles=1448 (compute=1128, dma=320), util=0.78
+[       0] CORE  [1;31mERROR[0m Attention: null descriptor
+
+═══════════════════════════════════════════
+  TU Attention Engine Tests (Gap O3)
+═══════════════════════════════════════════
+
+  Identity-style attention (all-ones K, uniform V)       PASS
+  Deterministic small attention (M=3,N=5,d=16)           FAIL: max_err=inf > 0.25
+  Causal mask (M=4,N=4,d=8)                              FAIL: max_err=inf > 1.5
+  Multi-head (2 heads, M=4,N=4,d=8)                      PASS
+  Auto-tiling produces valid tile sizes                  PASS
+  Edge case: M=1,N=1,d=8                                 PASS
+  Scale differentiation (0.5 vs 2.0)                     PASS
+  Performance counters populated                         PASS
+  Descriptor validation                                  PASS
+
+═══════════════════════════════════════════
+  Test Suite Complete
+  7/9 tests passed
+═══════════════════════════════════════════
+make: *** [Makefile:452: test-attention] Error 1
+make: Leaving directory '/home/zxy/.hermes/cache/scratch/tusim-20261016/baseline-archive'

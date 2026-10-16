@@ -73,6 +73,7 @@ test-perf
 test-pool
 test-pipeline
 test-agen
+test-agen-tiled-sweep
 test-multicore
 test-multicore-sweep
 test-multicore-dataflow-sweep

@@ -62,14 +62,46 @@ typedef struct {
  * Iterator: tiled 2D config
  * ============================================================================ */
 
-typedef struct {
-    uint32_t total_rows;
-    uint32_t total_cols;
-    uint32_t tile_rows;
-    uint32_t tile_cols;
-    uint32_t num_tile_rows;
-    uint32_t num_tile_cols;
-} agen_tiled2d_config_t;
+/* Reserve UINT32_MAX for exhaustion, including the final element's bytes. */
+static bool tiled_geometry_valid(uint32_t base, uint32_t d, uint32_t r,
+                                  uint32_t c, uint32_t size) {
+    if (d == 0 || r == 0 || c == 0) return true;
+    uint64_t count = (uint64_t)d * r;
+    if (count > UINT32_MAX) return false;
+    count *= c;
+    return count <= UINT32_MAX && (uint64_t)base + count * size <= UINT32_MAX;
+}
+
+static uint32_t min_u32(uint32_t a, uint32_t b) {
+    return a < b ? a : b;
+}
+
+/* Decode a compact tile-major ordinal, not a padded tile-slot ordinal.
+ * Complete depth/row/column tile slabs precede the clipped final slab.
+ * Every intermediate product is bounded by the validated tensor volume.
+ * Empty iterators never reach this helper. */
+static uint32_t tiled_offset(uint32_t idx, uint32_t d, uint32_t r, uint32_t c,
+                              uint32_t td, uint32_t tr, uint32_t tc) {
+    td = min_u32(td, d);
+    tr = min_u32(tr, r);
+    tc = min_u32(tc, c);
+    uint32_t slab = td * r * c;
+    uint32_t db = (idx / slab) * td;
+    uint32_t de = min_u32(td, d - db);
+    idx %= slab;
+    slab = de * tr * c;
+    uint32_t rb = (idx / slab) * tr;
+    uint32_t re = min_u32(tr, r - rb);
+    idx %= slab;
+    slab = de * re * tc;
+    uint32_t cb = (idx / slab) * tc;
+    uint32_t ce = min_u32(tc, c - cb);
+    idx %= slab;
+    uint32_t dz = idx / (re * ce);
+    uint32_t ry = (idx / ce) % re;
+    uint32_t cx = idx % ce;
+    return ((db + dz) * r + rb + ry) * c + cb + cx;
+}
 
 /* ============================================================================
  * Iterator initialization
@@ -122,14 +154,23 @@ int tu_agen_iterator_init(tu_agen_iterator_t *it,
     }
 
     case TU_AGEN_MODE_TILED_2D: {
-        const agen_tiled2d_config_t *cfg = (const agen_tiled2d_config_t *)config;
+        const tu_agen_tiled2d_config_t *cfg = (const tu_agen_tiled2d_config_t *)config;
         if (!cfg) return -1;
+        if (!cfg->tile_rows || !cfg->tile_cols ||
+            !tiled_geometry_valid(base_addr, 1, cfg->total_rows, cfg->total_cols, 4))
+            return -1;
+        uint32_t nr = cfg->total_rows / cfg->tile_rows +
+                      (cfg->total_rows % cfg->tile_rows != 0);
+        uint32_t nc = cfg->total_cols / cfg->tile_cols +
+                      (cfg->total_cols % cfg->tile_cols != 0);
+        if ((cfg->num_tile_rows && cfg->num_tile_rows != nr) ||
+            (cfg->num_tile_cols && cfg->num_tile_cols != nc)) return -1;
         it->total_dims[0] = cfg->total_rows;
         it->total_dims[1] = cfg->total_cols;
         it->tile_dims[0] = cfg->tile_rows;
         it->tile_dims[1] = cfg->tile_cols;
-        it->dims[0] = cfg->num_tile_rows;
-        it->dims[1] = cfg->num_tile_cols;
+        it->dims[0] = nr;
+        it->dims[1] = nc;
         it->total_elements = cfg->total_rows * cfg->total_cols;
         it->elem_size = 4;
         break;
@@ -138,16 +179,20 @@ int tu_agen_iterator_init(tu_agen_iterator_t *it,
     case TU_AGEN_MODE_TILED_3D: {
         const uint32_t *cfg = (const uint32_t *)config;
         if (!cfg) return -1;
+        uint32_t size = cfg[6] ? cfg[6] : 4;
+        if (!cfg[3] || !cfg[4] || !cfg[5] ||
+            !tiled_geometry_valid(base_addr, cfg[0], cfg[1], cfg[2], size))
+            return -1;
         it->total_dims[0] = cfg[0];
         it->total_dims[1] = cfg[1];
         it->total_dims[2] = cfg[2];
         it->tile_dims[0] = cfg[3];
         it->tile_dims[1] = cfg[4];
         it->tile_dims[2] = cfg[5];
-        it->elem_size = cfg[6] ? cfg[6] : 4;
-        it->dims[0] = (cfg[0] + cfg[3] - 1) / cfg[3];
-        it->dims[1] = (cfg[1] + cfg[4] - 1) / cfg[4];
-        it->dims[2] = (cfg[2] + cfg[5] - 1) / cfg[5];
+        it->elem_size = size;
+        it->dims[0] = cfg[0] / cfg[3] + (cfg[0] % cfg[3] != 0);
+        it->dims[1] = cfg[1] / cfg[4] + (cfg[1] % cfg[4] != 0);
+        it->dims[2] = cfg[2] / cfg[5] + (cfg[2] % cfg[5] != 0);
         it->total_elements = cfg[0] * cfg[1] * cfg[2];
         break;
     }
@@ -244,57 +289,15 @@ uint32_t tu_agen_next(tu_agen_iterator_t *it) {
     }
 
     case TU_AGEN_MODE_TILED_2D: {
-        uint32_t total_cols = it->total_dims[1];
-        uint32_t tile_rows  = it->tile_dims[0];
-        uint32_t tile_cols  = it->tile_dims[1];
-        uint32_t num_tile_cols = it->dims[1];
-
-        uint32_t elements_per_tile = tile_rows * tile_cols;
-        uint32_t tile_idx = idx / elements_per_tile;
-        uint32_t elem_in_tile = idx % elements_per_tile;
-
-        uint32_t tile_row = tile_idx / num_tile_cols;
-        uint32_t tile_col = tile_idx % num_tile_cols;
-
-        uint32_t local_row = elem_in_tile / tile_cols;
-        uint32_t local_col = elem_in_tile % tile_cols;
-
-        uint32_t global_row = tile_row * tile_rows + local_row;
-        uint32_t global_col = tile_col * tile_cols + local_col;
-
-        addr = it->base_addr + (global_row * total_cols + global_col) * it->elem_size;
+        addr = it->base_addr + tiled_offset(idx, 1, it->total_dims[0],
+            it->total_dims[1], 1, it->tile_dims[0], it->tile_dims[1]) * it->elem_size;
         break;
     }
 
     case TU_AGEN_MODE_TILED_3D: {
-        uint32_t total_r = it->total_dims[1];
-        uint32_t total_c = it->total_dims[2];
-        uint32_t tile_d  = it->tile_dims[0];
-        uint32_t tile_r  = it->tile_dims[1];
-        uint32_t tile_c  = it->tile_dims[2];
-        uint32_t num_tile_d = it->dims[0];
-        uint32_t num_tile_r = it->dims[1];
-
-        uint32_t elems_per_tile = tile_d * tile_r * tile_c;
-        uint32_t tile_idx = idx / elems_per_tile;
-        uint32_t elem_in = idx % elems_per_tile;
-
-        uint32_t t_d = tile_idx / (num_tile_r * num_tile_d);
-        (void)t_d; /* unused in current linearization */
-        uint32_t rem2 = tile_idx % (num_tile_r * num_tile_d);
-        uint32_t t_r = rem2 / num_tile_d;
-        uint32_t t_c = rem2 % num_tile_d;
-
-        uint32_t e_d = elem_in / (tile_r * tile_c);
-        uint32_t rem3 = elem_in % (tile_r * tile_c);
-        uint32_t e_r = rem3 / tile_c;
-        uint32_t e_c = rem3 % tile_c;
-
-        uint32_t g_d = t_d * tile_d + e_d;
-        uint32_t g_r = t_r * tile_r + e_r;
-        uint32_t g_c = t_c * tile_c + e_c;
-
-        addr = it->base_addr + (g_d * total_r * total_c + g_r * total_c + g_c) * it->elem_size;
+        addr = it->base_addr + tiled_offset(idx, it->total_dims[0],
+            it->total_dims[1], it->total_dims[2], it->tile_dims[0],
+            it->tile_dims[1], it->tile_dims[2]) * it->elem_size;
         break;
     }
 

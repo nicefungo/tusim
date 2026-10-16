@@ -1,0 +1,18 @@
+cc -O2 -Wall -Wextra -std=c11 -fPIC -I. -Itu_cmodel -o test-agen-tiled-sweep tests/test_agen_tiled_sweep.c ./libtucmodel.a -lm
+./test-agen-tiled-sweep
+rank shape(D,R,C) tile(D,R,C) element_bytes elements contiguous_ranges result
+2 1,3,5 1,2,3 4 15 4 PASS
+3 2,3,8 1,1,2 4 48 1 PASS
+RANGE_CAPACITY: required=256 stored=128 guard=unchanged; unsafe chain consumer not invoked
+2 1,6,6 1,2,3 4 36 10 PASS
+2 1,3,5 1,2,3 4 15 4 PASS
+2 1,3,5 1,8,8 4 15 1 PASS
+3 2,3,8 1,1,2 4 48 1 PASS
+3 3,5,4 2,3,3 4 60 28 PASS
+3 5,3,7 2,2,4 4 105 26 PASS
+2 1,3,5 1,1,1 4 15 1 PASS
+2 1,3,5 1,3,5 4 15 1 PASS
+3 3,5,4 1,5,4 4 60 1 PASS
+3 3,5,4 8,8,8 4 60 1 PASS
+3 3,5,4 1,2,2 4 60 19 PASS
+PASS: 17069 tiled permutation cases; invalid geometry, count/address overflow, exact-end and oversized-tile gates

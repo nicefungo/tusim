@@ -1,0 +1,34 @@
+sha256 tu_cmodel/memory/address_generator.c dbf6ddb38930dd4fdd15a7ed05738a58776d3e781a773bd0504a6d3071d9fd1d
+sha256 tests/test_agen_tiled_sweep.c 7608fdeec1a3aafeaf6e30d2d09698fe5303c34bddfb3cfead277d48e3b8be5a
+$ make libtucmodel.a
+make: 'libtucmodel.a' is up to date.
+exit=0
+baseline=8b3e3cb source_sha256=d2d39d8766f740b63e249b114bb9b7ccbca23daff58641d86ecb8aa9fcbf8fd8
+$ cc -std=c11 -Wall -Wextra -Werror -g -O1 -I/home/zxy/Workplace/projects/onnx-compiler -I/home/zxy/Workplace/projects/onnx-compiler/tu_cmodel -I/home/zxy/Workplace/projects/onnx-compiler/tu_cmodel/memory /home/zxy/Workplace/projects/onnx-compiler/tests/test_agen_tiled_sweep.c /home/zxy/.hermes/cache/scratch/agen-tiled-x2jtmc9i/baseline.c /home/zxy/Workplace/projects/onnx-compiler/libtucmodel.a -lm -o /home/zxy/.hermes/cache/scratch/agen-tiled-x2jtmc9i/red
+exit=0
+$ /home/zxy/.hermes/cache/scratch/agen-tiled-x2jtmc9i/red
+exit=1
+shape=1,3,5 tile=1,2,3 size=4 rank=2 i=8 expected=323 got=311
+shape=2,3,8 tile=1,1,2 size=4 rank=3 i=4 expected=307 got=323
+rank shape(D,R,C) tile(D,R,C) element_bytes elements contiguous_ranges result
+$ cc -std=c11 -Wall -Wextra -Werror -g -O1 -I/home/zxy/Workplace/projects/onnx-compiler -I/home/zxy/Workplace/projects/onnx-compiler/tu_cmodel -I/home/zxy/Workplace/projects/onnx-compiler/tu_cmodel/memory -fsanitize=address,undefined -fno-omit-frame-pointer /home/zxy/Workplace/projects/onnx-compiler/tests/test_agen_tiled_sweep.c /home/zxy/Workplace/projects/onnx-compiler/tu_cmodel/memory/address_generator.c /home/zxy/Workplace/projects/onnx-compiler/libtucmodel.a -lm -o /home/zxy/.hermes/cache/scratch/agen-tiled-x2jtmc9i/sanitized
+exit=0
+$ /home/zxy/.hermes/cache/scratch/agen-tiled-x2jtmc9i/sanitized
+rank shape(D,R,C) tile(D,R,C) element_bytes elements contiguous_ranges result
+2 1,3,5 1,2,3 4 15 4 PASS
+3 2,3,8 1,1,2 4 48 1 PASS
+RANGE_CAPACITY: required=256 stored=128 guard=unchanged; unsafe chain consumer not invoked
+2 1,6,6 1,2,3 4 36 10 PASS
+2 1,3,5 1,2,3 4 15 4 PASS
+2 1,3,5 1,8,8 4 15 1 PASS
+3 2,3,8 1,1,2 4 48 1 PASS
+3 3,5,4 2,3,3 4 60 28 PASS
+3 5,3,7 2,2,4 4 105 26 PASS
+2 1,3,5 1,1,1 4 15 1 PASS
+2 1,3,5 1,3,5 4 15 1 PASS
+3 3,5,4 1,5,4 4 60 1 PASS
+3 3,5,4 8,8,8 4 60 1 PASS
+3 3,5,4 1,2,2 4 60 19 PASS
+PASS: 17069 tiled permutation cases; invalid geometry, count/address overflow, exact-end and oversized-tile gates
+exit=0
+PASS: original traversal rejected; current complete iterator/range path ASan/UBSan/LSan clean

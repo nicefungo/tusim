@@ -143,6 +143,15 @@ void tu_agen_compute_tiling(tu_agen_tiling_t *tiling);
  * config:  pattern-specific parameters (cast to appropriate type)
  *          TRANSPOSED uses uint32_t[3] = {rows, cols, elem_size};
  *          storage is row-major, traversal is column-first, size 0 means 4 B.
+ *          TILED_2D uses tu_agen_tiled2d_config_t and fixed 4-byte elements;
+ *          zero grid counts are derived, nonzero counts must match ceil dims.
+ *          TILED_3D uses uint32_t[7] = {D,R,C,tile_D,tile_R,tile_C,elem_size};
+ *          element size 0 means 4 B. Both tiled modes traverse tiles in
+ *          row-major order and each tile in row-major order, clipping tails
+ *          without padding. Zero tensor dimensions yield an empty iterator;
+ *          tile dimensions must be positive (oversized tiles are legal).
+ *          Tiled element count and exclusive byte end must fit uint32_t;
+ *          UINT32_MAX is reserved for exhaustion, not a tensor byte.
  *
  * Returns 0 on success, -1 on invalid parameters.
  */
