@@ -498,12 +498,22 @@ tu_dma_descriptor_t *tu_agen_desc_chain_from_iterator(
     tu_sram_region_t *sram,
     void *host_base) {
 
-    if (!it) return NULL;
+    if (!it || !sram || !host_base || it->elem_size == 0 ||
+        (direction != TU_DMA_DIR_HOST_TO_TU && direction != TU_DMA_DIR_TU_TO_HOST))
+        return NULL;
 
-    tu_agen_range_t ranges[128];
-    uint32_t num_ranges = tu_agen_generate_ranges(it, ranges, 128);
-
+    /* The producer returns required count, not the bounded stored prefix.
+     * Count with a scratch entry, then replay into complete owned storage. */
+    tu_agen_range_t scratch;
+    uint32_t num_ranges = tu_agen_generate_ranges(it, &scratch, 1);
     if (num_ranges == 0) return NULL;
+    if ((uint64_t)num_ranges * sizeof(tu_agen_range_t) > SIZE_MAX) return NULL;
+    tu_agen_range_t *ranges = calloc(num_ranges, sizeof(*ranges));
+    if (!ranges) return NULL;
+    if (tu_agen_generate_ranges(it, ranges, num_ranges) != num_ranges) {
+        free(ranges);
+        return NULL;
+    }
 
     tu_dma_descriptor_t *head = NULL;
     tu_dma_descriptor_t *prev = NULL;
@@ -514,12 +524,17 @@ tu_dma_descriptor_t *tu_agen_desc_chain_from_iterator(
             channel, direction, sram, &ranges[i],
             host_ptr + ranges[i].base_addr);
 
-        if (!desc) continue;
+        if (!desc) {
+            tu_dma_desc_destroy(head);
+            free(ranges);
+            return NULL;
+        }
 
         if (!head) head = desc;
         if (prev) prev->next = desc;
         prev = desc;
     }
 
+    free(ranges);
     return head;
 }

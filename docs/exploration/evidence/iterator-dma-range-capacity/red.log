@@ -1,0 +1,5 @@
+FAIL line 42: addr >= base && addr + d->total_bytes <= base + bytes
+capacity rows=0 cols=0 mode=linear direction=0 ranges=0 bytes=0 PASS
+capacity rows=1 cols=4 mode=linear direction=0 ranges=1 bytes=16 PASS
+capacity rows=2 cols=2 mode=transposed direction=0 ranges=4 bytes=16 PASS
+capacity rows=2 cols=64 mode=transposed direction=0 ranges=128 bytes=512 PASS

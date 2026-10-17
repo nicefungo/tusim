@@ -195,12 +195,14 @@ uint32_t tu_agen_generate_all(tu_agen_iterator_t *it,
 
 /*
  * Generate contiguous ranges for DMA descriptor creation.
- * Groups consecutive addresses into ranges with stride=1.
+ * Groups consecutive addresses into ranges with stride=elem_size.
  *
  * ranges:     output buffer for range descriptors
  * max_ranges: capacity of ranges buffer
  *
- * Returns the number of ranges produced.
+ * Resets and exhausts the iterator. Returns the required range count, which
+ * may exceed max_ranges; only the first max_ranges entries are stored.
+ * NULL buffers and zero capacity return zero without traversing.
  */
 uint32_t tu_agen_generate_ranges(tu_agen_iterator_t *it,
                                   tu_agen_range_t *ranges,
@@ -303,7 +305,18 @@ tu_dma_descriptor_t *tu_agen_desc_from_range(
     void *host_ptr);
 
 /*
- * Create chained DMA descriptors covering all ranges from an iterator.
+ * Create a complete caller-owned chain covering all ranges, without a fixed
+ * range-count limit. Resets/replays the iterator; host_base is the origin of
+ * the same byte-addressed layout as SRAM (each pointer is host_base + address),
+ * not a packed traversal-order buffer or a pointer to iterator base_addr.
+ * Caller guarantees sufficient host storage and releases the unsubmitted chain
+ * with tu_dma_desc_destroy(head). No copy/submission occurs here.
+ * Returns NULL for empty input, allocation failure, NULL required arguments,
+ * zero element width, or a direction other than HOST_TO_TU/TU_TO_HOST.
+ * Allocation failure destroys the complete partial chain, never returns a
+ * truncated success; iterator progress is not rolled back. SRAM spans remain
+ * subject to the DMA executor/submission validator. This is not padding-fill
+ * support for im2col sentinel addresses or a host-allocation bounds validator.
  */
 tu_dma_descriptor_t *tu_agen_desc_chain_from_iterator(
     tu_agen_iterator_t *it,

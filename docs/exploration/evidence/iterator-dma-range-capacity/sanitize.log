@@ -1,0 +1,19 @@
+make: Entering directory '/home/zxy/.hermes/cache/scratch/tusim-20261017-sanitize'
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -I. -Itu_cmodel -o test-agen-dma-chain tests/test_agen_dma_chain.c ./libtucmodel.a -Wl,--wrap=calloc -lm -fsanitize=address,undefined
+./test-agen-dma-chain
+capacity rows=0 cols=0 mode=linear direction=0 ranges=0 bytes=0 PASS
+capacity rows=1 cols=4 mode=linear direction=0 ranges=1 bytes=16 PASS
+capacity rows=2 cols=2 mode=transposed direction=0 ranges=4 bytes=16 PASS
+capacity rows=2 cols=64 mode=transposed direction=0 ranges=128 bytes=512 PASS
+capacity rows=16 cols=16 mode=transposed direction=0 ranges=256 bytes=1024 PASS
+capacity rows=3 cols=129 mode=transposed direction=0 ranges=387 bytes=1548 PASS
+capacity rows=0 cols=0 mode=linear direction=1 ranges=0 bytes=0 PASS
+capacity rows=1 cols=4 mode=linear direction=1 ranges=1 bytes=16 PASS
+capacity rows=2 cols=2 mode=transposed direction=1 ranges=4 bytes=16 PASS
+capacity rows=2 cols=64 mode=transposed direction=1 ranges=128 bytes=512 PASS
+capacity rows=16 cols=16 mode=transposed direction=1 ranges=256 bytes=1024 PASS
+capacity rows=3 cols=129 mode=transposed direction=1 ranges=387 bytes=1548 PASS
+six invalid-input guards before allocation/traversal: PASS
+./test-agen-dma-chain oom
+514 allocation-failure direction/position cases: PASS
+make: Leaving directory '/home/zxy/.hermes/cache/scratch/tusim-20261017-sanitize'

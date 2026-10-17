@@ -161,6 +161,12 @@ verify >128-range movement/ownership and injected allocation failures. Do not
 silently truncate a successful tensor transfer. It remains the next daily
 independent item rather than being bundled into tiled geometry.
 
+**2026-10-17 closure:** this separate item is now implemented and verified;
+see `iterator-dma-range-capacity.md` for complete dynamic range storage,
+atomic allocation-failure cleanup, host-offset/ownership scope, 12 capacity
+rows and 514 injected allocation-failure cases. The paragraph above records
+the 2026-10-16 discovery state, not the current implementation status.
+
 SRAM arbitration still stores `arb_mode` without a requester-aware scalar
 consumer; its existing simultaneous-request/port dependency remains BLOCKED.
 Direct compressed-domain compute and physical dataflow remain subject to their

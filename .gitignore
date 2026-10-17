@@ -74,6 +74,7 @@ test-pool
 test-pipeline
 test-agen
 test-agen-tiled-sweep
+test-agen-dma-chain
 test-multicore
 test-multicore-sweep
 test-multicore-dataflow-sweep
