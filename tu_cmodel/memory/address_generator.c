@@ -72,6 +72,25 @@ static bool tiled_geometry_valid(uint32_t base, uint32_t d, uint32_t r,
     return count <= UINT32_MAX && (uint64_t)base + count * size <= UINT32_MAX;
 }
 
+/* Nonnegative affine strides may overlap or broadcast. Bound the complete
+ * element, not just its starting byte, without overflowing count or span.
+ * Subtract each axis from the byte-derived element budget so even a sum of
+ * two near-uint64 products cannot overflow. UINT32_MAX remains exhaustion. */
+static bool affine_geometry_valid(uint32_t base, uint32_t d, uint32_t r,
+                                   uint32_t c, uint32_t ds, uint32_t rs,
+                                   uint32_t size) {
+    if (!d || !r || !c) return true;
+    uint64_t count = (uint64_t)d * r;
+    if (count > UINT32_MAX || count * c > UINT32_MAX || !size) return false;
+    uint64_t budget = (UINT32_MAX - base) / size;
+    if (c > budget) return false;
+    budget -= c;
+    uint64_t rows = (uint64_t)(r - 1) * rs;
+    if (rows > budget) return false;
+    budget -= rows;
+    return (uint64_t)(d - 1) * ds <= budget;
+}
+
 static uint32_t min_u32(uint32_t a, uint32_t b) {
     return a < b ? a : b;
 }
@@ -123,6 +142,8 @@ int tu_agen_iterator_init(tu_agen_iterator_t *it,
         const uint32_t *count = (const uint32_t *)config;
         uint32_t elem_count = count ? count[0] : 0;
         uint32_t elem_size  = count ? count[1] : 1;
+        if (!affine_geometry_valid(base_addr, 1, 1, elem_count, 0, 0, elem_size))
+            return -1;
         it->elem_size = elem_size;
         it->dims[0] = elem_count;
         it->total_elements = elem_count;
@@ -132,6 +153,8 @@ int tu_agen_iterator_init(tu_agen_iterator_t *it,
     case TU_AGEN_MODE_STRIDED_2D: {
         const tu_agen_2d_config_t *cfg = (const tu_agen_2d_config_t *)config;
         if (!cfg) return -1;
+        if (!affine_geometry_valid(base_addr, 1, cfg->rows, cfg->cols,
+                                   0, cfg->row_stride, 4)) return -1;
         it->dims[0] = cfg->rows;
         it->dims[1] = cfg->cols;
         it->strides[0] = cfg->row_stride;
@@ -143,6 +166,8 @@ int tu_agen_iterator_init(tu_agen_iterator_t *it,
     case TU_AGEN_MODE_STRIDED_3D: {
         const uint32_t *cfg = (const uint32_t *)config;
         if (!cfg) return -1;
+        if (!affine_geometry_valid(base_addr, cfg[0], cfg[1], cfg[2],
+                                   cfg[3], cfg[4], cfg[5] ? cfg[5] : 4)) return -1;
         it->dims[0] = cfg[0];
         it->dims[1] = cfg[1];
         it->dims[2] = cfg[2];
@@ -238,6 +263,8 @@ int tu_agen_iterator_init(tu_agen_iterator_t *it,
     case TU_AGEN_MODE_TRANSPOSED: {
         const uint32_t *cfg = (const uint32_t *)config;
         if (!cfg) return -1;
+        if (!affine_geometry_valid(base_addr, 1, cfg[0], cfg[1],
+                                   0, cfg[1], cfg[2] ? cfg[2] : 4)) return -1;
         it->dims[0] = cfg[1];  /* iterate cols first */
         it->dims[1] = cfg[0];  /* then rows */
         it->strides[0] = 1;

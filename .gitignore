@@ -73,6 +73,7 @@ test-perf
 test-pool
 test-pipeline
 test-agen
+test-agen-affine-bounds
 test-agen-tiled-sweep
 test-agen-dma-chain
 test-multicore

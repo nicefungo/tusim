@@ -141,6 +141,18 @@ void tu_agen_compute_tiling(tu_agen_tiling_t *tiling);
  * mode:    which addressing pattern to use
  * base:    base byte address in memory
  * config:  pattern-specific parameters (cast to appropriate type)
+ *          LINEAR uses uint32_t[2] = {count, elem_size}; NULL means empty
+ *          with size 1. Nonempty linear views require a positive size.
+ *          STRIDED_2D uses tu_agen_2d_config_t with fixed 4-byte elements;
+ *          row_stride is in elements, not bytes.
+ *          STRIDED_3D uses uint32_t[6] = {D,R,C,depth_stride,row_stride,size};
+ *          strides are in elements and size 0 means 4 B.
+ *          Linear, strided and transposed views require element count and
+ *          full addressed byte extent to fit uint32_t, with UINT32_MAX
+ *          reserved for exhaustion. Zero tensor dimensions remain empty;
+ *          zero/overlapping strides are legal (broadcast/overlapping views).
+ *          Rejected views are left empty. This does not validate SRAM or
+ *          host allocation capacity; inline address helpers are unchecked.
  *          TRANSPOSED uses uint32_t[3] = {rows, cols, elem_size};
  *          storage is row-major, traversal is column-first, size 0 means 4 B.
  *          TILED_2D uses tu_agen_tiled2d_config_t and fixed 4-byte elements;
