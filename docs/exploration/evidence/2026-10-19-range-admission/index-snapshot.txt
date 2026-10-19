@@ -1,0 +1,4 @@
+Tested index tree (before adding this transcript and manifests): e0b96ca3452a8eef1b03648499f11ed104dc48a8
+Fresh archive: /home/zxy/.hermes/cache/scratch/tusim-range-index-l98hqsb2
+make: PASS
+make test-quick test-config test-conv test-scatter-gather: PASS

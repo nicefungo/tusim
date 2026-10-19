@@ -491,7 +491,10 @@ tu_dma_descriptor_t *tu_agen_desc_from_range(
     const tu_agen_range_t *range,
     void *host_ptr) {
 
-    if (!range || range->total_bytes == 0) return NULL;
+    if (!sram || !host_ptr || !range || !range->elem_size || !range->total_bytes ||
+        range->total_bytes % range->elem_size != 0 ||
+        (direction != TU_DMA_DIR_HOST_TO_TU && direction != TU_DMA_DIR_TU_TO_HOST))
+        return NULL;
 
     tu_dma_descriptor_t *desc = calloc(1, sizeof(tu_dma_descriptor_t));
     if (!desc) return NULL;

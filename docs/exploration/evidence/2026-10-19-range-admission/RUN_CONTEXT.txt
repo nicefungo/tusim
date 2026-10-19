@@ -1,0 +1,29 @@
+Execution input HEAD: 1cad91e8fc44a786adf5c67c1d552075f1861faf
+Date: 2026-10-19 (Asia/Shanghai)
+Mode: pre-spec; one newly evidenced correctness item, no READY item at entry.
+
+Commands performed in the live checkout:
+make clean && make
+make test-quick
+make libtucmodel.a
+cc -O2 -Wall -Wextra -std=c11 -I. -Itu_cmodel tests/test_agen_range_admission.c ./libtucmodel.a -Wl,--wrap=calloc -lm -o $TMPDIR/test-range-red
+$TMPDIR/test-range-red (expected exit 1 before production fix)
+cc -O2 -Wall -Wextra -std=c11 -I. -Itu_cmodel tests/test_agen_range_admission.c ./libtucmodel.a -Wl,--wrap=calloc -lm -o $TMPDIR/test-range-green
+$TMPDIR/test-range-green (exit 0 after production fix)
+make clean && make
+make test-quick
+make test-config test-conv test-scatter-gather test-agen-range-admission
+make test (exit 2; pre-existing attention failure)
+
+verify_archives.py is the historical runner used at the input HEAD above, not
+a timeless canonical runner. Its HEAD archive resolved to that exact commit.
+It captured clean baseline full-suite failure and current-source sanitizer gates.
+For future replay, use this named commit as its archive base rather than a newer
+HEAD; use the committed implementation/test/build files for the overlay.
+Safe archive extraction omits symlinks to external model fixtures unused here.
+commands.txt retains exact run argv, scratch paths and return codes.
+index-snapshot.txt records the source/index tree built before evidence manifests.
+
+INPUT_SHA256SUMS binds changed implementation/test/build inputs.
+SHA256SUMS binds all other retained evidence files (including INPUT_SHA256SUMS),
+excluding itself. The final publication commit supplies full source reachability.

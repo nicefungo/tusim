@@ -307,7 +307,14 @@ typedef struct {
 /* ---- Convenience: Create DMA Descriptors from Patterns ---- */
 
 /*
- * Create a DMA descriptor for a contiguous range.
+ * Create one caller-owned, unsubmitted linear descriptor for a contiguous range.
+ * Returns NULL before allocation for NULL required pointers, zero byte/element
+ * count, byte count not divisible by element width, or unsupported direction
+ * (only HOST_TO_TU and TU_TO_HOST). Allocation failure also returns NULL.
+ * host_ptr points to the first transferred byte, not a layout origin. The stride
+ * field does not select strided DMA here; use a strided descriptor for that.
+ * SRAM span/channel admission remains executor/submission-owned; host allocation
+ * bounds remain caller-owned. No copy or accounting occurs in this constructor.
  */
 tu_dma_descriptor_t *tu_agen_desc_from_range(
     uint8_t channel,

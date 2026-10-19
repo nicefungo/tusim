@@ -1,0 +1,6 @@
+baseline-archive-build: cwd=/home/zxy/.hermes/cache/scratch/tusim-range-baseline-79mkqjfj; argv=['make']; exit=0
+baseline-archive-full: cwd=/home/zxy/.hermes/cache/scratch/tusim-range-baseline-79mkqjfj; argv=['make', 'test']; exit=2
+final-full: cwd=/home/zxy/Workplace/projects/onnx-compiler; argv=['make', 'test']; exit=2
+san-build: cwd=/home/zxy/.hermes/cache/scratch/tusim-range-san-yi4t6hj1; argv=['make', 'libtucmodel.a', 'CFLAGS=-O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer']; exit=0
+san-tests: cwd=/home/zxy/.hermes/cache/scratch/tusim-range-san-yi4t6hj1; argv=['make', 'test-agen-range-admission', 'test-agen-dma-chain', 'test-agen-affine-bounds', 'test-agen-tiled-sweep', 'CFLAGS=-O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer', 'LDFLAGS=-lm -fsanitize=address,undefined']; exit=0
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 for san-tests

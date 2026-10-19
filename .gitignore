@@ -43,6 +43,7 @@ test-isa
 test-golden
 test-golden-full
 test-dataflow
+test-elementwise
 test-dataflow-sweep
 test-interconnect-switching-sweep
 test-interconnect-contention-sweep
@@ -73,6 +74,7 @@ test-perf
 test-pool
 test-pipeline
 test-agen
+test-agen-range-admission
 test-agen-affine-bounds
 test-agen-tiled-sweep
 test-agen-dma-chain

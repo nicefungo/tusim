@@ -1,0 +1,37 @@
+DMA: descriptor SRAM span exceeds region capacity
+DMA: descriptor SRAM span exceeds region capacity
+invalid direction/NULL/zero/fractional-element admission before allocation: PASS
+directional allocation-failure no-copy/no-accounting: PASS
+direction=0 width=1 base=0 bytes=16 exact_copy=PASS
+direction=0 width=1 base=1 bytes=16 exact_copy=PASS
+direction=0 width=1 base=8 bytes=16 exact_copy=PASS
+direction=0 width=1 base=48 bytes=16 exact_copy=PASS
+direction=0 width=2 base=0 bytes=16 exact_copy=PASS
+direction=0 width=2 base=1 bytes=16 exact_copy=PASS
+direction=0 width=2 base=8 bytes=16 exact_copy=PASS
+direction=0 width=2 base=48 bytes=16 exact_copy=PASS
+direction=0 width=4 base=0 bytes=16 exact_copy=PASS
+direction=0 width=4 base=1 bytes=16 exact_copy=PASS
+direction=0 width=4 base=8 bytes=16 exact_copy=PASS
+direction=0 width=4 base=48 bytes=16 exact_copy=PASS
+direction=0 width=8 base=0 bytes=16 exact_copy=PASS
+direction=0 width=8 base=1 bytes=16 exact_copy=PASS
+direction=0 width=8 base=8 bytes=16 exact_copy=PASS
+direction=0 width=8 base=48 bytes=16 exact_copy=PASS
+direction=1 width=1 base=0 bytes=16 exact_copy=PASS
+direction=1 width=1 base=1 bytes=16 exact_copy=PASS
+direction=1 width=1 base=8 bytes=16 exact_copy=PASS
+direction=1 width=1 base=48 bytes=16 exact_copy=PASS
+direction=1 width=2 base=0 bytes=16 exact_copy=PASS
+direction=1 width=2 base=1 bytes=16 exact_copy=PASS
+direction=1 width=2 base=8 bytes=16 exact_copy=PASS
+direction=1 width=2 base=48 bytes=16 exact_copy=PASS
+direction=1 width=4 base=0 bytes=16 exact_copy=PASS
+direction=1 width=4 base=1 bytes=16 exact_copy=PASS
+direction=1 width=4 base=8 bytes=16 exact_copy=PASS
+direction=1 width=4 base=48 bytes=16 exact_copy=PASS
+direction=1 width=8 base=0 bytes=16 exact_copy=PASS
+direction=1 width=8 base=1 bytes=16 exact_copy=PASS
+direction=1 width=8 base=8 bytes=16 exact_copy=PASS
+direction=1 width=8 base=48 bytes=16 exact_copy=PASS
+PASS: 32 movement rows, 4452 assertions; executor span rejection preserved
