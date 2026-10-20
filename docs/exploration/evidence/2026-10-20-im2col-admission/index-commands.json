@@ -1,0 +1,69 @@
+{
+  "tree": "2b737228cd572dfc65d48a359a84643ac83e7656",
+  "commands": [
+    {
+      "argv": [
+        "make",
+        "clean"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261020/index-p53txizc",
+      "exit": 0,
+      "log": "index-clean.log"
+    },
+    {
+      "argv": [
+        "make"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261020/index-p53txizc",
+      "exit": 0,
+      "log": "index-build.log"
+    },
+    {
+      "argv": [
+        "make",
+        "test-quick"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261020/index-p53txizc",
+      "exit": 0,
+      "log": "index-quick.log"
+    },
+    {
+      "argv": [
+        "make",
+        "test-config",
+        "test-conv",
+        "test-scatter-gather"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261020/index-p53txizc",
+      "exit": 0,
+      "log": "index-focused.log"
+    },
+    {
+      "argv": [
+        "cc",
+        "-O2",
+        "-Wall",
+        "-Wextra",
+        "-std=c11",
+        "-I.",
+        "-Itu_cmodel",
+        "/home/zxy/Workplace/projects/onnx-compiler/tests/test_agen_im2col_bounds.c",
+        "/home/zxy/.hermes/cache/scratch/tusim-20261020/baseline-g0_svoum/libtucmodel.a",
+        "-lm",
+        "-o",
+        "/home/zxy/.hermes/cache/scratch/tusim-20261020/final-regression-against-baseline"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261020/baseline-g0_svoum",
+      "exit": 0,
+      "log": "baseline-regression-build.log"
+    },
+    {
+      "argv": [
+        "/home/zxy/.hermes/cache/scratch/tusim-20261020/final-regression-against-baseline"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261020/baseline-g0_svoum",
+      "exit": 1,
+      "log": "baseline-regression-red.log"
+    }
+  ]
+}

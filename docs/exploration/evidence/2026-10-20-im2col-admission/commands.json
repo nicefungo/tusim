@@ -1,0 +1,47 @@
+{
+  "baseline_head": "95d7349c54b30e1d3fad95d1e8ba0bdfca64d59a",
+  "commands": [
+    {
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261020/baseline-g0_svoum",
+      "argv": [
+        "make"
+      ],
+      "exit": 0,
+      "log": "baseline-archive-build.log"
+    },
+    {
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261020/baseline-g0_svoum",
+      "argv": [
+        "make",
+        "test"
+      ],
+      "exit": 2,
+      "log": "baseline-archive-full.log"
+    },
+    {
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261020/san-fzu681bh",
+      "argv": [
+        "make",
+        "libtucmodel.a",
+        "CFLAGS=-O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer"
+      ],
+      "exit": 0,
+      "log": "san-build.log"
+    },
+    {
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261020/san-fzu681bh",
+      "argv": [
+        "make",
+        "test-agen-im2col-bounds",
+        "test-agen-affine-bounds",
+        "test-agen-tiled-sweep",
+        "test-agen-dma-chain",
+        "test-agen-range-admission",
+        "CFLAGS=-O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer",
+        "LDFLAGS=-lm -fsanitize=address,undefined"
+      ],
+      "exit": 0,
+      "log": "san-tests.log"
+    }
+  ]
+}

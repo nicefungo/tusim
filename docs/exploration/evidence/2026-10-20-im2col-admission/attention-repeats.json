@@ -1,0 +1,117 @@
+{
+  "baseline_head": "95d7349c54b30e1d3fad95d1e8ba0bdfca64d59a",
+  "runs": [
+    {
+      "attempt": 1,
+      "argv": [
+        "./test-attention"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261020/baseline-g0_svoum",
+      "exit": 1,
+      "log": "baseline-attention-repeat-1.log",
+      "observations": [
+        "  Scale differentiation (0.5 vs 2.0)                     FAIL: same output for different scales (err=0.000000)",
+        "  8/9 tests passed"
+      ]
+    },
+    {
+      "attempt": 2,
+      "argv": [
+        "./test-attention"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261020/baseline-g0_svoum",
+      "exit": 1,
+      "log": "baseline-attention-repeat-2.log",
+      "observations": [
+        "  Identity-style attention (all-ones K, uniform V)       FAIL: max_err=0.729492 > 0.35",
+        "  Deterministic small attention (M=3,N=5,d=16)           FAIL: max_err=inf > 0.25",
+        "  Causal mask (M=4,N=4,d=8)                              FAIL: max_err=inf > 1.5",
+        "  6/9 tests passed"
+      ]
+    },
+    {
+      "attempt": 3,
+      "argv": [
+        "./test-attention"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261020/baseline-g0_svoum",
+      "exit": 1,
+      "log": "baseline-attention-repeat-3.log",
+      "observations": [
+        "  Deterministic small attention (M=3,N=5,d=16)           FAIL: max_err=inf > 0.25",
+        "  Causal mask (M=4,N=4,d=8)                              FAIL: max_err=inf > 1.5",
+        "  7/9 tests passed"
+      ]
+    },
+    {
+      "attempt": 4,
+      "argv": [
+        "./test-attention"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261020/baseline-g0_svoum",
+      "exit": 1,
+      "log": "baseline-attention-repeat-4.log",
+      "observations": [
+        "  Scale differentiation (0.5 vs 2.0)                     FAIL: same output for different scales (err=0.000000)",
+        "  8/9 tests passed"
+      ]
+    },
+    {
+      "attempt": 5,
+      "argv": [
+        "./test-attention"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261020/baseline-g0_svoum",
+      "exit": 1,
+      "log": "baseline-attention-repeat-5.log",
+      "observations": [
+        "  Identity-style attention (all-ones K, uniform V)       FAIL: max_err=1.364258 > 0.35",
+        "  Scale differentiation (0.5 vs 2.0)                     FAIL: same output for different scales (err=0.000000)",
+        "  7/9 tests passed"
+      ]
+    },
+    {
+      "attempt": 6,
+      "argv": [
+        "./test-attention"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261020/baseline-g0_svoum",
+      "exit": 1,
+      "log": "baseline-attention-repeat-6.log",
+      "observations": [
+        "  Deterministic small attention (M=3,N=5,d=16)           FAIL: max_err=inf > 0.25",
+        "  Causal mask (M=4,N=4,d=8)                              FAIL: max_err=inf > 1.5",
+        "  7/9 tests passed"
+      ]
+    },
+    {
+      "attempt": 7,
+      "argv": [
+        "./test-attention"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261020/baseline-g0_svoum",
+      "exit": 1,
+      "log": "baseline-attention-repeat-7.log",
+      "observations": [
+        "  Deterministic small attention (M=3,N=5,d=16)           FAIL: max_err=inf > 0.25",
+        "  Causal mask (M=4,N=4,d=8)                              FAIL: max_err=inf > 1.5",
+        "  7/9 tests passed"
+      ]
+    },
+    {
+      "attempt": 8,
+      "argv": [
+        "./test-attention"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261020/baseline-g0_svoum",
+      "exit": 1,
+      "log": "baseline-attention-repeat-8.log",
+      "observations": [
+        "  Deterministic small attention (M=3,N=5,d=16)           FAIL: max_err=1.427490 > 0.25",
+        "  Causal mask (M=4,N=4,d=8)                              FAIL: max_err=1.667969 > 1.5",
+        "  Scale differentiation (0.5 vs 2.0)                     FAIL: same output for different scales (err=0.000000)",
+        "  6/9 tests passed"
+      ]
+    }
+  ]
+}

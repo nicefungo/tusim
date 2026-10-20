@@ -1,0 +1,31 @@
+{
+  "baseline_head": "95d7349c54b30e1d3fad95d1e8ba0bdfca64d59a",
+  "integration_branch": "main",
+  "machine": "aarch64",
+  "python": "3.14.7",
+  "compiler": "cc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0",
+  "excluded_user_work": [
+    "docs/exploration/TERMS.md"
+  ],
+  "baseline_live": [
+    "make clean",
+    "make",
+    "make test-quick"
+  ],
+  "final_live": [
+    "make clean",
+    "make",
+    "make test-quick",
+    "make test-config test-conv test-scatter-gather",
+    "make test"
+  ],
+  "sanitizer_environment": {
+    "ASAN_OPTIONS": "detect_leaks=1:halt_on_error=1",
+    "UBSAN_OPTIONS": "halt_on_error=1"
+  },
+  "notes": [
+    "Archive verifier and repeat script are exact executed script snapshots. Their original cwd/output paths are recorded, not portable reproduction entrypoints.",
+    "Intermediate RED logs were produced during vertical test-first iterations; final checked-in regression is the reproducible superset.",
+    "Legacy external symlink fixtures omitted from disposable archives; C gates do not use them."
+  ]
+}

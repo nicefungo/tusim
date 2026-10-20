@@ -122,8 +122,11 @@ typedef struct {
 /* ---- API: Compute Access Pattern Parameters ---- */
 
 /*
- * Compute im2col output dimensions and total elements.
- * Fills output_h, output_w, total_elements in the descriptor.
+ * Compute im2col output_h/output_w only (there is no total_elements field).
+ * Kernel/stride/dilation must be positive; invalid control or unrepresentable
+ * output axes set both outputs to zero. An empty input axis or a kernel larger
+ * than the padded axis gives zero along that axis, not a forced one. This void
+ * helper cannot distinguish invalid from empty; iterator_init returns status.
  */
 void tu_agen_im2col_dims(tu_agen_im2col_t *im2col);
 
@@ -164,6 +167,17 @@ void tu_agen_compute_tiling(tu_agen_tiling_t *tiling);
  *          tile dimensions must be positive (oversized tiles are legal).
  *          Tiled element count and exclusive byte end must fit uint32_t;
  *          UINT32_MAX is reserved for exhaustion, not a tensor byte.
+ *          IM2COL uses tu_agen_im2col_t; output_h/output_w are recomputed.
+ *          Kernel, stride and dilation fields must be positive; size 0 means
+ *          4 B. Empty input axes/channels or oversized effective kernels yield
+ *          no entries. Output axes and expanded count must fit uint32_t, and
+ *          nonempty traversal requires the full NCHW source byte extent below
+ *          the exhaustion sentinel. Invalid geometry rejects with an empty
+ *          iterator before division/count/address wrap. Traversal order is
+ *          oh, ow, kh, kw, ic; storage remains channel-first NCHW.
+ *          Padding still returns legacy 0xFFFFFF00, not a zero-fill operation;
+ *          padded iteration is NOT certified for range-to-DMA execution. The
+ *          separate tu_agen_addr_im2col helper is not validated by init.
  *
  * Returns 0 on success, -1 on invalid parameters.
  */

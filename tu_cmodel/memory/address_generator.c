@@ -15,19 +15,29 @@
  * im2col dimension computation
  * ============================================================================ */
 
+/* Validate shape arithmetic before division or narrowing. An oversized kernel
+ * yields zero along that axis; invalid control fields have no output shape. */
+static bool im2col_output_dims(const tu_agen_im2col_t *cfg,
+                               uint32_t *oh, uint32_t *ow) {
+    *oh = *ow = 0;
+    if (!cfg || !cfg->kernel_h || !cfg->kernel_w ||
+        !cfg->stride_h || !cfg->stride_w ||
+        !cfg->dilation_h || !cfg->dilation_w) return false;
+    uint64_t kh = (uint64_t)(cfg->kernel_h - 1) * cfg->dilation_h + 1;
+    uint64_t kw = (uint64_t)(cfg->kernel_w - 1) * cfg->dilation_w + 1;
+    uint64_t h = cfg->input_h + 2ull * cfg->pad_h;
+    uint64_t w = cfg->input_w + 2ull * cfg->pad_w;
+    uint64_t nh = !cfg->input_h || h < kh ? 0 : (h - kh) / cfg->stride_h + 1;
+    uint64_t nw = !cfg->input_w || w < kw ? 0 : (w - kw) / cfg->stride_w + 1;
+    if (nh > UINT32_MAX || nw > UINT32_MAX) return false;
+    *oh = (uint32_t)nh;
+    *ow = (uint32_t)nw;
+    return true;
+}
+
 void tu_agen_im2col_dims(tu_agen_im2col_t *im2col) {
     if (!im2col) return;
-
-    uint32_t effective_kh = (im2col->kernel_h - 1) * im2col->dilation_h + 1;
-    uint32_t effective_kw = (im2col->kernel_w - 1) * im2col->dilation_w + 1;
-
-    im2col->output_h = (im2col->input_h + 2 * im2col->pad_h - effective_kh)
-                       / im2col->stride_h + 1;
-    im2col->output_w = (im2col->input_w + 2 * im2col->pad_w - effective_kw)
-                       / im2col->stride_w + 1;
-
-    if (im2col->output_h == 0) im2col->output_h = 1;
-    if (im2col->output_w == 0) im2col->output_w = 1;
+    im2col_output_dims(im2col, &im2col->output_h, &im2col->output_w);
 }
 
 /* ============================================================================
@@ -225,6 +235,21 @@ int tu_agen_iterator_init(tu_agen_iterator_t *it,
     case TU_AGEN_MODE_IM2COL: {
         const tu_agen_im2col_t *cfg = (const tu_agen_im2col_t *)config;
         if (!cfg) return -1;
+        uint32_t oh, ow;
+        if (!im2col_output_dims(cfg, &oh, &ow)) return -1;
+        uint32_t size = cfg->elem_size ? cfg->elem_size : 4;
+        uint64_t count = 0;
+        if (oh && ow && cfg->input_c) {
+            const uint32_t factors[] = {oh, ow, cfg->kernel_h,
+                                        cfg->kernel_w, cfg->input_c};
+            count = 1;
+            for (unsigned i = 0; i < sizeof(factors) / sizeof(factors[0]); i++) {
+                if (count > UINT32_MAX / factors[i]) return -1;
+                count *= factors[i];
+            }
+            if (!tiled_geometry_valid(base_addr, cfg->input_c,
+                                       cfg->input_h, cfg->input_w, size)) return -1;
+        }
         it->input_h   = cfg->input_h;
         it->input_w   = cfg->input_w;
         it->input_c   = cfg->input_c;
@@ -236,17 +261,12 @@ int tu_agen_iterator_init(tu_agen_iterator_t *it,
         it->stride_w  = cfg->stride_w;
         it->dilation_h = cfg->dilation_h;
         it->dilation_w = cfg->dilation_w;
-        it->elem_size = cfg->elem_size ? cfg->elem_size : 4;
+        it->elem_size = size;
 
-        uint32_t eff_kh = (cfg->kernel_h - 1) * cfg->dilation_h + 1;
-        uint32_t eff_kw = (cfg->kernel_w - 1) * cfg->dilation_w + 1;
-        it->output_h = (cfg->input_h + 2 * cfg->pad_h - eff_kh) / cfg->stride_h + 1;
-        it->output_w = (cfg->input_w + 2 * cfg->pad_w - eff_kw) / cfg->stride_w + 1;
-        if (it->output_h == 0) it->output_h = 1;
-        if (it->output_w == 0) it->output_w = 1;
+        it->output_h = oh;
+        it->output_w = ow;
 
-        it->total_elements = it->output_h * it->output_w *
-                             cfg->kernel_h * cfg->kernel_w * cfg->input_c;
+        it->total_elements = (uint32_t)count;
         break;
     }
 
@@ -342,10 +362,16 @@ uint32_t tu_agen_next(tu_agen_iterator_t *it) {
         uint32_t kh = r3 / it->kernel_w;
         uint32_t kw = r3 % it->kernel_w;
 
-        uint32_t h_in = oh * it->stride_h + kh * it->dilation_h - it->pad_h;
-        uint32_t w_in = ow * it->stride_w + kw * it->dilation_w - it->pad_w;
+        /* Validated nonempty count bounds the sum of index products in u64.
+         * Check before subtracting padding: modular u32 negatives can alias
+         * real input coordinates when padding/strides are large. */
+        uint64_t h_in = (uint64_t)oh * it->stride_h + (uint64_t)kh * it->dilation_h;
+        uint64_t w_in = (uint64_t)ow * it->stride_w + (uint64_t)kw * it->dilation_w;
 
-        if (h_in < it->input_h && w_in < it->input_w) {
+        if (h_in >= it->pad_h && w_in >= it->pad_w &&
+            h_in - it->pad_h < it->input_h && w_in - it->pad_w < it->input_w) {
+            h_in -= it->pad_h;
+            w_in -= it->pad_w;
             addr = it->base_addr + (ic * it->input_h * it->input_w +
                                      h_in * it->input_w + w_in) * it->elem_size;
         } else {
