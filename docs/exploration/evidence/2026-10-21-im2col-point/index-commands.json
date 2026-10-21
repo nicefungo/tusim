@@ -1,0 +1,33 @@
+{
+  "staged_tree": "0b1315af6b138eaebfc909889410f546fcf438c2",
+  "inputs_verified": true,
+  "commands": [
+    {
+      "label": "index-build",
+      "args": [
+        "make"
+      ],
+      "returncode": 0
+    },
+    {
+      "label": "index-quick",
+      "args": [
+        "make",
+        "test-quick"
+      ],
+      "returncode": 0
+    },
+    {
+      "label": "index-focused",
+      "args": [
+        "make",
+        "test-agen-im2col-point",
+        "test-agen-im2col-bounds",
+        "test-config",
+        "test-conv",
+        "test-scatter-gather"
+      ],
+      "returncode": 0
+    }
+  ]
+}

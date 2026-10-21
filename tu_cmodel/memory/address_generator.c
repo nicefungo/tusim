@@ -492,17 +492,29 @@ uint32_t tu_agen_addr_im2col(const tu_agen_im2col_t *im2col,
                               uint32_t oh, uint32_t ow,
                               uint32_t kh, uint32_t kw,
                               uint32_t ic) {
-    if (!im2col) return UINT32_MAX;
+    uint32_t out_h, out_w;
+    if (!im2col_output_dims(im2col, &out_h, &out_w) ||
+        !im2col->elem_size || oh >= out_h || ow >= out_w ||
+        kh >= im2col->kernel_h || kw >= im2col->kernel_w ||
+        ic >= im2col->input_c ||
+        !tiled_geometry_valid(base_addr, im2col->input_c, im2col->input_h,
+                              im2col->input_w, im2col->elem_size))
+        return UINT32_MAX;
 
-    uint32_t h_in = oh * im2col->stride_h + kh * im2col->dilation_h;
-    uint32_t w_in = ow * im2col->stride_w + kw * im2col->dilation_w;
+    /* Unlike an iterator, a point query needs no expanded-count limit. The
+     * checked output shape bounds each product/sum by the padded input axis;
+     * form coordinates wide and test before subtracting padding. */
+    uint64_t h_in = (uint64_t)oh * im2col->stride_h +
+                    (uint64_t)kh * im2col->dilation_h;
+    uint64_t w_in = (uint64_t)ow * im2col->stride_w +
+                    (uint64_t)kw * im2col->dilation_w;
 
     if (h_in < im2col->pad_h || w_in < im2col->pad_w) return UINT32_MAX;
     h_in -= im2col->pad_h;
     w_in -= im2col->pad_w;
     if (h_in >= im2col->input_h || w_in >= im2col->input_w) return UINT32_MAX;
 
-    return base_addr + (ic * im2col->input_h * im2col->input_w +
+    return base_addr + ((uint64_t)ic * im2col->input_h * im2col->input_w +
                          h_in * im2col->input_w + w_in) * im2col->elem_size;
 }
 

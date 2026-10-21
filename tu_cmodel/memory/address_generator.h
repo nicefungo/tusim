@@ -177,7 +177,7 @@ void tu_agen_compute_tiling(tu_agen_tiling_t *tiling);
  *          oh, ow, kh, kw, ic; storage remains channel-first NCHW.
  *          Padding still returns legacy 0xFFFFFF00, not a zero-fill operation;
  *          padded iteration is NOT certified for range-to-DMA execution. The
- *          separate tu_agen_addr_im2col helper is not validated by init.
+ *          separate tu_agen_addr_im2col helper validates its own point queries.
  *
  * Returns 0 on success, -1 on invalid parameters.
  */
@@ -291,7 +291,16 @@ static inline uint32_t tu_agen_addr_tile_start(uint32_t base,
  *   input_h_pos = oh * stride_h + kh * dilation_h - pad_h
  *   input_w_pos = ow * stride_w + kw * dilation_w - pad_w
  *
- * Returns UINT32_MAX if the position is in padding (address is invalid).
+ * Recomputes output axes, ignoring cached output_h/output_w. Kernel, stride,
+ * dilation and elem_size must be positive (unlike iterator_init, size 0 has no
+ * default here). All five indices must be within their descriptor dimensions;
+ * the complete NCHW source byte extent must end at or before UINT32_MAX, which
+ * is reserved, not a data byte. No SRAM/host allocation bounds are inferred.
+ * Random access does not impose the iterator's expanded-entry-count limit.
+ * Returns UINT32_MAX for NULL/invalid/empty geometry, out-of-domain indices,
+ * an unrepresentable source view, or padding. These cases cannot be
+ * distinguished by this API; no fill/copy/accounting occurs. Ordinary valid
+ * positive-width addresses and the historical padding sentinel are unchanged.
  */
 uint32_t tu_agen_addr_im2col(const tu_agen_im2col_t *im2col,
                               uint32_t base_addr,

@@ -1,0 +1,196 @@
+{
+  "input_head": "69330281ac53c1af9fb0764e5d971806e1b0ae5c",
+  "commands": [
+    {
+      "label": "baseline-archive-build",
+      "args": [
+        "make"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-point-e5n43l34/baseline",
+      "returncode": 0
+    },
+    {
+      "label": "baseline-archive-quick",
+      "args": [
+        "make",
+        "test-quick"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-point-e5n43l34/baseline",
+      "returncode": 0
+    },
+    {
+      "label": "baseline-probe-build",
+      "args": [
+        "cc",
+        "-O2",
+        "-Wall",
+        "-Wextra",
+        "-std=c11",
+        "-I.",
+        "-Itu_cmodel",
+        "-o",
+        "point-probe",
+        "tests/test_agen_im2col_point.c",
+        "./libtucmodel.a",
+        "-lm"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-point-e5n43l34/baseline",
+      "returncode": 0
+    },
+    {
+      "label": "baseline-point-red",
+      "args": [
+        "./point-probe",
+        "--red"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-point-e5n43l34/baseline",
+      "returncode": 1
+    },
+    {
+      "label": "baseline-point-full",
+      "args": [
+        "./point-probe"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-point-e5n43l34/baseline",
+      "returncode": 1
+    },
+    {
+      "label": "baseline-full",
+      "args": [
+        "make",
+        "test"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-point-e5n43l34/baseline",
+      "returncode": 2
+    },
+    {
+      "label": "baseline-attention-repeat-1",
+      "args": [
+        "./test-attention"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-point-e5n43l34/baseline",
+      "returncode": 1
+    },
+    {
+      "label": "baseline-attention-repeat-2",
+      "args": [
+        "./test-attention"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-point-e5n43l34/baseline",
+      "returncode": 1
+    },
+    {
+      "label": "baseline-attention-repeat-3",
+      "args": [
+        "./test-attention"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-point-e5n43l34/baseline",
+      "returncode": 1
+    },
+    {
+      "label": "final-archive-build",
+      "args": [
+        "make"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-point-e5n43l34/final",
+      "returncode": 0
+    },
+    {
+      "label": "final-archive-quick",
+      "args": [
+        "make",
+        "test-quick"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-point-e5n43l34/final",
+      "returncode": 0
+    },
+    {
+      "label": "final-archive-focused",
+      "args": [
+        "make",
+        "test-agen-im2col-point",
+        "test-agen-im2col-bounds",
+        "test-config",
+        "test-conv",
+        "test-scatter-gather"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-point-e5n43l34/final",
+      "returncode": 0
+    },
+    {
+      "label": "final-archive-full",
+      "args": [
+        "make",
+        "test"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-point-e5n43l34/final",
+      "returncode": 2
+    },
+    {
+      "label": "live-clean",
+      "args": [
+        "make",
+        "clean"
+      ],
+      "cwd": "/home/zxy/Workplace/projects/onnx-compiler",
+      "returncode": 0
+    },
+    {
+      "label": "live-build",
+      "args": [
+        "make"
+      ],
+      "cwd": "/home/zxy/Workplace/projects/onnx-compiler",
+      "returncode": 0
+    },
+    {
+      "label": "live-quick",
+      "args": [
+        "make",
+        "test-quick"
+      ],
+      "cwd": "/home/zxy/Workplace/projects/onnx-compiler",
+      "returncode": 0
+    },
+    {
+      "label": "live-focused",
+      "args": [
+        "make",
+        "test-agen-im2col-point",
+        "test-agen-im2col-bounds",
+        "test-config",
+        "test-conv",
+        "test-scatter-gather"
+      ],
+      "cwd": "/home/zxy/Workplace/projects/onnx-compiler",
+      "returncode": 0
+    },
+    {
+      "label": "sanitizer-build",
+      "args": [
+        "make",
+        "CFLAGS=-O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer",
+        "LDFLAGS=-lm -fsanitize=address,undefined",
+        "libtucmodel.a"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-point-e5n43l34/asan",
+      "returncode": 0
+    },
+    {
+      "label": "sanitizer-focused",
+      "args": [
+        "make",
+        "CFLAGS=-O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer",
+        "LDFLAGS=-lm -fsanitize=address,undefined",
+        "test-agen-im2col-point",
+        "test-agen-im2col-bounds",
+        "test-agen-affine-bounds",
+        "test-agen-tiled-sweep",
+        "test-agen-dma-chain",
+        "test-agen-range-admission"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-point-e5n43l34/asan",
+      "returncode": 0
+    }
+  ]
+}

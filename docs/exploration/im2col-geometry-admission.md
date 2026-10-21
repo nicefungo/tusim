@@ -162,6 +162,11 @@ than rejected for being slower. The independent `tu_agen_addr_im2col()` helper,
 block-interleaved mode, general tiling utility and arbitrary manual mutation of
 iterator state are not certified by this patch.
 
+**2026-10-21 follow-up:** the independent single-address helper is now checked
+and separately gated; see [point-query admission](im2col-point-query-admission.md).
+This does not extend certification to padded range-to-DMA zero-fill,
+block-interleaved admission, general tiling utility or unchecked inline helpers.
+
 The narrow reversible correction stays on `main`; no competing tracked edits
 existed. User-owned untracked `TERMS.md` is preserved and excluded. No handoff
 artifacts or build binaries are published.

@@ -4,6 +4,7 @@ __pycache__/
 build/
 
 # Test binaries
+test-agen-im2col-point
 test-cmodel
 test-reinit
 test-cmdq

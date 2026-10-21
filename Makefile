@@ -467,6 +467,11 @@ test-pipeline: tests/test_pipeline.c libtucmodel.a
 	./test-pipeline
 
 # ---- Test: Address Generator (M3) ----
+.PHONY: test-agen-im2col-point
+test-agen-im2col-point: tests/test_agen_im2col_point.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
+	./test-agen-im2col-point
+
 .PHONY: test-agen-im2col-bounds
 test-agen-im2col-bounds: tests/test_agen_im2col_bounds.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
@@ -714,7 +719,7 @@ test-asm: libtucmodel.a
 test: test-config-generation test-cmodel test-reinit test-cmdq test-dma test-dma-drr-scan-width test-dram test-isa test-golden \
       test-elementwise test-bf16 test-memhier test-norm test-dataflow \
       test-logging test-int-quant test-conv test-asm test-rounding test-fp8 \
-      test-attention test-perf test-pool test-pipeline test-agen test-agen-im2col-bounds test-agen-range-admission test-agen-affine-bounds test-agen-tiled-sweep test-agen-dma-chain test-multicore \
+      test-attention test-perf test-pool test-pipeline test-agen test-agen-im2col-point test-agen-im2col-bounds test-agen-range-admission test-agen-affine-bounds test-agen-tiled-sweep test-agen-dma-chain test-multicore \
       test-multicast test-scatter-gather test-trace test-config test-sparsity test-scheduler test-liveness test-dpi
 	@echo ""
 	@echo "═══════════════════════════════════════════"
@@ -722,7 +727,7 @@ test: test-config-generation test-cmodel test-reinit test-cmdq test-dma test-dma
 	@echo "═══════════════════════════════════════════"
 
 # Quick smoke test (pre-commit)
-test-quick: test-config-generation test-cmodel test-reinit test-agen test-agen-im2col-bounds test-agen-range-admission test-agen-affine-bounds test-agen-tiled-sweep test-agen-dma-chain test-multicast test-cmdq test-dma test-dma-drr-scan-width test-dma-burst-boundary-sweep test-dma-external-boundary-sweep test-asm
+test-quick: test-config-generation test-cmodel test-reinit test-agen test-agen-im2col-point test-agen-im2col-bounds test-agen-range-admission test-agen-affine-bounds test-agen-tiled-sweep test-agen-dma-chain test-multicast test-cmdq test-dma test-dma-drr-scan-width test-dma-burst-boundary-sweep test-dma-external-boundary-sweep test-asm
 	@echo ""
 	@echo "═══ Quick smoke test passed ═══"
 
@@ -764,6 +769,7 @@ config-docs: libtucmodel.a
 
 # ---- Clean ----
 clean:
+	rm -f test-agen-im2col-point
 	rm -f test-agen-im2col-bounds
 	rm -f test-agen-range-admission
 	rm -f test-agen-affine-bounds
