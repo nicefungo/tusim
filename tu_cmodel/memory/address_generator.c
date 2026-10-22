@@ -49,13 +49,22 @@ void tu_agen_compute_tiling(tu_agen_tiling_t *tiling) {
 
     for (int d = 0; d < 3; d++) {
         if (tiling->tile_dims[d] == 0) tiling->tile_dims[d] = 1;
-        tiling->tiles_per_dim[d] = (tiling->total_dims[d] + tiling->tile_dims[d] - 1)
-                                    / tiling->tile_dims[d];
+        tiling->tiles_per_dim[d] = tiling->total_dims[d] / tiling->tile_dims[d] +
+                                    (tiling->total_dims[d] % tiling->tile_dims[d] != 0);
     }
 
-    tiling->num_tiles = tiling->tiles_per_dim[0] *
-                        tiling->tiles_per_dim[1] *
-                        tiling->tiles_per_dim[2];
+    /* Keep exact per-axis metadata, but never expose a wrapped total as work.
+     * This void compatibility API uses zero for empty or unrepresentable grids.
+     * Check empty axes first: a zero-volume grid is empty in any axis order. */
+    tiling->num_tiles = 0;
+    for (int d = 0; d < 3; d++)
+        if (!tiling->tiles_per_dim[d]) return;
+    uint32_t count = 1;
+    for (int d = 0; d < 3; d++) {
+        if (count > UINT32_MAX / tiling->tiles_per_dim[d]) return;
+        count *= tiling->tiles_per_dim[d];
+    }
+    tiling->num_tiles = count;
 }
 
 /* ============================================================================

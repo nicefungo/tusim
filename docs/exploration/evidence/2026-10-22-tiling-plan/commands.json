@@ -1,0 +1,172 @@
+[
+  {
+    "label": "baseline-build",
+    "cwd": "/home/zxy/.hermes/cache/scratch/tiling-audit-n5a02clv/baseline",
+    "command": [
+      "make",
+      "-j4"
+    ],
+    "LD_LIBRARY_PATH": "/home/zxy/.hermes/cache/scratch/tiling-audit-n5a02clv/baseline",
+    "extra_env": {},
+    "returncode": 0,
+    "expected": 0
+  },
+  {
+    "label": "baseline-quick",
+    "cwd": "/home/zxy/.hermes/cache/scratch/tiling-audit-n5a02clv/baseline",
+    "command": [
+      "make",
+      "test-quick"
+    ],
+    "LD_LIBRARY_PATH": "/home/zxy/.hermes/cache/scratch/tiling-audit-n5a02clv/baseline",
+    "extra_env": {},
+    "returncode": 0,
+    "expected": 0
+  },
+  {
+    "label": "baseline-new-gate-build",
+    "cwd": "/home/zxy/.hermes/cache/scratch/tiling-audit-n5a02clv/baseline",
+    "command": [
+      "cc",
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-I.",
+      "-Itu_cmodel",
+      "tests/test_agen_tiling_plan.c",
+      "./libtucmodel.a",
+      "-lm",
+      "-o",
+      "tiling-probe"
+    ],
+    "LD_LIBRARY_PATH": "/home/zxy/.hermes/cache/scratch/tiling-audit-n5a02clv/baseline",
+    "extra_env": {},
+    "returncode": 0,
+    "expected": 0
+  },
+  {
+    "label": "baseline-probes-red",
+    "cwd": "/home/zxy/.hermes/cache/scratch/tiling-audit-n5a02clv/baseline",
+    "command": [
+      "./tiling-probe",
+      "probes"
+    ],
+    "LD_LIBRARY_PATH": "/home/zxy/.hermes/cache/scratch/tiling-audit-n5a02clv/baseline",
+    "extra_env": {},
+    "returncode": 1,
+    "expected": 1
+  },
+  {
+    "label": "baseline-full-gate-red",
+    "cwd": "/home/zxy/.hermes/cache/scratch/tiling-audit-n5a02clv/baseline",
+    "command": [
+      "./tiling-probe"
+    ],
+    "LD_LIBRARY_PATH": "/home/zxy/.hermes/cache/scratch/tiling-audit-n5a02clv/baseline",
+    "extra_env": {},
+    "returncode": 1,
+    "expected": 1
+  },
+  {
+    "label": "baseline-broad",
+    "cwd": "/home/zxy/.hermes/cache/scratch/tiling-audit-n5a02clv/baseline",
+    "command": [
+      "make",
+      "test"
+    ],
+    "LD_LIBRARY_PATH": "/home/zxy/.hermes/cache/scratch/tiling-audit-n5a02clv/baseline",
+    "extra_env": {},
+    "returncode": 2,
+    "expected": null
+  },
+  {
+    "label": "final-build",
+    "cwd": "/home/zxy/.hermes/cache/scratch/tiling-audit-n5a02clv/final",
+    "command": [
+      "make",
+      "-j4"
+    ],
+    "LD_LIBRARY_PATH": "/home/zxy/.hermes/cache/scratch/tiling-audit-n5a02clv/final",
+    "extra_env": {},
+    "returncode": 0,
+    "expected": 0
+  },
+  {
+    "label": "final-quick",
+    "cwd": "/home/zxy/.hermes/cache/scratch/tiling-audit-n5a02clv/final",
+    "command": [
+      "make",
+      "test-quick"
+    ],
+    "LD_LIBRARY_PATH": "/home/zxy/.hermes/cache/scratch/tiling-audit-n5a02clv/final",
+    "extra_env": {},
+    "returncode": 0,
+    "expected": 0
+  },
+  {
+    "label": "final-focused",
+    "cwd": "/home/zxy/.hermes/cache/scratch/tiling-audit-n5a02clv/final",
+    "command": [
+      "make",
+      "test-agen-tiling-plan",
+      "test-config",
+      "test-conv",
+      "test-scatter-gather"
+    ],
+    "LD_LIBRARY_PATH": "/home/zxy/.hermes/cache/scratch/tiling-audit-n5a02clv/final",
+    "extra_env": {},
+    "returncode": 0,
+    "expected": 0
+  },
+  {
+    "label": "final-broad",
+    "cwd": "/home/zxy/.hermes/cache/scratch/tiling-audit-n5a02clv/final",
+    "command": [
+      "make",
+      "test"
+    ],
+    "LD_LIBRARY_PATH": "/home/zxy/.hermes/cache/scratch/tiling-audit-n5a02clv/final",
+    "extra_env": {},
+    "returncode": 2,
+    "expected": null
+  },
+  {
+    "label": "sanitizer-build",
+    "cwd": "/home/zxy/.hermes/cache/scratch/tiling-audit-n5a02clv/sanitized",
+    "command": [
+      "make",
+      "-j4",
+      "libtucmodel.a",
+      "CFLAGS=-O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer"
+    ],
+    "LD_LIBRARY_PATH": "/home/zxy/.hermes/cache/scratch/tiling-audit-n5a02clv/sanitized",
+    "extra_env": {},
+    "returncode": 0,
+    "expected": 0
+  },
+  {
+    "label": "sanitizer-gates",
+    "cwd": "/home/zxy/.hermes/cache/scratch/tiling-audit-n5a02clv/sanitized",
+    "command": [
+      "make",
+      "test-agen-tiling-plan",
+      "test-agen",
+      "test-agen-tiled-sweep",
+      "test-agen-affine-bounds",
+      "test-agen-im2col-bounds",
+      "test-agen-im2col-point",
+      "test-agen-dma-chain",
+      "test-agen-range-admission",
+      "CFLAGS=-O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer",
+      "LDFLAGS=-lm -fsanitize=address,undefined"
+    ],
+    "LD_LIBRARY_PATH": "/home/zxy/.hermes/cache/scratch/tiling-audit-n5a02clv/sanitized",
+    "extra_env": {
+      "ASAN_OPTIONS": "detect_leaks=1:halt_on_error=1",
+      "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1"
+    },
+    "returncode": 0,
+    "expected": 0
+  }
+]

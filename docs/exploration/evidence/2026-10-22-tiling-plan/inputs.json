@@ -1,0 +1,13 @@
+{
+  "baseline_head": "58f0f143ca1c7681402d3bc09909da3de63f8dd9",
+  "overlay_sha256": {
+    ".gitignore": "c539ec5a7421791bc8ca25e8ca47a9bff996899b3a37bb1f3d24ee9fa1086a57",
+    "Makefile": "d3155e482719c1b90bbb08b21d5c376378185c4ed9dad9bd4af6366cfd394039",
+    "tu_cmodel/memory/address_generator.c": "8483ef182bd6c2ebea68781a49271bfff898750e7df51f27d5ae0303107e90e6",
+    "tu_cmodel/memory/address_generator.h": "ea4d2d58736565715b57fc1aef68089175e9479a5aac00f611af56b9088986cd",
+    "tests/test_agen_tiling_plan.c": "76c0f2b529d28264e412a0f779d36df163414a86d9d3e3db513d33e437129354"
+  },
+  "runner_sha256": "4820e1d122de272147566ebc9643b206c6cd7cbf678c1d211099109a130f39e0",
+  "scratch": "/home/zxy/.hermes/cache/scratch/tiling-audit-n5a02clv",
+  "symlinks_omitted": true
+}

@@ -131,8 +131,14 @@ typedef struct {
 void tu_agen_im2col_dims(tu_agen_im2col_t *im2col);
 
 /*
- * Compute tiling: given total dimensions and tile dimensions,
- * populate tiles_per_dim and num_tiles.
+ * Compute tile-grid metadata (no address/capacity/timing admission).
+ * Zero tile dimensions normalize to 1 for compatibility. Each tiles_per_dim
+ * is exact ceil(total_dim / normalized_tile_dim), including empty axes.
+ * num_tiles is the exact product when representable in uint32_t, otherwise 0;
+ * it is also 0 for empty grids. Exact axes remain available to distinguish an
+ * empty grid from overflow (all axes nonzero). NULL is a no-op. total_dims and
+ * elem_size are unchanged; neither tensor bytes nor iterator limits are
+ * inferred. Oversized tiles and huge tensors with small grids remain legal.
  */
 void tu_agen_compute_tiling(tu_agen_tiling_t *tiling);
 
