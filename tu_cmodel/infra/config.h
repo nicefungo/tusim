@@ -298,6 +298,8 @@ typedef struct tu_config_t {
     int      dma_drr_round_cost_mode; /* fixed=0, all channels=1, visited channels=2 */
     uint32_t dma_drr_select_issue_cycles; /* cycles before each successful DRR issue */
     uint32_t dma_drr_scan_width; /* 0=compatibility; 1..8 queues per scan group */
+    uint32_t dma_drr_round_scan_width; /* 0 inherits common; 1..8 round lanes */
+    uint32_t dma_drr_select_scan_width; /* 0 inherits common; 1..8 selection lanes */
     uint8_t  dma_drr_channel_weights[TU_DMA_ENGINE_MAX_CHANNELS];
     int      dma_aging_scope;       /* submission=0, queue_head=1 */
     int      dma_aging_metric;      /* missed_grants=0, wait_cycles=1 */

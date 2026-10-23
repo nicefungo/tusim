@@ -238,6 +238,11 @@ test-dma-channel-sweep: tests/test_dma_channel_sweep.c libtucmodel.a
 
 .PHONY: test-dma-arbitration-sweep
 .PHONY: test-dma-drr-scan-width
+.PHONY: test-dma-drr-stage-width
+test-dma-drr-stage-width: tests/test_dma_drr_stage_width.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
+	./test-dma-drr-stage-width
+
 test-dma-drr-scan-width: tests/test_dma_drr_scan_width.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
 	./test-dma-drr-scan-width
@@ -721,7 +726,7 @@ test-asm: libtucmodel.a
 
 # Run full test suite: build library + all unit tests + integration
 .PHONY: test test-quick test-random test-full
-test: test-agen-tiling-plan test-config-generation test-cmodel test-reinit test-cmdq test-dma test-dma-drr-scan-width test-dram test-isa test-golden \
+test: test-dma-drr-stage-width test-agen-tiling-plan test-config-generation test-cmodel test-reinit test-cmdq test-dma test-dma-drr-scan-width test-dram test-isa test-golden \
       test-elementwise test-bf16 test-memhier test-norm test-dataflow \
       test-logging test-int-quant test-conv test-asm test-rounding test-fp8 \
       test-attention test-perf test-pool test-pipeline test-agen test-agen-im2col-point test-agen-im2col-bounds test-agen-range-admission test-agen-affine-bounds test-agen-tiled-sweep test-agen-dma-chain test-multicore \
@@ -732,7 +737,7 @@ test: test-agen-tiling-plan test-config-generation test-cmodel test-reinit test-
 	@echo "═══════════════════════════════════════════"
 
 # Quick smoke test (pre-commit)
-test-quick: test-config-generation test-cmodel test-reinit test-agen test-agen-tiling-plan test-agen-im2col-point test-agen-im2col-bounds test-agen-range-admission test-agen-affine-bounds test-agen-tiled-sweep test-agen-dma-chain test-multicast test-cmdq test-dma test-dma-drr-scan-width test-dma-burst-boundary-sweep test-dma-external-boundary-sweep test-asm
+test-quick: test-dma-drr-stage-width test-config-generation test-cmodel test-reinit test-agen test-agen-tiling-plan test-agen-im2col-point test-agen-im2col-bounds test-agen-range-admission test-agen-affine-bounds test-agen-tiled-sweep test-agen-dma-chain test-multicast test-cmdq test-dma test-dma-drr-scan-width test-dma-burst-boundary-sweep test-dma-external-boundary-sweep test-asm
 	@echo ""
 	@echo "═══ Quick smoke test passed ═══"
 
@@ -783,6 +788,7 @@ clean:
 	rm -f test-agen-tiled-sweep
 	rm -f test-multicast
 	rm -f test-dma-drr-scan-width
+	rm -f test-dma-drr-stage-width
 	rm -f $(TU_DIR)/*.o $(TU_DIR)/memory/*.o $(TU_DIR)/sparsity/*.o $(TU_DIR)/isa/*.o $(TU_DIR)/compute/*.o $(TU_DIR)/compute/dataflow/*.o $(TU_DIR)/infra/*.o $(TU_DIR)/perf/*.o $(TU_DIR)/bindings/*.o libtucmodel.a libtucmodel.so
 	rm -f test-cmodel test-reinit test-cmdq test-dma test-dma-channel-sweep test-dma-arbitration-sweep test-dma-binding-sweep test-dma-bus-width-sweep test-dma-directional-latency-sweep test-dma-burst-issue-sweep test-dma-directional-burst-sweep test-dma-directional-issue-sweep test-dma-segmentation-sweep test-dma-base-scope-sweep test-dma-payload-scope-sweep test-dma-issue-payload-overlap-sweep test-dma-burst-boundary-sweep test-dma-external-boundary-sweep test-dram test-sram-issue-sweep test-dram-row-policy-sweep test-dram-row-timeout-sweep test-dram-row-timeout-domain-sweep test-dram-turnaround-sweep test-dram-turnaround-idle-sweep test-dram-directional-burst-sweep test-dram-burst-alignment-sweep test-dram-zero-byte-sweep test-dram-address-mapping-sweep test-dram-refresh-sweep test-dram-refresh-phase-sweep test-dram-refresh-debt-sweep test-dram-core-clock-sweep test-isa test-golden test-golden-full
 	rm -f test-dataflow test-elementwise test-bf16 test-memhier test-norm test-logging

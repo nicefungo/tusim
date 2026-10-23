@@ -77,6 +77,8 @@ def main() -> int:
                 'drr_round_cost_mode: "per_visited_channel"',
             "drr_select_issue_cycles: 0": "drr_select_issue_cycles: 3",
             "drr_scan_width: 1": "drr_scan_width: 3",
+            "drr_round_scan_width: 0": "drr_round_scan_width: 8",
+            "drr_select_scan_width: 0": "drr_select_scan_width: 2",
             'drr_channel_weights: [1, 1, 1, 1, 1, 1, 1, 1]':
                 'drr_channel_weights: [1, 2, 3, 4, 5, 6, 7, 8]',
             "aging_cycle_quantum: 1": "aging_cycle_quantum: 64",
@@ -148,6 +150,8 @@ def main() -> int:
             'c.dma_drr_round_cost_mode != TU_DMA_DRR_ROUND_COST_DEFAULT_PER_VISITED_CHANNEL || '
             'c.dma_drr_select_issue_cycles != 3 || '
             'c.dma_drr_scan_width != 3 || '
+            'c.dma_drr_round_scan_width != 8 || '
+            'c.dma_drr_select_scan_width != 2 || '
             'c.dma_drr_channel_weights[0] != 1 || c.dma_drr_channel_weights[7] != 8 || '
             'c.dma_aging_quantum_domain != TU_DMA_AGING_QUANTUM_PHYSICAL_NS || '
             'c.dma_aging_quantum_ns != 64.0 || '
@@ -156,7 +160,7 @@ def main() -> int:
         )
         subprocess.run(
             [
-                "cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-fsyntax-only",
+                "cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-o", str(tmp / "probe"),
                 "-I", str(tmp), "-I", str(ROOT), "-I", str(ROOT / "tu_cmodel"),
                 str(probe),
             ],
@@ -164,6 +168,7 @@ def main() -> int:
         )
 
         bad_yaml = tmp / "bad.yaml"
+        subprocess.run([str(tmp / "probe")], check=True)
         bad_yaml.write_text(
             yaml_text.replace('dataflow: "output_stationary"',
                               'dataflow: "unsupported_dataflow"')
@@ -182,16 +187,18 @@ def main() -> int:
         if bad.returncode == 0:
             print("unsupported generated configuration was accepted")
             return 1
-        for width in ("-1", "9", "1.5", "true"):
-            bad_yaml.write_text(yaml_text.replace("drr_scan_width: 3",
-                                                 f"drr_scan_width: {width}"))
-            bad = subprocess.run(
-                ["python3", str(ROOT / "scripts" / "gen_config.py"),
-                 str(bad_yaml), "-o", str(generated)],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            if bad.returncode == 0:
-                print(f"unsupported generated scan width accepted: {width}")
-                return 1
+        for key, valid in (("drr_scan_width", 3), ("drr_round_scan_width", 8),
+                           ("drr_select_scan_width", 2)):
+            for width in ("-1", "9", "1.5", "true", "null", '"2"'):
+                bad_yaml.write_text(yaml_text.replace(f"{key}: {valid}",
+                                                     f"{key}: {width}"))
+                bad = subprocess.run(
+                    ["python3", str(ROOT / "scripts" / "gen_config.py"),
+                     str(bad_yaml), "-o", str(generated)],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if bad.returncode == 0:
+                    print(f"unsupported generated {key} accepted: {width}")
+                    return 1
 
     print("generated configuration identity, alternatives, compile, rejection: PASS")
     return 0

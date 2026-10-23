@@ -96,6 +96,8 @@
       "drr_round_cost_mode": "fixed",
       "drr_select_issue_cycles": 0,
       "drr_scan_width": 1,
+      "drr_round_scan_width": 0,
+      "drr_select_scan_width": 0,
       "drr_channel_weights": [1, 1, 1, 1, 1, 1, 1, 1],
       "aging_scope": "submission",
       "aging_metric": "grants",

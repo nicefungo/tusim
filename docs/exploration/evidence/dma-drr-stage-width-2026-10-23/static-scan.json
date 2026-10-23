@@ -1,0 +1,6 @@
+{
+  "secrets": [],
+  "shell_injection": [],
+  "eval_exec": [],
+  "unsafe_deserialization": []
+}

@@ -62,7 +62,11 @@ def load_yaml_simple(path):
         parent = stack[-1][0]
 
         # Preprocess value: strip inline comment and whitespace
-        val_stripped = val.split('#')[0].strip().strip('"').strip("'")
+        scalar = val.split('#')[0].strip()
+        if len(scalar) >= 2 and scalar[0] in ('"', "'") and scalar[-1] == scalar[0]:
+            parent[key] = scalar[1:-1]
+            continue
+        val_stripped = scalar
 
         # Handle bracketed lists: [a, b, c]
         if val_stripped.startswith('[') and val_stripped.endswith(']'):
@@ -390,6 +394,12 @@ def generate_header(config, output_path):
     if type(drr_scan_width) is not int or not 0 <= drr_scan_width <= 8:
         raise ValueError('dma.drr_scan_width must be an integer in [0,8]')
     L(f'#define TU_DMA_DRR_SCAN_WIDTH {drr_scan_width or 1}')
+    for stage in ('ROUND', 'SELECT'):
+        key = f'drr_{stage.lower()}_scan_width'
+        width = dma.get(key, 0)
+        if type(width) is not int or not 0 <= width <= 8:
+            raise ValueError(f'dma.{key} must be an integer in [0,8]')
+        L(f'#define TU_DMA_DRR_{stage}_SCAN_WIDTH {width}')
     drr_weights = [int(x) for x in dma.get('drr_channel_weights', ['1'] * 8)]
     if len(drr_weights) != 8 or any(x < 1 or x > 255 for x in drr_weights):
         raise ValueError('dma.drr_channel_weights must contain 8 integers in [1,255]')
@@ -589,6 +599,8 @@ def generate_header(config, output_path):
     L('    int      dma_drr_round_cost_mode;')
     L('    uint32_t dma_drr_select_issue_cycles;')
     L('    uint32_t dma_drr_scan_width;')
+    L('    uint32_t dma_drr_round_scan_width; /* 0 inherits common width */')
+    L('    uint32_t dma_drr_select_scan_width; /* 0 inherits common width */')
     L('    uint8_t  dma_drr_channel_weights[TU_DMA_ENGINE_MAX_CHANNELS];')
     L('    int      dma_aging_scope;')
     L('    int      dma_aging_metric;')
@@ -657,6 +669,8 @@ def generate_header(config, output_path):
     L(f'        .dma_drr_round_cost_mode = TU_DMA_DRR_ROUND_COST_MODE,')
     L(f'        .dma_drr_select_issue_cycles = TU_DMA_DRR_SELECT_ISSUE_CYCLES,')
     L(f'        .dma_drr_scan_width = TU_DMA_DRR_SCAN_WIDTH,')
+    L(f'        .dma_drr_round_scan_width = TU_DMA_DRR_ROUND_SCAN_WIDTH,')
+    L(f'        .dma_drr_select_scan_width = TU_DMA_DRR_SELECT_SCAN_WIDTH,')
     L(f'        .dma_drr_channel_weights = TU_DMA_DRR_CHANNEL_WEIGHTS,')
     L(f'        .dma_aging_scope    = TU_DMA_AGING_SCOPE,')
     L(f'        .dma_aging_metric   = TU_DMA_AGING_METRIC,')

@@ -1,0 +1,88 @@
+{
+  "baseline_head": "450fb1667c58aba8cf8b1839ccf967fe9c3d665d",
+  "source_sanitizer_input_tree": "251cc2e9f41f435c1cb37e9567cdc1106429c03e",
+  "final_snapshot_input_tree": "071ac0a69c4df1ca27dd47e6dc94a8ba9b37a744",
+  "tree_difference_scope": "Only exploration documentation; executable/config/test inputs identical",
+  "environment": {
+    "LD_LIBRARY_PATH": "<each archive or checkout root>",
+    "ASAN_OPTIONS": "detect_leaks=1:halt_on_error=1",
+    "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1"
+  },
+  "baseline_results": {
+    "build": 0,
+    "quick": 0,
+    "focused": 0,
+    "full": 2
+  },
+  "final_live_results": {
+    "build": 0,
+    "quick": 0,
+    "focused": 0,
+    "full": 2
+  },
+  "final_snapshot_results": {
+    "build": 0,
+    "quick": 0,
+    "focused": 0
+  },
+  "initial_extended_sanitizer_results": {
+    "build": 0,
+    "instrumented-build": 0,
+    "gate": 2
+  },
+  "separate_width_sanitizer_command_exit": 0,
+  "historical_baseline_sanitized_test_dma_make_exit": 2,
+  "timing_rows": 8425,
+  "simultaneous_queue_reconfiguration_gates": 162,
+  "live_inheritance_gates": 3,
+  "historical_dma_leak_bytes": 3136,
+  "historical_dma_leak_allocations": 14,
+  "baseline_and_final_leak_sites_equal": true,
+  "input_sha256": {
+    ".gitignore": "9a8eee3a522ed3b7461810d97251d7bb4dfc4716f350f624cbd400b5e2a8f27f",
+    "Makefile": "1d8c5ff88a35a76be896d653b14fa4bc64b56ae59ebf692bbc2a083f9699c2da",
+    "config/tu_config.json": "7fcbc371f4ca7d2c6e0b14761121d3fe529024eea9f64717f83d68852fb1c9a0",
+    "config/tu_config.yaml": "68f7ccbfae37586f99fc622395501aa7d9bd7be84b10daa34671c22703909e3b",
+    "docs/CONFIG_REFERENCE.md": "9e7e8774e2bdba3aaf1546aca2ab639f7b06386a82fa51c5f121b563f8ba11bf",
+    "docs/exploration/IMPLEMENTATION_BACKLOG.md": "4de8adeeef43fe59f350ee58a4177807b319a9835fdc6d926482c68087d4fb4f",
+    "docs/exploration/dma-drr-scan-width.md": "0fc415692b207052f8d977fdbecb417b679450ed20d2210fb445179649ffbdd2",
+    "docs/exploration/dma-drr-stage-width.md": "ab491930801316d2cbe22f8f50761b43d211ff839e5932223b7a372c08b8853f",
+    "docs/exploration/dma-test-descriptor-cleanup.md": "c6d8bf91a6e8a61ea5973764451679269305633cc8af5d3419e8e9b94b199f2c",
+    "docs/exploration/evidence/dma-drr-stage-width-2026-10-23/tracer.c": "a8cb5569b48cb6503c5d122ec5f147dc2f6aa7329e695250729410f81da8e292",
+    "scripts/gen_config.py": "512dc0f7968aa7ff052bef2a710c62e470401f49bf13f9e20702fbb458122b48",
+    "tests/test_dma_drr_stage_width.c": "b4c803d7867c398dcc1476020cb666de79fccb20f6b2b44b881065ef2fb024a3",
+    "tests/test_generated_config.py": "90beb0341edf2963575ba3ffefdad6cc3b9358f0d8418a7b730f421f6b8cd706",
+    "tu_cmodel/dma_descriptor.c": "51f6341a218ce5246e6660a7b19642b5920f26c547a0f60490ac59ee7dfbaaba",
+    "tu_cmodel/dma_descriptor.h": "bc71566ebf5f3bfa544e184018bf3be7b70fc8b596f798c24a6d94ac9108eb71",
+    "tu_cmodel/infra/config.c": "55713db547f018948d28dbd78717f9fc9e9c4eb116a759be0a51bb9773d73581",
+    "tu_cmodel/infra/config.h": "3135bde22a845f4eda4806b091d8f87785398e656d67a15642849ae1bd981a10",
+    "tu_cmodel/tu_cmodel.c": "c0688318ba0cdeeab6acac436c0b05c79824ef0b5a3ddf7f8ad7bcaa80039ab1",
+    "tu_cmodel/tu_config.h": "027ce0aea9c2bd1d8eb51c46e96229ebee3f6f8600180757852756a94ba8a751"
+  },
+  "decompressed_log_sha256": {
+    "baseline-build.log.gz": "458d4678c6374f71cb795905459abd419af44773ff1dea3f52607f4d7b972db2",
+    "baseline-quick.log.gz": "0f527ce492f93e428db60526145c8a1cfd14e110ac57856a9f3989b0efebae53",
+    "baseline-focused.log.gz": "78dadf36593b90aba58ea94d12512519a509b9ce0a0a68f565e972381e20a44f",
+    "baseline-full.log.gz": "7bd3f7d7073be28dd8562fd81985130e96307911392d4ffc22ae9edf582ce42c",
+    "final-build.log.gz": "d48626b72b14d2205b086d04efe62fbdd430401cb35847575b6dc9312c0f0e08",
+    "final-quick.log.gz": "d41bfc819cead4fbe2a6e3e9e0efc4c6505dc9c51350f888a773a65c35cf63e9",
+    "final-focused.log.gz": "1060953a1510bf25c91c6ca5e4a8a21d23c8caa5dde7d4b95322b0cd98543a67",
+    "final-full.log.gz": "57ecae52ec1a551d43efc1acc27f4d66732dfa018105f5f8c88f8e801430b771",
+    "tracer-baseline.log.gz": "f893cba58f6431589f8aa3a72832f48122c83b1c5f0bbada5a7ee849715d0af9",
+    "tracer-final.log.gz": "e8b0250b72cb14848a9a78caf83d0f9a6a5b1daec4b4675e7785664f8de715f5",
+    "stage-final.log.gz": "c07f79c8d80ecf89f5a5ce1a327ba4442f72a2eef0ffcfa90903522ffc134e2d",
+    "baseline-attention-1.log.gz": "8d43ba9d19f4866b6804e809f6c33f6f48929adbe8588de1ca7625bf05b9ba08",
+    "baseline-attention-2.log.gz": "60b741d0ba57a06a6759e7d44b8b5bd6a9aa35ae31db77bcc8fa433bd587eb0c",
+    "baseline-attention-3.log.gz": "60b741d0ba57a06a6759e7d44b8b5bd6a9aa35ae31db77bcc8fa433bd587eb0c",
+    "snapshot-build.log.gz": "77077b32d1f6c5aca8c416714cf1bc0923341213faeddc091147110d13f97ba6",
+    "snapshot-quick.log.gz": "7668ce5827ad0ccae7874f7c5a3533466984b1cb80e05d567ca9d4e24ad0ec6f",
+    "snapshot-focused.log.gz": "0a03c59f98f18d5f95aca8fb1822038ad8409c1c19938f4a693e3dc9e4cd8a5d",
+    "sanitized-build.log.gz": "8647c123c32b6cdfd61524841eea596ff9126403c69a6e8a9689c7c52bda9a9a",
+    "sanitized-instrumented-build.log.gz": "75d4565c1886cc8cfbf441eb1af9868bc27b9fa03a06f4e41fea66cb785e3f05",
+    "sanitized-gate.log.gz": "a1b7580b3c67882d3f3f62b82248907480db7944dba47d67aea09ce7b4ecd34b",
+    "sanitized-focused.log.gz": "648dc75a292243865c8d7eac0540a1802df9ebfd344f7438d2da5cc94b5d2e4e",
+    "baseline-sanitized-build.log.gz": "6ad207e2fbde527a908766ceabcf83eb489fff7bf75023c57ed1e749d7abf0e0",
+    "baseline-sanitized-dma.log.gz": "eb91294d151ae481c3537774e3e48c6669b99828a602e7d8ae34e8438ea188e4",
+    "generator.log.gz": "867f82017341e79081440d4d5ee2ccad944e060424f737aa0cc59f07dda08e8a"
+  }
+}

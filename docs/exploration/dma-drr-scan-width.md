@@ -2,6 +2,8 @@
 
 **Date:** 2026-10-13. **Mode:** pre-spec exploration, uncalibrated aggregate scheduler timing.
 
+**2026-10-23 follow-up:** [Independent round/selection widths](dma-drr-stage-width.md) now preserve this common-width contract while allowing separate 0=inherits-common / 1..8 overrides. Default behavior and this historical matrix are unchanged; physical stage feasibility remains unmodeled.
+
 ## Question and evidence-backed scope
 
 The successful-selection study retained hidden/fixed, full-serial, and early-stop-serial alternatives, but charged every queue probe serially. Can a partially parallel selector represent an intermediate resource/latency point without changing DRR credit or service order?
@@ -67,7 +69,7 @@ The gain buys expected hardware resources and verification effort. Choosing widt
 
 ## Fidelity limits and verification
 
-Both scheduler stages share one width. Independent stage widths, queue-state read conflicts, speculative lane updates, finite command credits, backpressure, pipelined selection/data overlap, producer arrivals during the atomic tick delay, physical area/power, timing closure and calibration are unmodeled. Width does not prove any such mechanism. Shared service remains descriptor-boundary and non-preemptive.
+The original study shared one width; the 2026-10-23 follow-up adds independent stage costing widths. Queue-state read conflicts, speculative lane updates, finite command credits, backpressure, pipelined selection/data overlap, producer arrivals during the atomic tick delay, physical area/power, timing closure and calibration remain unmodeled. Width does not prove any such mechanism. Shared service remains descriptor-boundary and non-preemptive.
 
 Executed gates:
 

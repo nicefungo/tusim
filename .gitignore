@@ -14,6 +14,7 @@ test-dma
 test-dma-channel-sweep
 test-dma-arbitration-sweep
 test-dma-drr-scan-width
+test-dma-drr-stage-width
 test-dma-binding-sweep
 test-dma-bus-width-sweep
 test-dma-directional-latency-sweep
