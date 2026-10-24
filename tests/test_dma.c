@@ -24,6 +24,36 @@ static int tests_run = 0, tests_pass = 0;
 #define PASS() do { printf("PASS\n"); tests_pass++; } while(0)
 #define FAIL(fmt, ...) do { printf("FAIL: " fmt "\n", ##__VA_ARGS__); } while(0)
 
+/* Rejection consumes the whole submitted chain. Completion/retirement does
+ * not free detached descriptors. Clear rejected pointers before cleanup. */
+static uint32_t submit_owned(tu_dma_descriptor_t **desc) {
+    uint32_t id = tu_dma_submit_desc(*desc);
+    if (!id) *desc = NULL;
+    return id;
+}
+
+/* Only for these acyclic fixtures. Keep pending/active objects engine-owned;
+ * release detached or never-submitted objects individually, before destroying
+ * the engine. completed is not a retirement test: it is already set at issue.
+ * Sever next because a queue/chain successor may have another owner. */
+static void destroy_detached(tu_dma_descriptor_t *desc) {
+    if (!desc) return;
+    for (uint32_t i = 0; i < g_tu_dma.num_channels; ++i) {
+        const tu_dma_channel_state_t *ch = &g_tu_dma.channels[i];
+        if (ch->active == desc) return;
+        for (const tu_dma_descriptor_t *p = ch->head; p; p = p->next)
+            if (p == desc) return;
+    }
+    desc->next = NULL;
+    tu_dma_desc_destroy(desc);
+}
+
+static void cleanup_descriptors(tu_dma_descriptor_t **descs, size_t count) {
+    for (size_t i = 0; i < count; ++i) destroy_detached(descs[i]);
+    tu_dma_destroy();
+    for (size_t i = 0; i < count; ++i) descs[i] = NULL;
+}
+
 /* ================================================================
  * Test 1: Linear transfer host→SRAM
  * ================================================================ */
@@ -43,8 +73,8 @@ static void test_dma_linear_host_to_sram(void) {
         0, TU_DMA_DIR_HOST_TO_TU,
         &sram, 0, src, 1, 128);
 
-    uint32_t id = tu_dma_submit_desc(desc);
-    if (id == 0) { FAIL("submit failed"); tu_sram_destroy(&sram); return; }
+    uint32_t id = submit_owned(&desc);
+    if (id == 0) { FAIL("submit failed"); goto cleanup; }
 
     /* Verify SRAM contents (sync mode = immediate) */
     uint8_t *sram_data = tu_sram_raw_ptr(&sram);
@@ -57,8 +87,10 @@ static void test_dma_linear_host_to_sram(void) {
     }
     if (ok) PASS();
 
-    tu_sram_destroy(&sram);
+cleanup:
+    destroy_detached(desc);
     tu_dma_destroy();
+    tu_sram_destroy(&sram);
 }
 
 /* ================================================================
@@ -83,8 +115,8 @@ static void test_dma_linear_sram_to_host(void) {
         2, TU_DMA_DIR_TU_TO_HOST,
         &sram, 0, dst, 1, 256);
 
-    uint32_t id = tu_dma_submit_desc(desc);
-    if (id == 0) { FAIL("submit failed"); tu_sram_destroy(&sram); return; }
+    uint32_t id = submit_owned(&desc);
+    if (id == 0) { FAIL("submit failed"); goto cleanup; }
 
     /* Verify */
     int ok = 1;
@@ -96,8 +128,10 @@ static void test_dma_linear_sram_to_host(void) {
     }
     if (ok) PASS();
 
-    tu_sram_destroy(&sram);
+cleanup:
+    destroy_detached(desc);
     tu_dma_destroy();
+    tu_sram_destroy(&sram);
 }
 
 /* ================================================================
@@ -138,8 +172,8 @@ static void test_dma_strided_2d(void) {
         4,       /* elem_size = sizeof(fp32_t) */
         4, 4);   /* rows=4, cols=4 */
 
-    uint32_t id = tu_dma_submit_desc(desc);
-    if (id == 0) { FAIL("submit failed"); tu_sram_destroy(&sram); return; }
+    uint32_t id = submit_owned(&desc);
+    if (id == 0) { FAIL("submit failed"); goto cleanup; }
 
     /* Expected: each row in dst has cols 2,3,4,5 from the corresponding source row */
     int ok = 1;
@@ -160,8 +194,10 @@ static void test_dma_strided_2d(void) {
     }
     if (ok) PASS();
 
-    tu_sram_destroy(&sram);
+cleanup:
+    destroy_detached(desc);
     tu_dma_destroy();
+    tu_sram_destroy(&sram);
 }
 
 /* ================================================================
@@ -209,8 +245,8 @@ static void test_dma_strided_3d(void) {
         4,      /* elem_size */
         2, 2, 2);  /* depth=2, rows=2, cols=2 */
 
-    uint32_t id = tu_dma_submit_desc(desc);
-    if (id == 0) { FAIL("submit failed"); tu_sram_destroy(&sram); return; }
+    uint32_t id = submit_owned(&desc);
+    if (id == 0) { FAIL("submit failed"); goto cleanup; }
 
     /* Expected: elements from SRAM at positions [d][r][c]:
      * d=1,r=1,c=1 → 21,  d=1,r=1,c=2 → 22,  d=1,r=2,c=1 → 25, d=1,r=2,c=2 → 26
@@ -226,8 +262,10 @@ static void test_dma_strided_3d(void) {
     }
     if (ok) PASS();
 
-    tu_sram_destroy(&sram);
+cleanup:
+    destroy_detached(desc);
     tu_dma_destroy();
+    tu_sram_destroy(&sram);
 }
 
 /* ================================================================
@@ -252,11 +290,16 @@ static void test_dma_chain(void) {
     tu_dma_descriptor_t *d2 = tu_dma_desc_create_linear(
         0, TU_DMA_DIR_HOST_TO_TU, &sram, 256, src2, 1, 64);
 
+    if (!d0 || !d1 || !d2) { FAIL("allocation failed"); goto cleanup; }
     tu_dma_desc_chain(d0, d1);
     tu_dma_desc_chain(d0, d2);
 
     uint32_t id = tu_dma_submit_desc(d0);
-    if (id == 0) { FAIL("submit failed"); tu_sram_destroy(&sram); return; }
+    if (id == 0) {
+        d0 = d1 = d2 = NULL; /* Rejection destroys the complete chain. */
+        FAIL("submit failed");
+        goto cleanup;
+    }
 
     uint8_t *raw = tu_sram_raw_ptr(&sram);
 
@@ -279,8 +322,12 @@ static void test_dma_chain(void) {
     }
     if (ok) PASS();
 
-    tu_sram_destroy(&sram);
+cleanup:
+    destroy_detached(d0);
+    destroy_detached(d1);
+    destroy_detached(d2);
     tu_dma_destroy();
+    tu_sram_destroy(&sram);
 }
 
 /* ================================================================
@@ -301,8 +348,8 @@ static void test_dma_async(void) {
         0, TU_DMA_DIR_HOST_TO_TU, &sram, 0, src, 1, 128);
 
     /* Submit in async mode — should NOT execute immediately */
-    uint32_t id = tu_dma_submit_desc(desc);
-    if (id == 0) { FAIL("submit failed"); tu_sram_destroy(&sram); return; }
+    uint32_t id = submit_owned(&desc);
+    if (id == 0) { FAIL("submit failed"); goto cleanup; }
 
     /* Verify SRAM is still zero (not yet executed) */
     uint8_t *raw = tu_sram_raw_ptr(&sram);
@@ -310,7 +357,7 @@ static void test_dma_async(void) {
     for (int i = 0; i < 128; i++) {
         if (raw[i] != 0) { all_zero = 0; break; }
     }
-    if (!all_zero) { FAIL("data appeared before tick"); tu_sram_destroy(&sram); return; }
+    if (!all_zero) { FAIL("data appeared before tick"); goto cleanup; }
 
     /* Tick to execute */
     for (int i = 0; i < 200; i++) tu_dma_tick();
@@ -325,8 +372,10 @@ static void test_dma_async(void) {
     }
     if (ok) PASS();
 
-    tu_sram_destroy(&sram);
+cleanup:
+    destroy_detached(desc);
     tu_dma_destroy();
+    tu_sram_destroy(&sram);
 }
 
 /* ================================================================
@@ -347,8 +396,8 @@ static void test_dma_fp32_transfer(void) {
         0, TU_DMA_DIR_HOST_TO_TU,
         &sram, 0, src, sizeof(fp32_t), 16 * 16);
 
-    uint32_t id = tu_dma_submit_desc(desc);
-    if (id == 0) { FAIL("submit failed"); tu_sram_destroy(&sram); return; }
+    uint32_t id = submit_owned(&desc);
+    if (id == 0) { FAIL("submit failed"); goto cleanup; }
 
     /* Verify */
     fp32_t *dst = (fp32_t *)tu_sram_raw_ptr(&sram);
@@ -361,8 +410,10 @@ static void test_dma_fp32_transfer(void) {
     }
     if (ok) PASS();
 
-    tu_sram_destroy(&sram);
+cleanup:
+    destroy_detached(desc);
     tu_dma_destroy();
+    tu_sram_destroy(&sram);
 }
 
 /* ================================================================
@@ -413,17 +464,20 @@ static void test_dma_completion_signal(void) {
 
     tu_dma_descriptor_t *desc = tu_dma_desc_create_linear(
         0, TU_DMA_DIR_HOST_TO_TU, &sram, 0, src, 1, 64);
+    if (!desc) { FAIL("allocation failed"); goto cleanup; }
     desc->signal_id = 42;
 
-    uint32_t id = tu_dma_submit_desc(desc);
-    if (id == 0) { FAIL("submit failed"); tu_sram_destroy(&sram); return; }
+    uint32_t id = submit_owned(&desc);
+    if (id == 0) { FAIL("submit failed"); goto cleanup; }
 
     /* In sync mode, descriptor should be completed */
     if (desc->completed) PASS();
     else FAIL("descriptor not completed");
 
-    tu_sram_destroy(&sram);
+cleanup:
+    destroy_detached(desc);
     tu_dma_destroy();
+    tu_sram_destroy(&sram);
 }
 
 /* ================================================================
@@ -445,14 +499,16 @@ static void test_dma_stats(void) {
     tu_dma_descriptor_t *d2 = tu_dma_desc_create_linear(
         0, TU_DMA_DIR_HOST_TO_TU, &sram, 256, src, 1, 256);
 
-    tu_dma_submit_desc(d1);
-    tu_dma_submit_desc(d2);
+    uint32_t id1 = submit_owned(&d1);
+    uint32_t id2 = submit_owned(&d2);
 
-    if (g_tu_dma.total_bytes == 512 && g_tu_dma.total_transfers == 2) PASS();
+    if (id1 && id2 && g_tu_dma.total_bytes == 512 && g_tu_dma.total_transfers == 2) PASS();
     else FAIL("bytes=%lu transfers=%lu", g_tu_dma.total_bytes, g_tu_dma.total_transfers);
 
-    tu_sram_destroy(&sram);
+    destroy_detached(d1);
+    destroy_detached(d2);
     tu_dma_destroy();
+    tu_sram_destroy(&sram);
 }
 
 /* ================================================================
@@ -466,6 +522,7 @@ static void test_dma_channel_capacity(void) {
     if (g_tu_dma.num_channels != TU_DMA_ENGINE_MAX_CHANNELS ||
         g_tu_dma.bus_mode != TU_DMA_BUS_MODE_SHARED_SERIAL) {
         FAIL("max channel count/topology did not initialize");
+        tu_dma_destroy();
         return;
     }
     tu_dma_destroy();
@@ -499,16 +556,18 @@ static void test_dma_outstanding_includes_active(void) {
 
     tu_dma_descriptor_t *d0 = tu_dma_desc_create_linear(
         0, TU_DMA_DIR_HOST_TO_TU, &sram, 0, src0, 1, sizeof(src0));
-    uint32_t id0 = tu_dma_submit_desc(d0);
+    uint32_t id0 = submit_owned(&d0);
     tu_dma_tick(); /* d0 becomes active; pending depth returns to zero */
 
     tu_dma_descriptor_t *d1 = tu_dma_desc_create_linear(
         0, TU_DMA_DIR_HOST_TO_TU, &sram, 64, src1, 1, sizeof(src1));
-    uint32_t id1 = tu_dma_submit_desc(d1);
+    bool allocated1 = d1 != NULL;
+    uint32_t id1 = submit_owned(&d1);
 
     for (int i = 0; i < 200; i++) tu_dma_tick();
     uint8_t *raw = tu_sram_raw_ptr(&sram);
-    int ok = id0 > 0 && id1 == 0 && g_tu_dma.channels[0].total_submitted == 1;
+    int ok = id0 > 0 && allocated1 && id1 == 0 &&
+             g_tu_dma.channels[0].total_submitted == 1;
     for (size_t i = 0; i < sizeof(src0) && ok; i++) ok = raw[i] == 0x11;
     for (size_t i = 0; i < sizeof(src1) && ok; i++) ok = raw[64 + i] == 0;
 
@@ -516,83 +575,91 @@ static void test_dma_outstanding_includes_active(void) {
     else FAIL("id0=%u id1=%u submitted=%lu", id0, id1,
               (unsigned long)g_tu_dma.channels[0].total_submitted);
 
-    tu_sram_destroy(&sram);
+    destroy_detached(d0);
+    destroy_detached(d1);
     tu_dma_destroy();
+    tu_sram_destroy(&sram);
 }
 
 static void test_dma_shared_arbitration(void) {
     TEST("Shared bus round-robin / strict / aging / DRR arbitration");
     tu_sram_region_t sram;
     static uint8_t src[3][64];
+    tu_dma_descriptor_t *descs[3] = {0};
     int ok = 1;
     tu_sram_init(&sram, 3 * 64, "arbitration");
 
     tu_dma_init_config_policy(true, 3, 2, TU_DMA_BUS_MODE_SHARED_SERIAL,
                               TU_DMA_ARB_ROUND_ROBIN);
     for (uint8_t i = 0; i < 3; i++) {
-        tu_dma_descriptor_t *d = tu_dma_desc_create_linear(
+        descs[i] = tu_dma_desc_create_linear(
             i, TU_DMA_DIR_HOST_TO_TU, &sram, i * 64, src[i], 1, 64);
-        d->priority = (uint8_t)(i == 1 ? 10 : i == 2 ? 5 : 0);
-        ok = ok && tu_dma_submit_desc(d) > 0;
+        if (descs[i]) descs[i]->priority = (uint8_t)(i == 1 ? 10 : i == 2 ? 5 : 0);
+        uint32_t id = submit_owned(&descs[i]);
+        ok = id > 0 && ok;
     }
     tu_dma_tick();
     ok = ok && g_tu_dma.channels[0].active != NULL &&
          g_tu_dma.channels[1].active == NULL;
-    tu_dma_destroy();
+    cleanup_descriptors(descs, 3);
 
     tu_dma_init_config_policy(true, 3, 2, TU_DMA_BUS_MODE_SHARED_SERIAL,
                               TU_DMA_ARB_STRICT_PRIORITY);
     for (uint8_t i = 0; i < 3; i++) {
-        tu_dma_descriptor_t *d = tu_dma_desc_create_linear(
+        descs[i] = tu_dma_desc_create_linear(
             i, TU_DMA_DIR_HOST_TO_TU, &sram, i * 64, src[i], 1, 64);
-        d->priority = (uint8_t)(i == 1 ? 10 : i == 2 ? 5 : 0);
-        ok = ok && tu_dma_submit_desc(d) > 0;
+        if (descs[i]) descs[i]->priority = (uint8_t)(i == 1 ? 10 : i == 2 ? 5 : 0);
+        uint32_t id = submit_owned(&descs[i]);
+        ok = id > 0 && ok;
     }
     tu_dma_tick();
     ok = ok && g_tu_dma.channels[1].active != NULL &&
          g_tu_dma.channels[0].active == NULL;
-    tu_dma_destroy();
+    cleanup_descriptors(descs, 3);
 
     tu_dma_init_config_policy(true, 3, 2, TU_DMA_BUS_MODE_SHARED_SERIAL,
                               TU_DMA_ARB_AGING_PRIORITY);
     for (uint8_t i = 0; i < 3; i++) {
-        tu_dma_descriptor_t *d = tu_dma_desc_create_linear(
+        descs[i] = tu_dma_desc_create_linear(
             i, TU_DMA_DIR_HOST_TO_TU, &sram, i * 64, src[i], 1, 64);
-        d->priority = (uint8_t)(i == 1 ? 10 : i == 2 ? 5 : 0);
-        ok = ok && tu_dma_submit_desc(d) > 0;
+        if (descs[i]) descs[i]->priority = (uint8_t)(i == 1 ? 10 : i == 2 ? 5 : 0);
+        uint32_t id = submit_owned(&descs[i]);
+        ok = id > 0 && ok;
     }
     tu_dma_tick();
     ok = ok && g_tu_dma.channels[1].active != NULL &&
          g_tu_dma.arbitration_epoch == 1;
-    tu_dma_destroy();
+    cleanup_descriptors(descs, 3);
 
     tu_dma_init_config_policy(true, 3, 2, TU_DMA_BUS_MODE_SHARED_SERIAL,
                               TU_DMA_ARB_DEFICIT_ROUND_ROBIN);
     for (uint8_t i = 0; i < 3; i++) {
-        tu_dma_descriptor_t *d = tu_dma_desc_create_linear(
+        descs[i] = tu_dma_desc_create_linear(
             i, TU_DMA_DIR_HOST_TO_TU, &sram, i * 64, src[i], 1, 64);
-        ok = ok && tu_dma_submit_desc(d) > 0;
+        uint32_t id = submit_owned(&descs[i]);
+        ok = id > 0 && ok;
     }
     tu_dma_tick();
     ok = ok && g_tu_dma.drr_quantum_bytes == 256 &&
          g_tu_dma.channels[0].active != NULL;
-    tu_dma_destroy();
+    cleanup_descriptors(descs, 3);
 
     /* Equal priority falls back to rotating tie-break, not channel 0 forever. */
     tu_dma_init_config_policy(true, 3, 2, TU_DMA_BUS_MODE_SHARED_SERIAL,
                               TU_DMA_ARB_STRICT_PRIORITY);
     for (uint8_t i = 0; i < 3; i++) {
-        tu_dma_descriptor_t *d = tu_dma_desc_create_linear(
+        descs[i] = tu_dma_desc_create_linear(
             i, TU_DMA_DIR_HOST_TO_TU, &sram, i * 64, src[i], 1, 64);
-        d->priority = 7;
-        ok = ok && tu_dma_submit_desc(d) > 0;
+        if (descs[i]) descs[i]->priority = 7;
+        uint32_t id = submit_owned(&descs[i]);
+        ok = id > 0 && ok;
     }
     tu_dma_tick();
     ok = ok && g_tu_dma.channels[0].active != NULL;
     for (int i = 0; i < 200 && g_tu_dma.channels[0].total_completed == 0; i++)
         tu_dma_tick();
     ok = ok && g_tu_dma.channels[1].active != NULL;
-    tu_dma_destroy();
+    cleanup_descriptors(descs, 3);
 
     tu_dma_init_config_policy(true, 3, 2, TU_DMA_BUS_MODE_SHARED_SERIAL, 4);
     ok = ok && g_tu_dma.num_channels == 0;
@@ -726,6 +793,7 @@ static void test_dma_shared_arbitration(void) {
 }
 
 static int rejected_without_submission(tu_dma_descriptor_t *desc) {
+    if (!desc) return 0; /* Allocation failure is not evidence of rejection. */
     uint32_t id = tu_dma_submit_desc(desc);
     if (id == 0) return 1; /* Rejection owns and destroys the descriptor. */
     /* All callers use async mode, so an accepted descriptor is still owned by
@@ -752,6 +820,7 @@ static void test_dma_descriptor_sram_span_validation(void) {
      * the invalid second row to escape the backing allocation. */
     sram.total_size = 64;
     tu_dma_init_full(true, 1, 8);
+    /* Always consume each allocation, even after an earlier assertion failed. */
     tu_dma_descriptor_t *direct = tu_dma_desc_create_strided_2d(
         0, TU_DMA_DIR_HOST_TO_TU, &sram, 16, host, 40, 16, 1, 2, 16);
     tu_dma_execute_desc(direct);
@@ -765,26 +834,26 @@ static void test_dma_descriptor_sram_span_validation(void) {
     tu_dma_init_full(true, 1, 8);
     tu_dma_descriptor_t *d2 = tu_dma_desc_create_strided_2d(
         0, TU_DMA_DIR_HOST_TO_TU, &sram, 16, host, 40, 16, 1, 2, 16);
-    ok = ok && d2 && rejected_without_submission(d2) &&
+    ok &= d2 && rejected_without_submission(d2) &&
          g_tu_dma.channels[0].total_submitted == 0;
 
     tu_dma_init_full(true, 1, 8);
     tu_dma_descriptor_t *d3 = tu_dma_desc_create_strided_3d(
         0, TU_DMA_DIR_HOST_TO_TU, &sram, 0, host,
         32, 48, 16, 32, 1, 2, 2, 16);
-    ok = ok && d3 && rejected_without_submission(d3) &&
+    ok &= d3 && rejected_without_submission(d3) &&
          g_tu_dma.channels[0].total_submitted == 0;
 
     tu_dma_init_full(true, 1, 8);
     tu_dma_descriptor_t *scatter = tu_dma_desc_create_scatter(
         0, &sram, host, bad_indices, 2, 8);
-    ok = ok && scatter && rejected_without_submission(scatter) &&
+    ok &= scatter && rejected_without_submission(scatter) &&
          g_tu_dma.channels[0].total_submitted == 0;
 
     tu_dma_init_full(true, 1, 8);
     tu_dma_descriptor_t *gather = tu_dma_desc_create_gather(
         0, &sram, host, bad_indices, 2, 8);
-    ok = ok && gather && rejected_without_submission(gather) &&
+    ok &= gather && rejected_without_submission(gather) &&
          g_tu_dma.channels[0].total_submitted == 0;
 
     /* Validation must use the copy width, not mutable index metadata. */
@@ -792,7 +861,7 @@ static void test_dma_descriptor_sram_span_validation(void) {
     tu_dma_descriptor_t *width_mismatch = tu_dma_desc_create_scatter(
         0, &sram, host, bad_indices, 2, 8);
     if (width_mismatch) width_mismatch->index_elem_size = 1;
-    ok = ok && width_mismatch && rejected_without_submission(width_mismatch) &&
+    ok &= width_mismatch && rejected_without_submission(width_mismatch) &&
          g_tu_dma.channels[0].total_submitted == 0;
 
     /* A public TU-to-TU descriptor must bound both SRAM endpoints. */
@@ -814,7 +883,7 @@ static void test_dma_descriptor_sram_span_validation(void) {
         internal->dims[2] = 1;
         internal->total_bytes = 32;
     }
-    ok = ok && internal && rejected_without_submission(internal) &&
+    ok &= internal && rejected_without_submission(internal) &&
          g_tu_dma.channels[0].total_submitted == 0;
 
     for (uint32_t missing = 0; missing < 2; missing++) {
@@ -832,7 +901,7 @@ static void test_dma_descriptor_sram_span_validation(void) {
             null_endpoint->dims[2] = 1;
             null_endpoint->total_bytes = 8;
         }
-        ok = ok && null_endpoint &&
+        ok &= null_endpoint &&
              rejected_without_submission(null_endpoint) &&
              g_tu_dma.channels[0].total_submitted == 0;
     }
@@ -842,7 +911,7 @@ static void test_dma_descriptor_sram_span_validation(void) {
     tu_dma_init_full(true, 1, 8);
     tu_dma_descriptor_t *null_multicast = tu_dma_desc_create_multicast(
         0, host, targets, offsets, 2, 1, 8);
-    ok = ok && null_multicast && rejected_without_submission(null_multicast) &&
+    ok &= null_multicast && rejected_without_submission(null_multicast) &&
          g_tu_dma.channels[0].total_submitted == 0;
 
     targets[1] = &other;
@@ -850,7 +919,7 @@ static void test_dma_descriptor_sram_span_validation(void) {
     tu_dma_init_full(true, 1, 8);
     tu_dma_descriptor_t *multicast = tu_dma_desc_create_multicast(
         0, host, targets, offsets, 2, 1, 8);
-    ok = ok && multicast && rejected_without_submission(multicast) &&
+    ok &= multicast && rejected_without_submission(multicast) &&
          g_tu_dma.channels[0].total_submitted == 0;
 
     /* Validate the complete chain before accepting its head. */
@@ -859,9 +928,15 @@ static void test_dma_descriptor_sram_span_validation(void) {
         0, TU_DMA_DIR_HOST_TO_TU, &sram, 0, host, 1, 8);
     tu_dma_descriptor_t *tail = tu_dma_desc_create_strided_2d(
         0, TU_DMA_DIR_HOST_TO_TU, &sram, 16, host, 40, 16, 1, 2, 16);
-    tu_dma_desc_chain(head, tail);
-    ok = ok && head && tail && rejected_without_submission(head) &&
-         g_tu_dma.channels[0].total_submitted == 0;
+    if (!head || !tail) {
+        destroy_detached(head);
+        destroy_detached(tail);
+        ok = 0;
+    } else {
+        tu_dma_desc_chain(head, tail);
+        ok = rejected_without_submission(head) &&
+             g_tu_dma.channels[0].total_submitted == 0 && ok;
+    }
     for (uint32_t i = 0; i < 64 && ok; i++)
         ok = sram_bytes[i] == 0;
 
@@ -870,15 +945,12 @@ static void test_dma_descriptor_sram_span_validation(void) {
     tu_dma_init_full(false, 1, 8);
     tu_dma_descriptor_t *edge = tu_dma_desc_create_strided_2d(
         0, TU_DMA_DIR_HOST_TO_TU, &sram, 0, host, 48, 16, 1, 2, 16);
-    uint32_t edge_id = edge ? tu_dma_submit_desc(edge) : 0;
+    uint32_t edge_id = submit_owned(&edge);
     ok = ok && edge_id > 0 && edge->completed &&
          memcmp(tu_sram_raw_ptr(&sram), host, 16) == 0 &&
          memcmp(tu_sram_raw_ptr(&sram) + 48, host + 16, 16) == 0;
+    destroy_detached(edge);
     tu_dma_destroy();
-    if (edge_id > 0) {
-        edge->next = NULL;
-        tu_dma_desc_destroy(edge);
-    }
 
     sram.total_size = 128;
     tu_sram_destroy(&other);
@@ -891,6 +963,7 @@ static void test_dma_channel_binding(void) {
     tu_sram_region_t sram;
     static uint8_t src[3][16];
     tu_dma_descriptor_t *d[3] = {0};
+    uint32_t id;
     int ok = 1;
     tu_sram_init(&sram, 64, "binding");
 
@@ -899,39 +972,39 @@ static void test_dma_channel_binding(void) {
     for (uint8_t i = 0; i < 3; i++) {
         d[i] = tu_dma_desc_create_linear(0, TU_DMA_DIR_HOST_TO_TU,
                                          &sram, i * 16, src[i], 1, 16);
-        ok = ok && d[i] && tu_dma_submit_desc(d[i]) > 0 && d[i]->channel == i;
+        uint32_t id = submit_owned(&d[i]);
+        ok = id > 0 && d[i]->channel == i && ok;
     }
     tu_dma_flush_all();
-    tu_dma_destroy();
-    for (uint8_t i = 0; i < 3; i++) { d[i]->next = NULL; tu_dma_desc_destroy(d[i]); }
+    cleanup_descriptors(d, 3);
 
     tu_dma_init_config_full(true, 3, 4, TU_DMA_BUS_MODE_INDEPENDENT,
                             TU_DMA_ARB_ROUND_ROBIN, TU_DMA_BIND_LEAST_OUTSTANDING);
     d[0] = tu_dma_desc_create_linear(2, TU_DMA_DIR_HOST_TO_TU,
                                      &sram, 0, src[0], 1, 16);
-    ok = ok && d[0] && tu_dma_submit_desc(d[0]) > 0 && d[0]->channel == 0;
+    id = submit_owned(&d[0]);
+    ok = id > 0 && d[0]->channel == 0 && ok;
     tu_dma_flush_all();
-    tu_dma_destroy();
-    d[0]->next = NULL; tu_dma_desc_destroy(d[0]);
+    cleanup_descriptors(d, 3);
 
     tu_dma_init_config_full(true, 3, 4, TU_DMA_BUS_MODE_INDEPENDENT,
                             TU_DMA_ARB_ROUND_ROBIN, TU_DMA_BIND_LEAST_BYTES);
     d[0] = tu_dma_desc_create_linear(2, TU_DMA_DIR_HOST_TO_TU,
                                      &sram, 0, src[0], 1, 16);
-    ok = ok && d[0] && tu_dma_submit_desc(d[0]) > 0 && d[0]->channel == 0;
+    id = submit_owned(&d[0]);
+    ok = id > 0 && d[0]->channel == 0 && ok;
     tu_dma_flush_all();
-    tu_dma_destroy();
-    d[0]->next = NULL; tu_dma_desc_destroy(d[0]);
+    cleanup_descriptors(d, 3);
 
     tu_dma_init_config_full(true, 3, 4, TU_DMA_BUS_MODE_INDEPENDENT,
                             TU_DMA_ARB_ROUND_ROBIN,
                             TU_DMA_BIND_LEAST_PROJECTED_CYCLES);
     d[0] = tu_dma_desc_create_linear(2, TU_DMA_DIR_HOST_TO_TU,
                                      &sram, 0, src[0], 1, 16);
-    ok = ok && d[0] && tu_dma_submit_desc(d[0]) > 0 && d[0]->channel == 0;
+    id = submit_owned(&d[0]);
+    ok = id > 0 && d[0]->channel == 0 && ok;
     tu_dma_flush_all();
-    tu_dma_destroy();
-    d[0]->next = NULL; tu_dma_desc_destroy(d[0]);
+    cleanup_descriptors(d, 3);
 
     tu_dma_init_config_full(true, 3, 4, TU_DMA_BUS_MODE_INDEPENDENT,
                             TU_DMA_ARB_ROUND_ROBIN, 99);
