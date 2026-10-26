@@ -1,5 +1,17 @@
 # Attention Engine Sweep: PE Array × Workload × Dataflow
 
+> **2026-10-25 evidence correction — historical table, not an accepted design ranking.**
+> The original engine copied four-byte SRAM words into/from two-byte FP16
+> objects, compacted FP32 probabilities in the wrong direction, and could
+> overlap live FP32 scores and output. See [attention-sram-staging.md](attention-sram-staging.md)
+> for reproduced ASan evidence, corrected single-KV-tile gates and the complete
+> query-tile/resource/traffic matrix. The advertised cross-KV online normalization
+> is absent (uniform two-tile output is 0.5 instead of 0.25). Mixed SRAM-stall
+> and MMA estimates are not end-to-end timing. Thus the rankings, utilization,
+> bottleneck diagnoses and universal OS recommendation below are **withdrawn**;
+> rows remain as historical observations, not calibrated or numerically validated
+> evidence. WS/OS/RS remain selectable; no universally best physical dataflow is established.
+
 **Date:** 2026-06-26
 **Question:** How do PE array size, aspect ratio, and dataflow choice affect attention throughput across prefill (high M) and decode (M=1) workloads?
 **Hypothesis:** Prefill is DMA-bound (M-dimension dominates SRAM usage); decode is compute-bound. PE array aspect ratio should matter more for systolic dataflows (WS/RS) than for OS due to fill/drain costs.
@@ -71,7 +83,7 @@ Systolic fill/drain costs scale with array dimensions: 64 rows × 2 (fill + drai
 ### 5. W-buffer off-by-one overflow is a persistent hazard for KV tiles near buffer capacity
 Multiple decode workloads with tile_n=256, head_dim=128 hit "addr=131070 size=4 max=131072" — a 2-byte overflow past 128KB W-buffer. The K tile (64KB) + K^T scratch (64KB) lands exactly at the boundary, and a single FP32 write overflows by 2 bytes.
 
-**Actionable insight:** SRAM budget for tiled attention must include K^T scratch space (tile_n × head_dim × 2 bytes) PLUS alignment padding. The auto-tiler should reduce tile_n by 1 or enforce a 16-byte safety margin.
+**Corrected 2026-10-25:** this was a four-byte scalar SRAM access to a two-byte FP16 object, not a need for unexplained alignment padding. Exact-sized accesses now pass an exact-end K+KT fixture with no headroom. The original reduce-by-one/padding workaround is not the fix. Auto-tiler capacity feasibility remains a separate audit.
 
 ## Conclusion
 

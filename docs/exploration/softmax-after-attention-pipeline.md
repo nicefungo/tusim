@@ -1,5 +1,13 @@
 # Softmax-After-Attention Pipeline Sweep
 
+> **2026-10-25: historical/unaccepted pipeline evidence.** Attention SRAM
+> staging was unsafe; see [attention-sram-staging.md](attention-sram-staging.md).
+> This harness consumes offset 0 (S/P scratch), not the engine's live FP32
+> output. Standalone softmax returns SRAM stalls, whereas attention combines
+> incompatible accounting domains. The percentages, physical-cycle budget and
+> end-to-end/fusion conclusions below are withdrawn pending an explicit output
+> boundary, numerical oracle and coherent timing model. Tables remain historical.
+
 **Date:** 2026-07-08
 **Question:** What overhead does a standalone softmax pass add to attention latency across PE array sizes and head dimensions?
 **Hypothesis:** Softmax overhead is higher than normalization overhead (2× the SRAM stall cycles) and follows the same pattern — increasing with PE size and head dimension. Expected 16-32% overhead vs. 8-16% for norm.

@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "cases": 720,
+  "checks": 67034,
+  "mutants_rejected": [
+    "word-width",
+    "reverse-pack",
+    "packed-p-layout"
+  ],
+  "known_kv_defect": "0.5 versus expected 0.25; remains unresolved",
+  "commands": 18
+}

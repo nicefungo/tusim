@@ -37,6 +37,18 @@
  *     - O_tile:  tile_m × head_dim × 4 bytes  (FP32, accum)
  *     - scratch: tile_m × 4 bytes (max), tile_m × 4 bytes (sum)
  *
+ *   Executable fidelity limits (2026-10-25): FP16 K transpose and FP32-to-FP16
+ *   probability packing use explicit-sized SRAM accesses. FP32 S, FP32 O and
+ *   mask scratch are disjoint: O-buffer admission reserves 2*S_bytes+O_bytes.
+ *   Single-KV-tile, no-mask/causal results are independently gated; multiple
+ *   query tiles work. Cross-KV online max/sum/rescaling is NOT implemented:
+ *   summing separately normalized KV tiles is not global attention. Custom
+ *   multi-row mask slicing, auto-tiler feasibility and allocation failures
+ *   require separate audits. The description above is the intended architecture,
+ *   not evidence that these missing paths are correct or timing-calibrated.
+ *   Execution uses the active global plugin (tu_set_dataflow), not desc.dataflow.
+ *   Mixed SRAM-stall/MMA counters are not calibrated end-to-end latency.
+ *
  *   Bandwidth awareness:
  *     All operations go through SRAM with bank conflict and
  *     bandwidth stall accounting. DMA bytes and compute cycles
@@ -114,6 +126,10 @@ typedef struct {
 /*
  * Execute FlashAttention: O = softmax(Q × K^T * scale + mask) × V
  *
+ * Single-KV-tile execution is numerically verified; see fidelity limits above
+ * before using multiple KV tiles or custom masks. Configured tile footprints
+ * reject before movement when disjoint scratch cannot fit; this can reject
+ * formerly admitted overlapping layouts. No unsafe-layout compatibility mode.
  * Computes multi-head attention with tiled execution to fit in SRAM.
  * All data movement and computation is tracked via global counters
  * (DMA bytes, MMA FLOPs, estimated cycles).

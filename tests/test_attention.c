@@ -242,7 +242,7 @@ static void test_scale(void) {
     tu_attention_simple(Q, K, V, o1, M, N, d, 0.5f, false);
     tu_attention_simple(Q, K, V, o2, M, N, d, 2.0f, false);
     float max_err = max_abs_error_fp16(o1, o2, M * d);
-    if (max_err > 0.001f) PASS();
+    if (isfinite(max_err) && max_err > 0.001f) PASS();
     else FAIL("same output for different scales (err=%.6f)", max_err);
     free(Q); free(K); free(V); free(o1); free(o2);
 }

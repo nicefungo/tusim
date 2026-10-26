@@ -1,0 +1,71 @@
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention: M=1 N=1 d=1 scale=0.500000 tile_m=1 tile_n=1 Q=2B K=2B KT=2B S=4B O=4B
+=================================================================
+==616350==ERROR: AddressSanitizer: stack-buffer-overflow on address 0xfffffbbb4b72 at pc 0xffffb0a6be04 bp 0xfffffbbb48b0 sp 0xfffffbbb4088
+WRITE of size 4 at 0xfffffbbb4b72 thread T0
+    #0 0xffffb0a6be00 in __interceptor_memcpy ../../../../src/libsanitizer/sanitizer_common/sanitizer_common_interceptors.inc:827
+    #1 0xaaaad0a1d9f0 in memcpy /usr/include/aarch64-linux-gnu/bits/string_fortified.h:29
+    #2 0xaaaad0a1d9f0 in tu_sram_read tu_cmodel/tu_sram.c:163
+    #3 0xaaaad0a3f0c8 in transpose_fp16_in_sram tu_cmodel/compute/attention_engine.c:57
+    #4 0xaaaad0a3f0c8 in tu_attention_execute tu_cmodel/compute/attention_engine.c:364
+    #5 0xaaaad0a10588 in run_case tests/test_attention_staging.c:46
+    #6 0xaaaad0a133d8 in main tests/test_attention_staging.c:148
+    #7 0xffffb01773fc in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+    #8 0xffffb01774d4 in __libc_start_main_impl ../csu/libc-start.c:392
+    #9 0xaaaad0a0f76c in _start (/home/zxy/.hermes/cache/scratch/tusim-20261025/baseline-final-harness-asan+0x9f76c)
+
+Address 0xfffffbbb4b72 is located in stack of thread T0 at offset 50 in frame
+    #0 0xaaaad0a3c60c in tu_attention_execute tu_cmodel/compute/attention_engine.c:222
+
+  This frame has 14 object(s):
+    [48, 50) 'val' (line 56) <== Memory access at offset 50 overflows this variable
+    [64, 66) 'h' (line 78)
+    [80, 84) 'zero' (line 347)
+    [96, 100) 'zero' (line 388)
+    [112, 116) 'fill' (line 420)
+    [128, 132) 'val' (line 76)
+    [144, 168) 'W_t' (line 369)
+    [208, 232) 'A_t' (line 375)
+    [272, 296) 'O_t' (line 381)
+    [336, 360) 'W_t' (line 491)
+    [400, 424) 'A_t' (line 497)
+    [464, 488) 'O_t' (line 503)
+    [528, 584) 'local_stats' (line 229)
+    [624, 704) 'sm_desc' (line 465)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow ../../../../src/libsanitizer/sanitizer_common/sanitizer_common_interceptors.inc:827 in __interceptor_memcpy
+Shadow bytes around the buggy address:
+  0x200fff776910: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x200fff776920: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x200fff776930: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x200fff776940: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x200fff776950: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x200fff776960: 00 00 00 00 00 00 00 00 f1 f1 f1 f1 f1 f1[02]f2
+  0x200fff776970: 02 f2 f8 f2 04 f2 04 f2 04 f2 00 00 00 f2 f2 f2
+  0x200fff776980: f2 f2 00 00 00 f2 f2 f2 f2 f2 00 00 00 f2 f2 f2
+  0x200fff776990: f2 f2 00 00 00 f2 f2 f2 f2 f2 00 00 00 f2 f2 f2
+  0x200fff7769a0: f2 f2 00 00 00 f2 f2 f2 f2 f2 00 00 00 00 00 00
+  0x200fff7769b0: 00 f2 f2 f2 f2 f2 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==616350==ABORTING

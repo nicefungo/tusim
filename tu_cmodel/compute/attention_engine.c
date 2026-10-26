@@ -22,8 +22,10 @@
  *   sram_w: K_tile (tile_n × head_dim × 2 bytes FP16)
  *           then V_tile (tile_n × head_dim × 2 bytes FP16) [overwrites K]
  *           also K^T_scratch for transposed K
- *   sram_o: S_tile (tile_m × tile_n × 4 bytes FP32)
- *           then O_tile (tile_m × head_dim × 4 bytes FP32) [reuses space]
+ *   sram_o: S/P scratch (tile_m × tile_n × 4 bytes), followed by
+ *           O_tile (tile_m × head_dim × 4 bytes), then FP32 mask scratch.
+ * S is packed forward to FP16 in its own region; O remains live and disjoint.
+ * Cross-KV normalization is not implemented; see the public fidelity limits.
  */
 
 #include "attention_engine.h"
@@ -54,31 +56,30 @@ static uint64_t transpose_fp16_in_sram(tu_sram_region_t *sram,
             uint32_t src_addr = src_off + (r * cols + c) * sizeof(fp16_t);
             uint32_t dst_addr = dst_off + (c * rows + r) * sizeof(fp16_t);
             fp16_t val;
-            stall += tu_sram_read(sram, src_addr, &val);
-            stall += tu_sram_write(sram, dst_addr, &val);
+            stall += tu_sram_read_bulk(sram, src_addr, &val, sizeof(val));
+            stall += tu_sram_write_bulk(sram, dst_addr, &val, sizeof(val));
         }
     }
     return stall;
 }
 
-/* Convert FP32 SRAM buffer to FP16 in-place (truncating lower half).
+/* Convert FP32 SRAM buffer to packed FP16 in-place.
  * Reads FP32 at offset, writes FP16 back starting at same offset.
  * elem_count: number of FP32 elements.
  * Returns stall cycles. */
 static uint64_t fp32_to_fp16_in_sram(tu_sram_region_t *sram,
                                       uint32_t offset, uint32_t elem_count) {
     uint64_t stall = 0;
-    /* Process in reverse to avoid overwriting unread data if shrinking.
-     * FP32 is 4 bytes, FP16 is 2 bytes — so output fits in place. */
-    for (uint32_t i = 1; i <= elem_count; i++) {
-        uint32_t idx = elem_count - i;
+    /* Shrinking must run forward: output [2*i, 2*i+2) cannot reach
+     * the next unread FP32 source at 4*(i+1). Reverse traversal can. */
+    for (uint32_t idx = 0; idx < elem_count; idx++) {
         uint32_t src_addr = offset + idx * sizeof(fp32_t);
         fp32_t val;
         stall += tu_sram_read(sram, src_addr, &val);
         fp16_t h = tu_fp32_to_fp16(val);
-        /* Write FP16 at same offset (overwrites the upper half) */
+        /* Explicit width avoids copying a four-byte SRAM word from h. */
         uint32_t dst_addr = offset + idx * sizeof(fp16_t);
-        stall += tu_sram_write(sram, dst_addr, &h);
+        stall += tu_sram_write_bulk(sram, dst_addr, &h, sizeof(h));
     }
     return stall;
 }
@@ -220,7 +221,7 @@ bool tu_attention_validate_desc(const tu_attention_desc_t *desc) {
 
 int tu_attention_execute(const tu_attention_desc_t *desc,
                          tu_attention_stats_t *stats) {
-    if (!desc || !desc->Q || !desc->K || !desc->V || !desc->output) {
+    if (!tu_attention_validate_desc(desc)) {
         TU_LOG_ERR(TU_COMP_CORE, "Attention: invalid descriptor");
         return -1;
     }
@@ -264,44 +265,34 @@ int tu_attention_execute(const tu_attention_desc_t *desc,
     uint32_t sram_o_cap = g_tu.rt_cfg.sram_o_size;
 
     /* Verify tiles fit in SRAM */
-    uint32_t q_tile_bytes = tile_m * aw * sizeof(fp16_t);
-    uint32_t k_tile_bytes = tile_n * aw * sizeof(fp16_t);
-    uint32_t kt_tile_bytes = aw * tile_n * sizeof(fp16_t);  /* K^T */
-    uint32_t s_tile_bytes = tile_m * tile_n * sizeof(fp32_t);
-    uint32_t o_tile_bytes = tile_m * aw * sizeof(fp32_t);
+    /* Compare element products before scaling/narrowing to byte offsets. */
+    uint64_t q_elements = (uint64_t)tile_m * aw;
+    uint64_t k_elements = (uint64_t)tile_n * aw;
+    uint64_t s_elements = (uint64_t)tile_m * tile_n;
+    if (q_elements > sram_a_cap / sizeof(fp16_t) ||
+        k_elements > sram_w_cap / (2 * sizeof(fp16_t)) ||
+        s_elements > sram_o_cap / sizeof(fp32_t) ||
+        q_elements > sram_o_cap / sizeof(fp32_t)) {
+        TU_LOG_ERR(TU_COMP_CORE, "Attention: tile element footprint exceeds SRAM");
+        return -1;
+    }
+    uint32_t q_tile_bytes = q_elements * sizeof(fp16_t);
+    uint32_t k_tile_bytes = k_elements * sizeof(fp16_t);
+    uint32_t kt_tile_bytes = k_tile_bytes;
+    uint32_t s_tile_bytes = s_elements * sizeof(fp32_t);
+    uint32_t o_tile_bytes = q_elements * sizeof(fp32_t);
 
-    if (q_tile_bytes > sram_a_cap) {
-        TU_LOG_ERR(TU_COMP_CORE,
-            "Attention: Q tile (%u B) exceeds A-buffer (%u B)",
-            q_tile_bytes, sram_a_cap);
-        return -1;
-    }
-    if (k_tile_bytes + kt_tile_bytes > sram_w_cap) {
-        TU_LOG_ERR(TU_COMP_CORE,
-            "Attention: K+K^T tiles (%u B) exceed W-buffer (%u B)",
-            k_tile_bytes + kt_tile_bytes, sram_w_cap);
-        return -1;
-    }
-    if (s_tile_bytes > sram_o_cap || o_tile_bytes > sram_o_cap) {
-        TU_LOG_ERR(TU_COMP_CORE,
-            "Attention: S/O tiles (%u/%u B) exceed O-buffer (%u B)",
-            s_tile_bytes, o_tile_bytes, sram_o_cap);
-        return -1;
-    }
 
     /* Compute O-buffer layout and verify total fits */
-    uint32_t p_fp16_bytes = tile_m * tile_n * sizeof(fp16_t);
-    uint32_t O_off_aligned = ((p_fp16_bytes + 3) / 4) * 4;
-    uint32_t o_end = O_off_aligned + o_tile_bytes;
-    uint32_t mask_off_aligned = o_end;
-    /* Worst-case: mask + S coexist, or O at O_off_aligned */
-    uint32_t max_o_usage = o_end;
-    uint32_t mask_with_s = mask_off_aligned + s_tile_bytes;
-    if (mask_with_s > max_o_usage) max_o_usage = mask_with_s;
+    /* O remains live while S is FP32, not only after packing P to FP16.
+     * Reserve disjoint score/probability, accumulator and mask regions. */
+    uint32_t O_off_aligned = s_tile_bytes;
+    uint64_t o_end = (uint64_t)O_off_aligned + o_tile_bytes;
+    uint64_t max_o_usage = o_end + s_tile_bytes;
     if (max_o_usage > sram_o_cap) {
         TU_LOG_ERR(TU_COMP_CORE,
-            "Attention: total O-buffer usage (%u B) exceeds capacity (%u B)",
-            max_o_usage, sram_o_cap);
+            "Attention: total O-buffer usage (%llu B) exceeds capacity (%u B)",
+            (unsigned long long)max_o_usage, sram_o_cap);
         return -1;
     }
 
@@ -312,9 +303,9 @@ int tu_attention_execute(const tu_attention_desc_t *desc,
     uint32_t V_off  = 0;                    /* sram_w: V tile (reuses K space) */
     uint32_t S_off  = 0;                    /* sram_o: S/P tile (FP32 scores → FP16 probs) */
 
-    /* O tile sits after P (FP16) in sram_o — must not overlap */
+    /* O follows the full FP32 S lifetime, not the smaller packed P. */
     uint32_t O_off  = O_off_aligned;
-    uint32_t mask_off = mask_off_aligned;
+    uint32_t mask_off = (uint32_t)o_end;
 
     TU_LOG_INFO(TU_COMP_CORE,
         "Attention: M=%u N=%u d=%u scale=%.6f tile_m=%u tile_n=%u "

@@ -1,5 +1,14 @@
 # Norm-After-Attention Pipeline Sweep
 
+> **2026-10-25: historical/unaccepted pipeline evidence.** Attention SRAM
+> staging was unsafe; see [attention-sram-staging.md](attention-sram-staging.md).
+> The harness also reads offset 0, which is S/P scratch, not the live FP32
+> attention output (even a single query tile needs the engine's O offset).
+> Comparing a standalone SRAM-stall return to mixed-domain attention counters
+> does not establish pipeline latency. The percentages and fusion advice below
+> are withdrawn pending an explicit output-layout interface, exact downstream
+> numerical oracle and compatible timing domain; preserved numbers are historical.
+
 **Date:** 2026-07-04
 **Question:** What fraction of transformer block latency does normalization (LayerNorm/RMSNorm) add after attention, across PE array sizes and head dimensions?
 **Hypothesis:** Norm overhead is small (< 5%) because attention is O(M×N×d) compute while norm is O(M×N) SRAM bandwidth. But norm is a fixed per-element cost that doesn't benefit from larger PE arrays — so overhead should increase with PE size.

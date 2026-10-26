@@ -4,6 +4,7 @@ __pycache__/
 build/
 
 # Test binaries
+test-attention-staging
 test-agen-tiling-plan
 test-agen-im2col-point
 test-cmodel

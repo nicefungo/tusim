@@ -1,0 +1,309 @@
+[
+  {
+    "label": "sanitized-build",
+    "command": [
+      "make",
+      "-j4",
+      "CFLAGS=-O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "c9f698bcc2dfd3b9e2b784f832ed9f642abf7f20cf94c8a12c7e5eb016f2ac4d"
+  },
+  {
+    "label": "sanitized-link",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-I.",
+      "-Itu_cmodel",
+      "tests/test_attention_staging.c",
+      "./libtucmodel.a",
+      "-lm",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/staging-asan"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "sanitized-matrix",
+    "command": [
+      "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/staging-asan"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "4e2e2d8bae0467bfc2d3bb31c14957d6bba67a5eba31d2d355cb2d81235c3e18"
+  },
+  {
+    "label": "sanitized-legacy-link",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-I.",
+      "-Itu_cmodel",
+      "tests/test_attention.c",
+      "./libtucmodel.a",
+      "-lm",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/attention-asan"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "sanitized-legacy",
+    "command": [
+      "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/attention-asan"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "1d5a41b1d611179222ee6419c63c0c7c4dc15da6558418189fcd77a3d1dc2ffd"
+  },
+  {
+    "label": "known-kv-defect",
+    "command": [
+      "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/staging-asan",
+      "--kv-probe"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/source",
+    "returncode": 1,
+    "expected": 1,
+    "log_sha256": "09c48eadb2d3afe37d3d41ea2cc1e5394c8839b89bbe4873d9e4a213d3ad2be6"
+  },
+  {
+    "label": "word-width-compile",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-Itu_cmodel",
+      "-c",
+      "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/source/tu_cmodel/compute/attention_engine.c",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/word-width/attention_engine.o"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "word-width-archive",
+    "command": [
+      "ar",
+      "rcs",
+      "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/word-width/libtucmodel.a",
+      "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/word-width/attention_engine.o"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "word-width-link",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-I.",
+      "-Itu_cmodel",
+      "tests/test_attention_staging.c",
+      "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/word-width/libtucmodel.a",
+      "-lm",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/word-width/gate"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "word-width-rejection",
+    "command": [
+      "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/word-width/gate",
+      "--smoke"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/source",
+    "returncode": 1,
+    "expected": 1,
+    "log_sha256": "fa6450067d0bec0a432b24b39f3ff8576fe2ca36e78c87ef7284e5ba82158493"
+  },
+  {
+    "label": "reverse-pack-compile",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-Itu_cmodel",
+      "-c",
+      "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/source/tu_cmodel/compute/attention_engine.c",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/reverse-pack/attention_engine.o"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "reverse-pack-archive",
+    "command": [
+      "ar",
+      "rcs",
+      "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/reverse-pack/libtucmodel.a",
+      "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/reverse-pack/attention_engine.o"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "reverse-pack-link",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-I.",
+      "-Itu_cmodel",
+      "tests/test_attention_staging.c",
+      "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/reverse-pack/libtucmodel.a",
+      "-lm",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/reverse-pack/gate"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "reverse-pack-rejection",
+    "command": [
+      "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/reverse-pack/gate"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/source",
+    "returncode": 1,
+    "expected": 1,
+    "log_sha256": "ac34cbf3eec04b4efda3c31c58e8e1ba041a944198274bb83651ebef37583fad"
+  },
+  {
+    "label": "packed-p-layout-compile",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-Itu_cmodel",
+      "-c",
+      "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/source/tu_cmodel/compute/attention_engine.c",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/packed-p-layout/attention_engine.o"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "packed-p-layout-archive",
+    "command": [
+      "ar",
+      "rcs",
+      "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/packed-p-layout/libtucmodel.a",
+      "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/packed-p-layout/attention_engine.o"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "packed-p-layout-link",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-I.",
+      "-Itu_cmodel",
+      "tests/test_attention_staging.c",
+      "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/packed-p-layout/libtucmodel.a",
+      "-lm",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/packed-p-layout/gate"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "packed-p-layout-rejection",
+    "command": [
+      "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/packed-p-layout/gate"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/source",
+    "returncode": 1,
+    "expected": 1,
+    "log_sha256": "b4cfd0e3fa64382dbb5333abd28b595ad1bb61eaeb358148c728e7306911f277"
+  }
+]

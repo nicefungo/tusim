@@ -1,0 +1,71 @@
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention: M=1 N=1 d=1 scale=0.500000 tile_m=1 tile_n=1 Q=2B K=2B KT=2B S=4B O=4B
+=================================================================
+==615575==ERROR: AddressSanitizer: stack-buffer-overflow on address 0xffffc87b37d2 at pc 0xffffa82fbe04 bp 0xffffc87b3520 sp 0xffffc87b2cf8
+WRITE of size 4 at 0xffffc87b37d2 thread T0
+    #0 0xffffa82fbe00 in __interceptor_memcpy ../../../../src/libsanitizer/sanitizer_common/sanitizer_common_interceptors.inc:827
+    #1 0xaaaac237c3b0 in memcpy /usr/include/aarch64-linux-gnu/bits/string_fortified.h:29
+    #2 0xaaaac237c3b0 in tu_sram_read tu_cmodel/tu_sram.c:163
+    #3 0xaaaac239e55c in transpose_fp16_in_sram /home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/source/tu_cmodel/compute/attention_engine.c:59
+    #4 0xaaaac239e55c in tu_attention_execute /home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/source/tu_cmodel/compute/attention_engine.c:355
+    #5 0xaaaac236ff48 in run_case tests/test_attention_staging.c:46
+    #6 0xaaaac2372d98 in main tests/test_attention_staging.c:148
+    #7 0xffffa7a073fc in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+    #8 0xffffa7a074d4 in __libc_start_main_impl ../csu/libc-start.c:392
+    #9 0xaaaac236f12c in _start (/home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/word-width/gate+0x9f12c)
+
+Address 0xffffc87b37d2 is located in stack of thread T0 at offset 50 in frame
+    #0 0xaaaac239bfcc in tu_attention_execute /home/zxy/.hermes/cache/scratch/tusim-20261025/verified-staging-final/source/tu_cmodel/compute/attention_engine.c:223
+
+  This frame has 14 object(s):
+    [48, 50) 'val' (line 58) <== Memory access at offset 50 overflows this variable
+    [64, 66) 'h' (line 79)
+    [80, 84) 'zero' (line 338)
+    [96, 100) 'zero' (line 379)
+    [112, 116) 'fill' (line 411)
+    [128, 132) 'val' (line 77)
+    [144, 168) 'W_t' (line 360)
+    [208, 232) 'A_t' (line 366)
+    [272, 296) 'O_t' (line 372)
+    [336, 360) 'W_t' (line 482)
+    [400, 424) 'A_t' (line 488)
+    [464, 488) 'O_t' (line 494)
+    [528, 584) 'local_stats' (line 230)
+    [624, 704) 'sm_desc' (line 456)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow ../../../../src/libsanitizer/sanitizer_common/sanitizer_common_interceptors.inc:827 in __interceptor_memcpy
+Shadow bytes around the buggy address:
+  0x200ff90f66a0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x200ff90f66b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x200ff90f66c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x200ff90f66d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x200ff90f66e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x200ff90f66f0: 00 00 00 00 f1 f1 f1 f1 f1 f1[02]f2 02 f2 f8 f2
+  0x200ff90f6700: 04 f2 04 f2 04 f2 00 00 00 f2 f2 f2 f2 f2 00 00
+  0x200ff90f6710: 00 f2 f2 f2 f2 f2 00 00 00 f2 f2 f2 f2 f2 00 00
+  0x200ff90f6720: 00 f2 f2 f2 f2 f2 00 00 00 f2 f2 f2 f2 f2 00 00
+  0x200ff90f6730: 00 f2 f2 f2 f2 f2 00 00 00 00 00 00 00 f2 f2 f2
+  0x200ff90f6740: f2 f2 00 00 00 00 00 00 00 00 00 00 f3 f3 f3 f3
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==615575==ABORTING
