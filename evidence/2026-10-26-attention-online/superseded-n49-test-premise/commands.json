@@ -1,0 +1,131 @@
+[
+  {
+    "label": "sanitized-build",
+    "command": [
+      "make",
+      "-j4",
+      "CFLAGS=-O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-final/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "c9f698bcc2dfd3b9e2b784f832ed9f642abf7f20cf94c8a12c7e5eb016f2ac4d"
+  },
+  {
+    "label": "sanitized-link",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-I.",
+      "-Itu_cmodel",
+      "tests/test_attention_staging.c",
+      "./libtucmodel.a",
+      "-lm",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-final/staging-asan"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-final/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "sanitized-matrix",
+    "command": [
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-final/staging-asan"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-final/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "f3c97ee21c1ba1e73e39ec72a40b485d47a02f56c3f14fc965304108e4fd487c"
+  },
+  {
+    "label": "sanitized-legacy-link",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-I.",
+      "-Itu_cmodel",
+      "tests/test_attention.c",
+      "./libtucmodel.a",
+      "-lm",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-final/attention-asan"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-final/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "sanitized-legacy",
+    "command": [
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-final/attention-asan"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-final/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "1d5a41b1d611179222ee6419c63c0c7c4dc15da6558418189fcd77a3d1dc2ffd"
+  },
+  {
+    "label": "kv-regression",
+    "command": [
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-final/staging-asan",
+      "--kv-probe"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-final/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "2c4591b7217650a26a508396712fd24a655a7cfa637115ec2442407d03a53502"
+  },
+  {
+    "label": "sanitized-kv-link",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-Werror",
+      "-I.",
+      "-Itu_cmodel",
+      "tests/test_attention_kv.c",
+      "./libtucmodel.a",
+      "-lm",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-final/kv-asan"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-final/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "sanitized-kv-matrix",
+    "command": [
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-final/kv-asan"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-final/source",
+    "returncode": 1,
+    "expected": 0,
+    "log_sha256": "71765bd6adce3c7f1d62d337b1066ca1d0f1ad65f29fce69489a4a8b309114ad"
+  }
+]

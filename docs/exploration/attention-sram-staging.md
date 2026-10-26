@@ -1,5 +1,13 @@
 # Attention SRAM staging: exact element widths and live scratch
 
+**2026-10-26 follow-up:** the cross-KV defect below is corrected by
+[`attention-kv-normalization.md`](attention-kv-normalization.md). The historical
+exit-1 `--kv-probe` observation applies to staging checkpoint `d2a2194`; the
+current command is a passing exact-0.25 regression. The current Python runner
+also verifies cross-KV behavior and eight mutants. Original 2026-10-25 evidence
+and its then-unresolved scope remain unchanged below. Auto-tiler feasibility is
+now a separately reproduced READY item, not fixed by staging or normalization.
+
 **Audit:** 2026-10-25. **Mode:** pre-spec exploration; one new question after the prior backlog had no READY item. **Baseline:** `025a947` (full OID in evidence). **Status:** staging correction DONE; cross-KV normalization remains a separate READY correctness item.
 
 ## Question and reproduced causes

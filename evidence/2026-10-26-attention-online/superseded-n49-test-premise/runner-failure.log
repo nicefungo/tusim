@@ -1,0 +1,9 @@
+Traceback (most recent call last):
+  File "/home/zxy/Workplace/projects/onnx-compiler/tests/test_attention_staging.py", line 187, in <module>
+    main()
+    ~~~~^^
+  File "/home/zxy/Workplace/projects/onnx-compiler/tests/test_attention_staging.py", line 95, in main
+    kv_log = run("sanitized-kv-matrix", [str(kv_binary)])
+  File "/home/zxy/Workplace/projects/onnx-compiler/tests/test_attention_staging.py", line 67, in run
+    raise RuntimeError(f"{label}: expected {expected}, got {result.returncode}")
+RuntimeError: sanitized-kv-matrix: expected 0, got 1

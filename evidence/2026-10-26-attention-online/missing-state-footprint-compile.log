@@ -1,0 +1,4 @@
+/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source/tu_cmodel/compute/attention_engine.c: In function ‘tu_attention_execute’:
+/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source/tu_cmodel/compute/attention_engine.c:329:14: warning: unused variable ‘state_bytes’ [-Wunused-variable]
+  329 |     uint64_t state_bytes = streaming ? (uint64_t)tile_m * 2 * sizeof(float) : 0;
+      |              ^~~~~~~~~~~

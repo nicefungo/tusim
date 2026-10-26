@@ -1,0 +1,22 @@
+{
+  "status": "PASS",
+  "cases": 720,
+  "checks": 67034,
+  "kv_cases": 2565,
+  "kv_checks": 457309,
+  "mutants_rejected": [
+    "word-width",
+    "reverse-pack",
+    "packed-p-layout"
+  ],
+  "kv_mutants_rejected": [
+    "lost-old-normalizer",
+    "missing-output-rescale",
+    "missing-final-division",
+    "custom-mask-pitch",
+    "missing-state-footprint"
+  ],
+  "former_kv_defect": "0.25 exactly; corrected",
+  "auto_tiler_known_defect": "auto 16x512 rejects; explicit 8x512 succeeds",
+  "commands": 44
+}

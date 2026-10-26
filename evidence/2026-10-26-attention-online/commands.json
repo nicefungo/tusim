@@ -1,0 +1,761 @@
+[
+  {
+    "label": "sanitized-build",
+    "command": [
+      "make",
+      "-j4",
+      "CFLAGS=-O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "c9f698bcc2dfd3b9e2b784f832ed9f642abf7f20cf94c8a12c7e5eb016f2ac4d"
+  },
+  {
+    "label": "sanitized-link",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-I.",
+      "-Itu_cmodel",
+      "tests/test_attention_staging.c",
+      "./libtucmodel.a",
+      "-lm",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/staging-asan"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "sanitized-matrix",
+    "command": [
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/staging-asan"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "ba840f188b75e037e56e0deed01c16adc75c81f5d6fb47fccbe9162e0eae43aa"
+  },
+  {
+    "label": "sanitized-legacy-link",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-I.",
+      "-Itu_cmodel",
+      "tests/test_attention.c",
+      "./libtucmodel.a",
+      "-lm",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/attention-asan"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "sanitized-legacy",
+    "command": [
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/attention-asan"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "1d5a41b1d611179222ee6419c63c0c7c4dc15da6558418189fcd77a3d1dc2ffd"
+  },
+  {
+    "label": "kv-regression",
+    "command": [
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/staging-asan",
+      "--kv-probe"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "2c4591b7217650a26a508396712fd24a655a7cfa637115ec2442407d03a53502"
+  },
+  {
+    "label": "sanitized-kv-link",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-Werror",
+      "-I.",
+      "-Itu_cmodel",
+      "tests/test_attention_kv.c",
+      "./libtucmodel.a",
+      "-lm",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/kv-asan"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "sanitized-kv-matrix",
+    "command": [
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/kv-asan"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "c4a95ce85f69e900629c2e9d6e673a73d62218a22a2226d64e561f34f4ad21be"
+  },
+  {
+    "label": "sanitized-query-reuse-sweep",
+    "command": [
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/kv-asan",
+      "--reuse-sweep"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "048f4cb475a8908715c875c18d0eb12354c6c5e04600c07d3a1d92e01e54ab6c"
+  },
+  {
+    "label": "auto-tiler-known-defect",
+    "command": [
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/kv-asan",
+      "--auto-probe"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 1,
+    "expected": 1,
+    "log_sha256": "cfae177f64417d79fbf3b9024851d8afd2bc4bebebbf2740021816f57bcb47f8"
+  },
+  {
+    "label": "sanitized-alloc-link",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-Werror",
+      "-DTU_ATTN_TEST_ALLOC",
+      "-I.",
+      "-Itu_cmodel",
+      "tests/test_attention_kv.c",
+      "./libtucmodel.a",
+      "-lm",
+      "-Wl,--wrap=malloc",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/kv-alloc-asan"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "sanitized-alloc-failures",
+    "command": [
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/kv-alloc-asan",
+      "--alloc-probe"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "92246a5213bf6b7530ae5802d3dda5a6588414a77de9df0ad189a74117592c22"
+  },
+  {
+    "label": "word-width-compile",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-Itu_cmodel",
+      "-c",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source/tu_cmodel/compute/attention_engine.c",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/word-width/attention_engine.o"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "word-width-archive",
+    "command": [
+      "ar",
+      "rcs",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/word-width/libtucmodel.a",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/word-width/attention_engine.o"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "word-width-link",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-I.",
+      "-Itu_cmodel",
+      "tests/test_attention_staging.c",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/word-width/libtucmodel.a",
+      "-lm",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/word-width/gate"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "word-width-rejection",
+    "command": [
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/word-width/gate",
+      "--smoke"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 1,
+    "expected": 1,
+    "log_sha256": "8703fc91e5ec48026214082dd14f84466d70a313244c79c532bc11223bfedff6"
+  },
+  {
+    "label": "reverse-pack-compile",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-Itu_cmodel",
+      "-c",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source/tu_cmodel/compute/attention_engine.c",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/reverse-pack/attention_engine.o"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "reverse-pack-archive",
+    "command": [
+      "ar",
+      "rcs",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/reverse-pack/libtucmodel.a",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/reverse-pack/attention_engine.o"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "reverse-pack-link",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-I.",
+      "-Itu_cmodel",
+      "tests/test_attention_staging.c",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/reverse-pack/libtucmodel.a",
+      "-lm",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/reverse-pack/gate"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "reverse-pack-rejection",
+    "command": [
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/reverse-pack/gate"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 1,
+    "expected": 1,
+    "log_sha256": "0ad1498030bb0ec368e3a26f34f50c52c5879bb1a5ca2b0f068711edfb7b7e8b"
+  },
+  {
+    "label": "packed-p-layout-compile",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-Itu_cmodel",
+      "-c",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source/tu_cmodel/compute/attention_engine.c",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/packed-p-layout/attention_engine.o"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "packed-p-layout-archive",
+    "command": [
+      "ar",
+      "rcs",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/packed-p-layout/libtucmodel.a",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/packed-p-layout/attention_engine.o"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "packed-p-layout-link",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-I.",
+      "-Itu_cmodel",
+      "tests/test_attention_staging.c",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/packed-p-layout/libtucmodel.a",
+      "-lm",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/packed-p-layout/gate"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "packed-p-layout-rejection",
+    "command": [
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/packed-p-layout/gate"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 1,
+    "expected": 1,
+    "log_sha256": "5038bcaa28b6a75a96cca6ce2df34069e585f9bb51cc7b0d7b869bfbacb89b1c"
+  },
+  {
+    "label": "lost-old-normalizer-compile",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-Itu_cmodel",
+      "-c",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source/tu_cmodel/compute/attention_engine.c",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/lost-old-normalizer/attention_engine.o"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "lost-old-normalizer-archive",
+    "command": [
+      "ar",
+      "rcs",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/lost-old-normalizer/libtucmodel.a",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/lost-old-normalizer/attention_engine.o"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "lost-old-normalizer-link",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-I.",
+      "-Itu_cmodel",
+      "tests/test_attention_kv.c",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/lost-old-normalizer/libtucmodel.a",
+      "-lm",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/lost-old-normalizer/gate"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "lost-old-normalizer-rejection",
+    "command": [
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/lost-old-normalizer/gate"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 1,
+    "expected": 1,
+    "log_sha256": "b561c79d351294b4fc7c664e2b5c59e5638491211bfd22925a19718e04029b72"
+  },
+  {
+    "label": "missing-output-rescale-compile",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-Itu_cmodel",
+      "-c",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source/tu_cmodel/compute/attention_engine.c",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/missing-output-rescale/attention_engine.o"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "missing-output-rescale-archive",
+    "command": [
+      "ar",
+      "rcs",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/missing-output-rescale/libtucmodel.a",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/missing-output-rescale/attention_engine.o"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "missing-output-rescale-link",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-I.",
+      "-Itu_cmodel",
+      "tests/test_attention_kv.c",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/missing-output-rescale/libtucmodel.a",
+      "-lm",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/missing-output-rescale/gate"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "missing-output-rescale-rejection",
+    "command": [
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/missing-output-rescale/gate"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 1,
+    "expected": 1,
+    "log_sha256": "b838b6b8b0080e80744181e542f03901ae3198215cd1e0b21cb1cb518eea8d35"
+  },
+  {
+    "label": "missing-final-division-compile",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-Itu_cmodel",
+      "-c",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source/tu_cmodel/compute/attention_engine.c",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/missing-final-division/attention_engine.o"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "missing-final-division-archive",
+    "command": [
+      "ar",
+      "rcs",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/missing-final-division/libtucmodel.a",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/missing-final-division/attention_engine.o"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "missing-final-division-link",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-I.",
+      "-Itu_cmodel",
+      "tests/test_attention_kv.c",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/missing-final-division/libtucmodel.a",
+      "-lm",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/missing-final-division/gate"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "missing-final-division-rejection",
+    "command": [
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/missing-final-division/gate"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 1,
+    "expected": 1,
+    "log_sha256": "f7eaa391222fa0e3926d6dd086a25722f5d89523af74089a0bdfb309b9a1a573"
+  },
+  {
+    "label": "custom-mask-pitch-compile",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-Itu_cmodel",
+      "-c",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source/tu_cmodel/compute/attention_engine.c",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/custom-mask-pitch/attention_engine.o"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "custom-mask-pitch-archive",
+    "command": [
+      "ar",
+      "rcs",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/custom-mask-pitch/libtucmodel.a",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/custom-mask-pitch/attention_engine.o"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "custom-mask-pitch-link",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-I.",
+      "-Itu_cmodel",
+      "tests/test_attention_kv.c",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/custom-mask-pitch/libtucmodel.a",
+      "-lm",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/custom-mask-pitch/gate"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "custom-mask-pitch-rejection",
+    "command": [
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/custom-mask-pitch/gate"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 1,
+    "expected": 1,
+    "log_sha256": "a51508cd8530c616f0c374a0c75b397100390e906332fbdce3212a70e0a0f62b"
+  },
+  {
+    "label": "missing-state-footprint-compile",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-Itu_cmodel",
+      "-c",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source/tu_cmodel/compute/attention_engine.c",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/missing-state-footprint/attention_engine.o"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "7aa0d38d211f8aaceefa697afd19a47075874b805016ba681db5cd9df006d465"
+  },
+  {
+    "label": "missing-state-footprint-archive",
+    "command": [
+      "ar",
+      "rcs",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/missing-state-footprint/libtucmodel.a",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/missing-state-footprint/attention_engine.o"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "missing-state-footprint-link",
+    "command": [
+      "/usr/bin/cc",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-fPIC",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-I.",
+      "-Itu_cmodel",
+      "tests/test_attention_kv.c",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/missing-state-footprint/libtucmodel.a",
+      "-lm",
+      "-o",
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/missing-state-footprint/gate"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 0,
+    "expected": 0,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "missing-state-footprint-rejection",
+    "command": [
+      "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/missing-state-footprint/gate"
+    ],
+    "cwd": "/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source",
+    "returncode": 1,
+    "expected": 1,
+    "log_sha256": "51222e6280f53f8003c93b618e16b2f3d3d70d573f5531852cc94d83aa8d64fa"
+  }
+]

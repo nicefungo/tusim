@@ -1,0 +1,9 @@
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention: M=1 N=4 d=1 scale=0.500000 tile_m=1 tile_n=2 Q=2B K=4B KT=4B S=8B O=4B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=20 B, MMA tiles=4, FLOPs=16, cycles=78 (compute=74, dma=4), util=0.95
+FAIL line 70: isfinite(actual) && error <= 0.002
+FAIL line 74: o[1+(h*m+r)*d+a] == 0x3400
+ROW,1,4,1,1,1,0,1,0,20,74,4,0.25
+KV_PROBE first_output=0.5 expected=0.25 tile_n=2
+attention staging: cases=1 checks=8 failures=2 max_abs_error=0.25

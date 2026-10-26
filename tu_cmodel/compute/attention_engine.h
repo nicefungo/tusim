@@ -37,17 +37,19 @@
  *     - O_tile:  tile_m × head_dim × 4 bytes  (FP32, accum)
  *     - scratch: tile_m × 4 bytes (max), tile_m × 4 bytes (sum)
  *
- *   Executable fidelity limits (2026-10-25): FP16 K transpose and FP32-to-FP16
- *   probability packing use explicit-sized SRAM accesses. FP32 S, FP32 O and
- *   mask scratch are disjoint: O-buffer admission reserves 2*S_bytes+O_bytes.
- *   Single-KV-tile, no-mask/causal results are independently gated; multiple
- *   query tiles work. Cross-KV online max/sum/rescaling is NOT implemented:
- *   summing separately normalized KV tiles is not global attention. Custom
- *   multi-row mask slicing, auto-tiler feasibility and allocation failures
- *   require separate audits. The description above is the intended architecture,
- *   not evidence that these missing paths are correct or timing-calibrated.
- *   Execution uses the active global plugin (tu_set_dataflow), not desc.dataflow.
- *   Mixed SRAM-stall/MMA counters are not calibrated end-to-end latency.
+ *   Executable fidelity (2026-10-26): explicit-sized FP16 SRAM transfers,
+ *   forward packing and disjoint FP32 S/O/mask scratch. Runtime tile_n >= N
+ *   keeps whole-row normalized FP16 P; tile_n < N uses streaming FP32 max/sum,
+ *   unnormalized FP16 exp weights, FP32 O rescaling and final O/sum division.
+ *   Admission is 2*S_bytes+O_bytes, plus 8*tile_m bytes for streaming row state.
+ *   expf and per-tile double sum are host operations, not an exp-unit model.
+ *   Custom masks use full-N source pitch; -inf contributes zero and a fully
+ *   masked custom row returns zero. NaN/+inf scores and nonfinite output fail.
+ *   Whole-row no-mask/causal numerical defaults are preserved by regression.
+ *   Auto-tiler feasibility, large tensor offsets and full allocation-failure
+ *   coverage still require separate audits. Execution uses active global
+ *   tu_set_dataflow, not desc.dataflow. Mixed SRAM-stall/MMA counters are not
+ *   calibrated end-to-end latency; exp/division/control timing is unmodeled.
  *
  *   Bandwidth awareness:
  *     All operations go through SRAM with bank conflict and
@@ -126,10 +128,12 @@ typedef struct {
 /*
  * Execute FlashAttention: O = softmax(Q × K^T * scale + mask) × V
  *
- * Single-KV-tile execution is numerically verified; see fidelity limits above
- * before using multiple KV tiles or custom masks. Configured tile footprints
- * reject before movement when disjoint scratch cannot fit; this can reject
- * formerly admitted overlapping layouts. No unsafe-layout compatibility mode.
+ * Whole-row and streaming KV normalization are runtime tile-size alternatives;
+ * see the precision and timing limits above. Configured footprints and invalid
+ * descriptors reject before movement/stats mutation. Runtime arithmetic or
+ * allocation errors return -1 but do not roll back earlier output tiles or
+ * SRAM/counters. Host buffers must match descriptor extents; no bounds metadata.
+ * No independently normalized tile-sum or overlapping-scratch compatibility.
  * Computes multi-head attention with tiled execution to fit in SRAM.
  * All data movement and computation is tracked via global counters
  * (DMA bytes, MMA FLOPs, estimated cycles).

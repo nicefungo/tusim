@@ -1,6 +1,6 @@
 /* Attention FP16 staging: public single-KV-tile execution, independent FP64
  * softmax/output oracle, exact uniform controls, and admission immutability.
- * --kv-probe is an intentionally failing diagnostic, NOT an acceptance gate.
+ * --kv-probe is the former RED counterexample, now a passing regression.
  */
 #include "tu_cmodel/tu_cmodel.h"
 #include "tu_cmodel/compute/attention_engine.h"
@@ -13,6 +13,7 @@
 
 static unsigned cases, checks, failures;
 static double max_error;
+static uint64_t raw_digest = UINT64_C(14695981039346656037);
 static int kv_probe;
 #define CHECK(c) do { checks++; if (!(c)) { \
     if (failures < 12) fprintf(stderr, "FAIL line %d: %s\n", __LINE__, #c); \
@@ -63,6 +64,8 @@ static void run_case(unsigned m, unsigned n, unsigned d, unsigned tm,
             for (unsigned j = 0; j < n; j++)
                 expected += probs[j] / sum * tu_fp16_to_fp32(v[(h*n+j)*d+a]);
             float actual = tu_fp16_to_fp32(o[1+(h*m+r)*d+a]);
+            raw_digest ^= o[1+(h*m+r)*d+a];
+            raw_digest *= UINT64_C(1099511628211);
             double error = fabs(actual - expected);
             /* Inputs/V are bounded by 11/16, N<=33. FP16 probability plus
              * output rounding explains <=0.002 absolute error; this is not
@@ -144,6 +147,7 @@ static void admission(void) {
 }
 
 int main(int argc, char **argv) {
+    setvbuf(stdout,NULL,_IOLBF,0);
     if (argc==2 && !strcmp(argv[1],"--smoke")) {
         run_case(1,1,1,1,1,TU_DATAFLOW_MODE_WS,1,0);
     } else if (argc==2 && !strcmp(argv[1],"--kv-probe")) {
@@ -167,5 +171,6 @@ int main(int argc, char **argv) {
     }
     printf("attention staging: cases=%u checks=%u failures=%u max_abs_error=%.9g\n",
            cases,checks,failures,max_error);
+    printf("raw_output_digest=%016llx\n",(unsigned long long)raw_digest);
     return failures ? 1 : 0;
 }

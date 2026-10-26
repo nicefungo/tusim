@@ -1,0 +1,26 @@
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention: M=5 N=4 d=1 scale=0.500000 tile_m=3 tile_n=2 Q=6B K=4B KT=4B S=24B O=12B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=208 B, MMA tiles=32, FLOPs=320, cycles=1232 (compute=1068, dma=164), util=0.87
+FAIL 76: isfinite(got) && e<=.002
+FAIL 79: o[1+(h*m+r)*d+a]==0x3400
+FAIL 76: isfinite(got) && e<=.002
+FAIL 79: o[1+(h*m+r)*d+a]==0x3400
+FAIL 76: isfinite(got) && e<=.002
+FAIL 79: o[1+(h*m+r)*d+a]==0x3400
+FAIL 76: isfinite(got) && e<=.002
+FAIL 79: o[1+(h*m+r)*d+a]==0x3400
+FAIL 76: isfinite(got) && e<=.002
+FAIL 79: o[1+(h*m+r)*d+a]==0x3400
+FAIL 76: isfinite(got) && e<=.002
+FAIL 79: o[1+(h*m+r)*d+a]==0x3400
+FAIL 76: isfinite(got) && e<=.002
+FAIL 79: o[1+(h*m+r)*d+a]==0x3400
+FAIL 76: isfinite(got) && e<=.002
+FAIL 79: o[1+(h*m+r)*d+a]==0x3400
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention: M=5 N=4 d=1 scale=0.500000 tile_m=3 tile_n=4 Q=6B K=8B KT=8B S=48B O=12B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=208 B, MMA tiles=16, FLOPs=320, cycles=1100 (compute=960, dma=140), util=0.87
+KV_ROW,4,1,3,2,0,0,0,208,1068,164,0.25
+attention KV: cases=1 checks=68 failures=60 max_error=0.25 max_partition_error=0.25

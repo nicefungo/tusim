@@ -10,8 +10,10 @@
  *       S = Q_tile × K_tile^T          (MMA, FP16→FP32)
  *       S = S * scale                   (elementwise)
  *       S = S + mask                    (elementwise, if masked)
- *       P = softmax(S)                  (online rescale)
- *       O_tile += P × V_tile            (MMA, FP16→FP32)
+ *       Whole row: P = softmax(S)
+ *       Streaming: update max/sum, P = exp(S-new_max), rescale O_tile
+ *       O_tile += FP16(P) × V_tile      (MMA, FP16→FP32)
+ *     Streaming: O_tile /= final_sum
  *     O_tile → host output (FP16)
  *
  * Uses the pluggable dataflow system for MMA, elementwise pipeline
@@ -25,7 +27,8 @@
  *   sram_o: S/P scratch (tile_m × tile_n × 4 bytes), followed by
  *           O_tile (tile_m × head_dim × 4 bytes), then FP32 mask scratch.
  * S is packed forward to FP16 in its own region; O remains live and disjoint.
- * Cross-KV normalization is not implemented; see the public fidelity limits.
+ * Multi-KV execution retains FP32 row max/sum after mask scratch, rescales
+ * the unnormalized FP32 accumulator before each P*V and divides at the end.
  */
 
 #include "attention_engine.h"
@@ -84,34 +87,64 @@ static uint64_t fp32_to_fp16_in_sram(tu_sram_region_t *sram,
     return stall;
 }
 
-/* Build a causal mask in host memory for a Q_tile × K_tile block.
- * mask[i][j] = 0.0 if j <= i+q_start, else mask_fill.
- * The caller must free the returned buffer. */
-static float *build_causal_mask(uint32_t q_start, uint32_t q_count,
-                                 uint32_t kv_start, uint32_t kv_count,
-                                 float mask_fill) {
-    uint32_t total = q_count * kv_count;
-    float *mask = (float *)calloc(total, sizeof(float));
-    if (!mask) return NULL;
-    for (uint32_t i = 0; i < q_count; i++) {
-        for (uint32_t j = 0; j < kv_count; j++) {
-            if (j + kv_start > i + q_start) {
-                mask[i * kv_count + j] = mask_fill;
+/* Per-row streaming recurrence: m'=max(m,max(S)), alpha=exp(m-m'),
+ * p=exp(S-m'), l'=alpha*l+sum(p), O <- alpha*O before FP16(p)*V.
+ * FP32 m/l/O live in SRAM; expf is host FP32. The tile sum uses double,
+ * rounded to FP32 at the state update; final division is FP32. Only SRAM
+ * stalls are counted here, not a fabricated exp/divide physical latency.
+ * Whole-row custom masks normalize P directly without persistent row state.
+ * -inf contributes zero; entirely masked rows return zero; NaN/+inf fails.
+ */
+static bool normalize_attention_tile(uint32_t rows, uint32_t cols, uint32_t dim,
+                                    uint32_t score_off, uint32_t output_off,
+                                    uint32_t max_off, uint32_t sum_off,
+                                    bool streaming, uint64_t *stall) {
+    tu_sram_region_t *s = &g_tu.sram_o;
+    for (uint32_t r = 0; r < rows; r++) {
+        float old_max = -INFINITY, old_sum = 0.0f, hi = -INFINITY;
+        if (streaming) {
+            *stall += tu_sram_read(s, max_off + r * 4, &old_max);
+            *stall += tu_sram_read(s, sum_off + r * 4, &old_sum);
+            hi = old_max;
+        }
+        for (uint32_t j = 0; j < cols; j++) {
+            float x;
+            *stall += tu_sram_read(s, score_off + (r * cols + j) * 4, &x);
+            if (isnan(x) || x == INFINITY) return false;
+            hi = fmaxf(hi, x);
+        }
+        float alpha = old_sum == 0.0f ? 0.0f : expf(old_max - hi);
+        double tile_sum = 0.0;
+        for (uint32_t j = 0; j < cols; j++) {
+            float x;
+            uint32_t addr = score_off + (r * cols + j) * 4;
+            *stall += tu_sram_read(s, addr, &x);
+            float p = hi == -INFINITY || x - hi < -87.0f ? 0.0f : expf(x - hi);
+            tile_sum += (double)p;
+            *stall += tu_sram_write(s, addr, &p);
+        }
+        if (streaming) {
+            float sum = alpha * old_sum + (float)tile_sum;
+            *stall += tu_sram_write(s, max_off + r * 4, &hi);
+            *stall += tu_sram_write(s, sum_off + r * 4, &sum);
+            for (uint32_t a = 0; a < dim; a++) {
+                float out;
+                uint32_t addr = output_off + (r * dim + a) * 4;
+                *stall += tu_sram_read(s, addr, &out);
+                out *= alpha;
+                *stall += tu_sram_write(s, addr, &out);
+            }
+        } else {
+            for (uint32_t j = 0; j < cols; j++) {
+                float p;
+                uint32_t addr = score_off + (r * cols + j) * 4;
+                *stall += tu_sram_read(s, addr, &p);
+                p = tile_sum == 0.0 ? 0.0f : (float)((double)p / tile_sum);
+                *stall += tu_sram_write(s, addr, &p);
             }
         }
     }
-    return mask;
-}
-
-/* Write a FP32 host buffer into SRAM as FP32.
- * Used for loading masks into SRAM. Returns stall cycles. */
-static uint64_t write_fp32_to_sram(tu_sram_region_t *sram, uint32_t offset,
-                                    const float *host, uint32_t count) {
-    uint64_t stall = 0;
-    for (uint32_t i = 0; i < count; i++) {
-        stall += tu_sram_write(sram, offset + i * sizeof(float), &host[i]);
-    }
-    return stall;
+    return true;
 }
 
 /* ── Auto-tiling ──────────────────────────────────────────────── */
@@ -200,10 +233,14 @@ bool tu_attention_validate_desc(const tu_attention_desc_t *desc) {
         TU_LOG_ERR(TU_COMP_CORE, "Attention: zero batch_size or num_heads");
         return false;
     }
-    if (desc->softmax_scale < 0.0f) {
-        TU_LOG_ERR(TU_COMP_CORE, "Attention: negative softmax_scale");
+    if (!isfinite(desc->softmax_scale) || desc->softmax_scale < 0.0f) {
+        TU_LOG_ERR(TU_COMP_CORE, "Attention: nonfinite or negative softmax_scale");
         return false;
     }
+    if (desc->mask_type < TU_ATTN_MASK_NONE || desc->mask_type > TU_ATTN_MASK_CUSTOM ||
+        (desc->mask_type == TU_ATTN_MASK_CUSTOM && !desc->mask) ||
+        (desc->mask_type == TU_ATTN_MASK_CAUSAL &&
+         (isnan(desc->mask_fill) || desc->mask_fill == INFINITY))) return false;
     /* Auto-compute tile sizes if not set */
     if (desc->tile_m == 0 || desc->tile_n == 0) {
         /* We can't call auto_tile here because desc is const.
@@ -288,7 +325,9 @@ int tu_attention_execute(const tu_attention_desc_t *desc,
      * Reserve disjoint score/probability, accumulator and mask regions. */
     uint32_t O_off_aligned = s_tile_bytes;
     uint64_t o_end = (uint64_t)O_off_aligned + o_tile_bytes;
-    uint64_t max_o_usage = o_end + s_tile_bytes;
+    bool streaming = tile_n < N;
+    uint64_t state_bytes = streaming ? (uint64_t)tile_m * 2 * sizeof(float) : 0;
+    uint64_t max_o_usage = o_end + s_tile_bytes + state_bytes;
     if (max_o_usage > sram_o_cap) {
         TU_LOG_ERR(TU_COMP_CORE,
             "Attention: total O-buffer usage (%llu B) exceeds capacity (%u B)",
@@ -306,6 +345,8 @@ int tu_attention_execute(const tu_attention_desc_t *desc,
     /* O follows the full FP32 S lifetime, not the smaller packed P. */
     uint32_t O_off  = O_off_aligned;
     uint32_t mask_off = (uint32_t)o_end;
+    uint32_t max_off = mask_off + s_tile_bytes;
+    uint32_t sum_off = max_off + (streaming ? tile_m * sizeof(float) : 0);
 
     TU_LOG_INFO(TU_COMP_CORE,
         "Attention: M=%u N=%u d=%u scale=%.6f tile_m=%u tile_n=%u "
@@ -343,6 +384,13 @@ int tu_attention_execute(const tu_attention_desc_t *desc,
             }
 
             /* ── Inner loop: KV tiles ── */
+            if (streaming) {
+                for (uint32_t r = 0; r < q_count; r++) {
+                    float hi = -INFINITY, sum = 0.0f;
+                    local_stats.compute_cycles += tu_sram_write(&g_tu.sram_o, max_off + r * 4, &hi);
+                    local_stats.compute_cycles += tu_sram_write(&g_tu.sram_o, sum_off + r * 4, &sum);
+                }
+            }
             for (uint32_t kvi = 0; kvi < N; kvi += tile_n) {
                 uint32_t kv_count = (kvi + tile_n <= N) ? tile_n : (N - kvi);
 
@@ -401,58 +449,26 @@ int tu_attention_execute(const tu_attention_desc_t *desc,
                 }
 
                 /* ── Step 3: S = S + mask ── */
-                float *causal_buf = NULL;
-
-                if (desc->mask_type == TU_ATTN_MASK_CAUSAL && kvi > qi + q_count) {
-                    /* All KV positions are after all Q positions —
-                     * entire tile is masked. Skip MMA? No, we still computed S.
-                     * Instead, just fill S with mask_fill. */
-                    for (uint32_t i = 0; i < q_count * kv_count; i++) {
-                        fp32_t fill = mfill;
-                        tu_sram_write(&g_tu.sram_o,
-                            S_off + i * sizeof(fp32_t), &fill);
-                    }
-                    /* Skip the second MMA for this tile — S × V contributes ~0 */
-                    goto skip_v_mma;
-                } else if (desc->mask_type == TU_ATTN_MASK_CAUSAL) {
-                    causal_buf = build_causal_mask(qi, q_count, kvi, kv_count, mfill);
-                    if (causal_buf) {
-                        /* Write mask to sram_o (after S space, if fits) */
-                        uint32_t mask_bytes = q_count * kv_count * sizeof(float);
-                        if (mask_off + mask_bytes <= sram_o_cap) {
-                            local_stats.compute_cycles += write_fp32_to_sram(
-                                &g_tu.sram_o, mask_off, causal_buf,
-                                q_count * kv_count);
-                            /* Add: tu_ew_add_tensors(S, mask, S) */
-                            uint64_t ew_cycles = tu_ew_add_tensors(
-                                &g_tu.sram_o,
-                                S_off, mask_off, S_off,
-                                q_count * kv_count);
-                            local_stats.compute_cycles += ew_cycles;
-                            (void)0; /* mask applied */
+                if (desc->mask_type != TU_ATTN_MASK_NONE) {
+                    /* Source mask pitch is N, destination pitch is kv_count. */
+                    for (uint32_t r = 0; r < q_count; r++) {
+                        for (uint32_t j = 0; j < kv_count; j++) {
+                            float value = desc->mask_type == TU_ATTN_MASK_CAUSAL ?
+                                (kvi + j > qi + r ? mfill : 0.0f) :
+                                desc->mask[((size_t)h * M + qi + r) * N + kvi + j];
+                            local_stats.compute_cycles += tu_sram_write(&g_tu.sram_o,
+                                mask_off + (r * kv_count + j) * 4, &value);
                         }
-                        free(causal_buf);
                     }
-                } else if (desc->mask_type == TU_ATTN_MASK_CUSTOM && desc->mask) {
-                    /* Load custom mask slice */
-                    const float *mask_slice = desc->mask +
-                        h * M * N + qi * N + kvi;
-                    uint32_t mask_bytes = q_count * kv_count * sizeof(float);
-                    if (mask_off + mask_bytes <= sram_o_cap) {
-                        local_stats.compute_cycles += write_fp32_to_sram(
-                            &g_tu.sram_o, mask_off, mask_slice,
-                            q_count * kv_count);
-                        uint64_t ew_cycles = tu_ew_add_tensors(
-                            &g_tu.sram_o,
-                            S_off, mask_off, S_off,
-                            q_count * kv_count);
-                        local_stats.compute_cycles += ew_cycles;
-                        (void)0; /* mask applied */
-                    }
+                    local_stats.compute_cycles += tu_ew_add_tensors(&g_tu.sram_o,
+                        S_off, mask_off, S_off, q_count * kv_count);
                 }
 
                 /* ── Step 4: P = softmax(S) ── */
-                {
+                if (streaming || desc->mask_type == TU_ATTN_MASK_CUSTOM) {
+                    if (!normalize_attention_tile(q_count, kv_count, aw, S_off, O_off,
+                            max_off, sum_off, streaming, &local_stats.compute_cycles)) return -1;
+                } else {
                     tu_softmax_desc_t sm_desc = {
                         .mode       = TU_SOFTMAX_STANDARD,
                         .data_sram  = &g_tu.sram_o,
@@ -508,9 +524,21 @@ int tu_attention_execute(const tu_attention_desc_t *desc,
                     g_tu.dataflow->total_flops = 0;
                 }
 
-skip_v_mma:
-                ; /* Label needs statement */
             } /* end KV tile loop */
+
+            if (streaming) {
+                for (uint32_t r = 0; r < q_count; r++) {
+                    float sum;
+                    local_stats.compute_cycles += tu_sram_read(&g_tu.sram_o, sum_off + r * 4, &sum);
+                    for (uint32_t a = 0; a < aw; a++) {
+                        float out;
+                        uint32_t addr = O_off + (r * aw + a) * 4;
+                        local_stats.compute_cycles += tu_sram_read(&g_tu.sram_o, addr, &out);
+                        out = sum == 0.0f ? 0.0f : out / sum;
+                        local_stats.compute_cycles += tu_sram_write(&g_tu.sram_o, addr, &out);
+                    }
+                }
+            }
 
             /* ── Convert O_tile from FP32 to FP16 and DMA out ── */
             /* Read FP32 O_tile from SRAM, convert to FP16, write to host */
@@ -519,12 +547,26 @@ skip_v_mma:
                 /* Read FP32 into temp buffer, convert, DMA to host */
                 fp32_t *temp_fp32 = (fp32_t *)malloc(num_elems * sizeof(fp32_t));
                 fp16_t *temp_fp16 = (fp16_t *)malloc(num_elems * sizeof(fp16_t));
-                if (temp_fp32 && temp_fp16) {
+                if (!temp_fp32 || !temp_fp16) {
+                    free(temp_fp32); free(temp_fp16);
+                    return -1;
+                }
+                {
                     for (uint32_t i = 0; i < num_elems; i++) {
                         tu_sram_read(&g_tu.sram_o,
                             O_off + i * sizeof(fp32_t), &temp_fp32[i]);
+                        if (!isfinite(temp_fp32[i])) {
+                            free(temp_fp32); free(temp_fp16);
+                            return -1;
+                        }
                     }
                     tu_fp32_to_fp16_buffer(temp_fp32, temp_fp16, num_elems);
+                    for (uint32_t i = 0; i < num_elems; i++) {
+                        if ((temp_fp16[i] & 0x7c00u) == 0x7c00u) {
+                            free(temp_fp32); free(temp_fp16);
+                            return -1;
+                        }
+                    }
 
                     /* DMA store to host output */
                     tu_dma_store_o(O_head + qi * aw, O_off,

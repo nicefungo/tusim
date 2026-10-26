@@ -1,0 +1,7 @@
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention: M=1 N=2 d=4 scale=0.500000 tile_m=1 tile_n=1 Q=8B K=8B KT=8B S=4B O=16B
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention: M=1 N=2 d=4 scale=0.500000 tile_m=1 tile_n=1 Q=8B K=8B KT=8B S=4B O=16B
+allocation-failure gates: checks=4 failures=0

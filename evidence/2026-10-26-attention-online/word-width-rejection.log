@@ -1,0 +1,84 @@
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention: M=1 N=1 d=1 scale=0.500000 tile_m=1 tile_n=1 Q=2B K=2B KT=2B S=4B O=4B
+=================================================================
+==737907==ERROR: AddressSanitizer: stack-buffer-overflow on address 0xffffe68592c2 at pc 0xffffbb3cbe04 bp 0xffffe6859050 sp 0xffffe6858828
+WRITE of size 4 at 0xffffe68592c2 thread T0
+    #0 0xffffbb3cbe00 in __interceptor_memcpy ../../../../src/libsanitizer/sanitizer_common/sanitizer_common_interceptors.inc:827
+    #1 0xaaaad3cbcb84 in memcpy /usr/include/aarch64-linux-gnu/bits/string_fortified.h:29
+    #2 0xaaaad3cbcb84 in tu_sram_read tu_cmodel/tu_sram.c:163
+    #3 0xaaaad3cde028 in transpose_fp16_in_sram /home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source/tu_cmodel/compute/attention_engine.c:62
+    #4 0xaaaad3cde028 in tu_attention_execute /home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source/tu_cmodel/compute/attention_engine.c:403
+    #5 0xaaaad3cb0648 in run_case tests/test_attention_staging.c:47
+    #6 0xaaaad3cb3558 in main tests/test_attention_staging.c:152
+    #7 0xffffbaad73fc in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+    #8 0xffffbaad74d4 in __libc_start_main_impl ../csu/libc-start.c:392
+    #9 0xaaaad3caf82c in _start (/home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/word-width/gate+0x9f82c)
+
+Address 0xffffe68592c2 is located in stack of thread T0 at offset 34 in frame
+    #0 0xaaaad3cdba98 in tu_attention_execute /home/zxy/.hermes/cache/scratch/tusim-online-attention-2026-10-26-publication/source/tu_cmodel/compute/attention_engine.c:260
+
+  This frame has 27 object(s):
+    [32, 34) 'val' (line 61) <== Memory access at offset 34 overflows this variable
+    [48, 50) 'h' (line 82)
+    [64, 68) 'zero' (line 379)
+    [80, 84) 'hi' (line 389)
+    [96, 100) 'sum' (line 389)
+    [112, 116) 'zero' (line 427)
+    [128, 132) 'value' (line 456)
+    [144, 148) 'sum' (line 531)
+    [160, 164) 'out' (line 534)
+    [176, 180) 'old_max' (line 104)
+    [192, 196) 'old_sum' (line 104)
+    [208, 212) 'hi' (line 104)
+    [224, 228) 'x' (line 111)
+    [240, 244) 'x' (line 119)
+    [256, 260) 'p' (line 122)
+    [272, 276) 'sum' (line 127)
+    [288, 292) 'out' (line 131)
+    [304, 308) 'p' (line 139)
+    [320, 324) 'val' (line 80)
+    [336, 360) 'W_t' (line 408)
+    [400, 424) 'A_t' (line 414)
+    [464, 488) 'O_t' (line 420)
+    [528, 552) 'W_t' (line 498)
+    [592, 616) 'A_t' (line 504)
+    [656, 680) 'O_t' (line 510)
+    [720, 776) 'local_stats' (line 267)
+    [816, 896) 'sm_desc' (line 472)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow ../../../../src/libsanitizer/sanitizer_common/sanitizer_common_interceptors.inc:827 in __interceptor_memcpy
+Shadow bytes around the buggy address:
+  0x200ffcd0b200: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x200ffcd0b210: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x200ffcd0b220: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x200ffcd0b230: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x200ffcd0b240: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x200ffcd0b250: 00 00 00 00 f1 f1 f1 f1[02]f2 02 f2 f8 f2 04 f2
+  0x200ffcd0b260: 04 f2 04 f2 04 f2 04 f2 04 f2 04 f2 04 f2 04 f2
+  0x200ffcd0b270: 04 f2 04 f2 04 f2 04 f2 04 f2 04 f2 04 f2 00 00
+  0x200ffcd0b280: 00 f2 f2 f2 f2 f2 00 00 00 f2 f2 f2 f2 f2 00 00
+  0x200ffcd0b290: 00 f2 f2 f2 f2 f2 00 00 00 f2 f2 f2 f2 f2 00 00
+  0x200ffcd0b2a0: 00 f2 f2 f2 f2 f2 00 00 00 f2 f2 f2 f2 f2 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==737907==ABORTING

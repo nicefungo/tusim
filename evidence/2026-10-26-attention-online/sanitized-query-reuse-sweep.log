@@ -1,0 +1,55 @@
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention: M=5 N=33 d=8 scale=0.500000 tile_m=1 tile_n=3 Q=16B K=48B KT=48B S=12B O=32B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=21760 B, MMA tiles=440, FLOPs=21120, cycles=45446 (compute=43828, dma=1618), util=0.96
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention: M=5 N=33 d=8 scale=0.500000 tile_m=1 tile_n=33 Q=16B K=528B KT=528B S=132B O=32B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=21760 B, MMA tiles=120, FLOPs=21120, cycles=31612 (compute=30036, dma=1576), util=0.95
+KV_ROW,33,8,1,3,0,0,1,21760,43828,1618,4.47441022e-05
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention: M=5 N=33 d=8 scale=0.500000 tile_m=3 tile_n=3 Q=48B K=48B KT=48B S=36B O=96B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=9088 B, MMA tiles=176, FLOPs=21120, cycles=26428 (compute=24912, dma=1516), util=0.94
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention: M=5 N=33 d=8 scale=0.500000 tile_m=3 tile_n=33 Q=48B K=528B KT=528B S=396B O=96B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=9088 B, MMA tiles=48, FLOPs=21120, cycles=17656 (compute=16080, dma=1576), util=0.91
+KV_ROW,33,8,3,3,0,0,1,9088,24912,1516,4.47441022e-05
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention: M=5 N=33 d=8 scale=0.500000 tile_m=1 tile_n=3 Q=16B K=48B KT=48B S=12B O=32B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=21760 B, MMA tiles=440, FLOPs=21120, cycles=40386 (compute=38768, dma=1618), util=0.96
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention: M=5 N=33 d=8 scale=0.500000 tile_m=1 tile_n=33 Q=16B K=528B KT=528B S=132B O=32B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=21760 B, MMA tiles=120, FLOPs=21120, cycles=29392 (compute=27816, dma=1576), util=0.95
+KV_ROW,33,8,1,3,1,0,1,21760,38768,1618,4.47441022e-05
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention: M=5 N=33 d=8 scale=0.500000 tile_m=3 tile_n=3 Q=48B K=48B KT=48B S=36B O=96B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=9088 B, MMA tiles=176, FLOPs=21120, cycles=23876 (compute=22360, dma=1516), util=0.94
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention: M=5 N=33 d=8 scale=0.500000 tile_m=3 tile_n=33 Q=48B K=528B KT=528B S=396B O=96B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=9088 B, MMA tiles=48, FLOPs=21120, cycles=16624 (compute=15048, dma=1576), util=0.91
+KV_ROW,33,8,3,3,1,0,1,9088,22360,1516,4.47441022e-05
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention: M=5 N=33 d=8 scale=0.500000 tile_m=1 tile_n=3 Q=16B K=48B KT=48B S=12B O=32B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=21760 B, MMA tiles=440, FLOPs=21120, cycles=43026 (compute=41408, dma=1618), util=0.96
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention: M=5 N=33 d=8 scale=0.500000 tile_m=1 tile_n=33 Q=16B K=528B KT=528B S=132B O=32B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=21760 B, MMA tiles=120, FLOPs=21120, cycles=30472 (compute=28896, dma=1576), util=0.95
+KV_ROW,33,8,1,3,2,0,1,21760,41408,1618,4.47441022e-05
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention: M=5 N=33 d=8 scale=0.500000 tile_m=3 tile_n=3 Q=48B K=48B KT=48B S=36B O=96B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=9088 B, MMA tiles=176, FLOPs=21120, cycles=25196 (compute=23680, dma=1516), util=0.94
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention: M=5 N=33 d=8 scale=0.500000 tile_m=3 tile_n=33 Q=48B K=528B KT=528B S=396B O=96B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=9088 B, MMA tiles=48, FLOPs=21120, cycles=17128 (compute=15552, dma=1576), util=0.91
+KV_ROW,33,8,3,3,2,0,1,9088,23680,1516,4.47441022e-05
+attention KV: cases=6 checks=1974 failures=0 max_error=4.47441022e-05 max_partition_error=6.77108765e-05

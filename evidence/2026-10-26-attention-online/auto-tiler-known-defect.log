@@ -1,0 +1,9 @@
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention auto-tile: tile_m=16, tile_n=512 (head_dim=64, Q_len=16, KV_len=512)
+[       0] CORE  [1;31mERROR[0m Attention: total O-buffer usage (69632 B) exceeds capacity (65536 B)
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention: M=16 N=512 d=64 scale=0.125000 tile_m=8 tile_n=512 Q=1024B K=65536B KT=65536B S=16384B O=2048B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=266240 B, MMA tiles=512, FLOPs=2097152, cycles=395008 (compute=376640, dma=18368), util=0.95
+AUTO_PROBE chosen=16x512 auto_status=-1 manual=8x512 manual_status=0
