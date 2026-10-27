@@ -1,0 +1,31 @@
+{
+  "status": "PASS",
+  "cases": 720,
+  "checks": 67034,
+  "kv_cases": 2565,
+  "kv_checks": 457309,
+  "mutants_rejected": [
+    "word-width",
+    "reverse-pack",
+    "packed-p-layout"
+  ],
+  "kv_mutants_rejected": [
+    "lost-old-normalizer",
+    "missing-output-rescale",
+    "missing-final-division",
+    "custom-mask-pitch",
+    "missing-state-footprint"
+  ],
+  "former_kv_defect": "0.25 exactly; corrected",
+  "auto_tiler_former_defect": "auto 15x512 and explicit 8x512 succeed",
+  "autotile_metadata_cases": 90747,
+  "autotile_live_cases": 69,
+  "autotile_mutants_rejected": [
+    "auto-compiletime-w",
+    "auto-ignore-a",
+    "auto-miss-full-endpoint",
+    "auto-omit-mask-budget",
+    "auto-change-ties"
+  ],
+  "commands": 66
+}

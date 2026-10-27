@@ -1,0 +1,98 @@
+{
+  "input_tree": "1d8828fe98836990d0f3a07061b8967545cc95e6",
+  "commands": [
+    {
+      "label": "clean",
+      "command": [
+        "make",
+        "clean"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261027/index-source",
+      "LD_LIBRARY_PATH": "/home/zxy/.hermes/cache/scratch/tusim-20261027/index-source",
+      "returncode": 0,
+      "log_sha256": "1f639f0b8e7c9cab7263060789d5a330043eefcb4fd04e93927bfca2c4a1fbf6"
+    },
+    {
+      "label": "build",
+      "command": [
+        "make",
+        "-j4"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261027/index-source",
+      "LD_LIBRARY_PATH": "/home/zxy/.hermes/cache/scratch/tusim-20261027/index-source",
+      "returncode": 0,
+      "log_sha256": "5f340a5354f198b8000c3913240ccba5f8df571e2e9f54c9175ce719bad6a248"
+    },
+    {
+      "label": "quick",
+      "command": [
+        "make",
+        "test-quick"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261027/index-source",
+      "LD_LIBRARY_PATH": "/home/zxy/.hermes/cache/scratch/tusim-20261027/index-source",
+      "returncode": 0,
+      "log_sha256": "3b30d6589a3a7d7ee9767adf817cdad76947a9ca14d3891d66c933d3a52f85a8"
+    },
+    {
+      "label": "full",
+      "command": [
+        "make",
+        "-k",
+        "test"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261027/index-source",
+      "LD_LIBRARY_PATH": "/home/zxy/.hermes/cache/scratch/tusim-20261027/index-source",
+      "returncode": 0,
+      "log_sha256": "e27602b89329040a9cf7d06e250cf48a7c537578bd72321ac9236c30f4c86c13"
+    },
+    {
+      "label": "focused",
+      "command": [
+        "make",
+        "test-config",
+        "test-conv",
+        "test-scatter-gather",
+        "test-softmax",
+        "test-norm",
+        "test-dataflow-sweep"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261027/index-source",
+      "LD_LIBRARY_PATH": "/home/zxy/.hermes/cache/scratch/tusim-20261027/index-source",
+      "returncode": 0,
+      "log_sha256": "7adde653cf1a7f5fd9caddc3f70d19b02332e4b7393bdce60623b6303793b6f4"
+    },
+    {
+      "label": "auto-probe",
+      "command": [
+        "./test-attention-kv",
+        "--auto-probe"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261027/index-source",
+      "LD_LIBRARY_PATH": "/home/zxy/.hermes/cache/scratch/tusim-20261027/index-source",
+      "returncode": 0,
+      "log_sha256": "f2e6626359a77e1c1856aa33e96a5e6266f03b1d0070ee89b02df8075dc5f8d4"
+    },
+    {
+      "label": "analyzer",
+      "command": [
+        "cc",
+        "-O0",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-fanalyzer",
+        "-std=c11",
+        "-Itu_cmodel",
+        "-c",
+        "tu_cmodel/compute/attention_engine.c",
+        "-o",
+        "/home/zxy/.hermes/cache/scratch/tusim-20261027/index-analyzer.o"
+      ],
+      "cwd": "/home/zxy/.hermes/cache/scratch/tusim-20261027/index-source",
+      "LD_LIBRARY_PATH": "/home/zxy/.hermes/cache/scratch/tusim-20261027/index-source",
+      "returncode": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ]
+}

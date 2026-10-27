@@ -1,0 +1,11 @@
+{
+  "KV_ROW,": {
+    "rows": 2565,
+    "complete_ordered_tuples_identical": true
+  },
+  "ROW,": {
+    "rows": 720,
+    "complete_ordered_tuples_identical": true
+  },
+  "staging_output_digest": "32ed8b45db42dbbd"
+}

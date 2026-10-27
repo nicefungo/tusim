@@ -1,0 +1,15 @@
+{
+  "input_tree": "1d8828fe98836990d0f3a07061b8967545cc95e6",
+  "authored_inputs_sha256": {
+    ".gitignore": "dedbac52806af43acf645ae12808d51e265a6ff14ea5a47f36e96dafef4c3c6e",
+    "Makefile": "dee5c076cae903cd5c8ae279b406befb1c5458bf9c6a13c72d8eb1fa3a2a5190",
+    "tu_cmodel/compute/attention_engine.c": "bb7e15e0fc99a4358d1364cd0399f928039a4e0e6e4ad8987aceadb52637c094",
+    "tu_cmodel/compute/attention_engine.h": "7200b33d99509b940719e3c8340ee9184c735d9b6bcd02d8361fc79d3bfb3b61",
+    "tests/test_attention_autotile.c": "50d9299888e217a048ecf50730d59c61fc8be6a4d5c7c547d9ff973b0f52b2c8",
+    "tests/test_attention_kv.c": "e2f4117428e83fb586d7f875855681cf0cf95c7c1588fb4666cd5ff7ca46cf1d",
+    "tests/test_attention_staging.py": "7eee996e2170068f5df187507f081a87b7573535e5fa87d5048059a0bea331a6",
+    "docs/exploration/IMPLEMENTATION_BACKLOG.md": "8935304b9623580141ebf1ba0eac69f82c407a5490c39d9e6955e14c52899646",
+    "docs/exploration/attention-kv-normalization.md": "8d602ef8aee448b91cadcda59b2a54d730bee4515b84890666f62bc891ace619",
+    "docs/exploration/attention-auto-tiling-feasibility.md": "9a6211598f2f12629fe07e1a6ca413b7f5c7addffd83287b05977ca5b31cbb1e"
+  }
+}

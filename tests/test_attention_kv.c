@@ -184,8 +184,7 @@ static void admission(void) {
     }
 }
 
-/* Diagnostic only: remains RED until the separate auto-tiler audit/fix.
- * It must not be folded into passing cross-KV acceptance. */
+/* Former expected-failure diagnostic; auto feasibility is now a passing gate. */
 static int auto_probe(void) {
     fp16_t *q=calloc(16*64,2), *kv=calloc(512*64,2), *out=calloc(16*64,2);
     if(!q || !kv || !out) { free(q); free(kv); free(out); return 2; }
@@ -195,6 +194,7 @@ static int auto_probe(void) {
     tu_init(); tu_attention_auto_tile(&d);
     unsigned tm=d.tile_m,tn=d.tile_n;
     int automatic=tu_attention_execute(&d,NULL);
+    for(unsigned i=0;i<16*64;i++) if(out[i]!=0x3400) automatic=-1;
     tu_shutdown(); tu_init(); d.tile_m=8; d.tile_n=512;
     int manual=tu_attention_execute(&d,NULL);
     printf("AUTO_PROBE chosen=%ux%u auto_status=%d manual=8x512 manual_status=%d\n",

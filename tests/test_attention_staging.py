@@ -20,7 +20,7 @@ INPUTS = [
     "Makefile", ".gitignore", "tu_cmodel/compute/attention_engine.c",
     "tu_cmodel/compute/attention_engine.h", "tests/test_attention.c",
     "tests/test_attention_staging.c", "tests/test_attention_staging.py", "tests/test_framework.h",
-    "tests/test_attention_kv.c",
+    "tests/test_attention_kv.c", "tests/test_attention_autotile.c",
 ]
 FLAGS = ["-O1", "-g", "-Wall", "-Wextra", "-std=c11", "-fPIC",
          "-fsanitize=address,undefined", "-fno-omit-frame-pointer"]
@@ -102,9 +102,18 @@ def main():
     reuse = run("sanitized-query-reuse-sweep", [str(kv_binary), "--reuse-sweep"])
     if len(re.findall(r"^KV_ROW,", reuse, re.MULTILINE)) != 6:
         raise RuntimeError("query reuse matrix incomplete")
-    auto = run("auto-tiler-known-defect", [str(kv_binary), "--auto-probe"], expected=1)
-    if "chosen=16x512 auto_status=-1 manual=8x512 manual_status=0" not in auto:
-        raise RuntimeError("auto-tiler counterexample changed; investigate")
+    auto = run("auto-tiler-former-defect", [str(kv_binary), "--auto-probe"])
+    if "chosen=15x512 auto_status=0 manual=8x512 manual_status=0" not in auto:
+        raise RuntimeError("auto-tiler feasibility regression")
+    auto_binary = out / "autotile-asan"
+    run("sanitized-auto-link", [cc, *FLAGS, "-Werror", "-I.", "-Itu_cmodel",
+                               "tests/test_attention_autotile.c", "./libtucmodel.a", "-lm", "-o", str(auto_binary)])
+    auto_log = run("sanitized-auto-matrix", [str(auto_binary)])
+    if "attention autotile: metadata=90747 rejects=85765 live=69 checks=507611 failures=0" not in auto_log:
+        raise RuntimeError("complete auto-tiler gate missing")
+    auto_rows = re.findall(r"^AUTO_ROW,(?:[a-z-]+,)(?:[0-9]+,){11}[0-9]+$", auto_log, re.MULTILINE)
+    if len(auto_rows) != 57 or len(set(auto_rows)) != 57:
+        raise RuntimeError("auto-tiler live trade-off matrix incomplete")
     alloc_binary = out / "kv-alloc-asan"
     run("sanitized-alloc-link", [cc, *FLAGS, "-Werror", "-DTU_ATTN_TEST_ALLOC", "-I.", "-Itu_cmodel",
                                  "tests/test_attention_kv.c", "./libtucmodel.a", "-lm",
@@ -180,12 +189,39 @@ def main():
         if "FAIL " not in rejected:
             raise RuntimeError(f"{name}: no assertion caught mutant")
         production.write_text(current)
+    auto_mutations = {
+        "auto-compiletime-w": ("g_tu.rt_cfg.sram_w_size / (4ull * dim)", "TU_SRAM_W_SIZE / (4ull * dim)"),
+        "auto-ignore-a": ("q > g_tu.rt_cfg.sram_a_size / sizeof(fp16_t)", "false"),
+        "auto-miss-full-endpoint": ("max_n == n && attention_footprint(tm, n, dim, n, NULL)", "false"),
+        "auto-omit-mask-budget": ("(row_budget - fixed) / 8", "(row_budget - fixed) / 4"),
+        "auto-change-ties": ("score > best_score", "score >= best_score"),
+    }
+    for name, (old, new) in auto_mutations.items():
+        if current.count(old) != 1:
+            raise RuntimeError(f"mutation anchor drift: {name}")
+        production.write_text(current.replace(old, new))
+        directory = out / name
+        directory.mkdir()
+        obj = directory / "attention_engine.o"
+        lib = directory / "libtucmodel.a"
+        shutil.copyfile(source / "libtucmodel.a", lib)
+        run(name + "-compile", [cc, *FLAGS, "-Itu_cmodel", "-c", str(production), "-o", str(obj)])
+        run(name + "-archive", ["ar", "rcs", str(lib), str(obj)])
+        mutant = directory / "gate"
+        run(name + "-link", [cc, *FLAGS, "-Werror", "-I.", "-Itu_cmodel",
+                             "tests/test_attention_autotile.c", str(lib), "-lm", "-o", str(mutant)])
+        rejected = run(name + "-rejection", [str(mutant), "--metadata"], expected=1)
+        if "FAIL " not in rejected:
+            raise RuntimeError(f"{name}: no assertion caught mutant")
+        production.write_text(current)
     summary = {"status": "PASS", "cases": 720, "checks": 67034,
                "kv_cases": 2565, "kv_checks": 457309,
                "mutants_rejected": list(mutations),
                "kv_mutants_rejected": list(streaming_mutations),
                "former_kv_defect": "0.25 exactly; corrected",
-               "auto_tiler_known_defect": "auto 16x512 rejects; explicit 8x512 succeeds",
+               "auto_tiler_former_defect": "auto 15x512 and explicit 8x512 succeed",
+               "autotile_metadata_cases": 90747, "autotile_live_cases": 69,
+               "autotile_mutants_rejected": list(auto_mutations),
                "commands": len(records)}
     (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(json.dumps(summary, indent=2))

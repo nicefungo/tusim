@@ -46,8 +46,8 @@
  *   Custom masks use full-N source pitch; -inf contributes zero and a fully
  *   masked custom row returns zero. NaN/+inf scores and nonfinite output fail.
  *   Whole-row no-mask/causal numerical defaults are preserved by regression.
- *   Auto-tiler feasibility, large tensor offsets and full allocation-failure
- *   coverage still require separate audits. Execution uses active global
+ *   Auto-tiling shares runtime footprint admission (2026-10-27); large tensor
+ *   offsets and full allocation-failure coverage remain separate. Execution uses active global
  *   tu_set_dataflow, not desc.dataflow. Mixed SRAM-stall/MMA counters are not
  *   calibrated end-to-end latency; exp/division/control timing is unmodeled.
  *
@@ -102,7 +102,8 @@ typedef struct {
     const float         *mask;         /* Custom mask [batch*heads, seq_len_q, seq_len_kv], FP32 (NULL if not custom) */
     float               mask_fill;     /* Value for masked positions (default -1e9 for -inf effect) */
 
-    /* Tiling parameters (0 = auto-select based on SRAM size) */
+    /* Explicit tiling; call auto_tile to select by runtime SRAM. Without that
+     * call, a zero field retains the historical capped compile-time PE default. */
     uint32_t      tile_m;       /* Q tile size (query tokens per tile) */
     uint32_t      tile_n;       /* KV tile size (key/value tokens per tile) */
 
@@ -178,9 +179,18 @@ int tu_attention_simple(const void *Q, const void *K, const void *V,
 bool tu_attention_validate_desc(const tu_attention_desc_t *desc);
 
 /*
- * Compute auto tile sizes based on SRAM and head_dim.
- * Sets desc->tile_m and desc->tile_n to optimal values.
- * Call before tu_attention_execute() if you want auto-tiling.
+ * Compute feasible tiles after global TU initialization, using its runtime
+ * A/W/O capacities and the same reservation contract as execute. Search query
+ * rows 1..min(M,64); maximize tile_m*tile_n, ties prefer smaller tile_m. This
+ * deterministic bounded heuristic is not a latency/traffic/physical optimum.
+ * No upward PE alignment: supported ragged edges retain their exact footprint.
+ * Overwrites both tile fields; all other descriptor and TU state is unchanged.
+ * NULL is a no-op. Zero dimensions, uninitialized/insufficient SRAM yield 0/0;
+ * callers can check those fields for no fit. Execute's historical zero-field
+ * fallback still fails SRAM admission when no 1x1/whole-row endpoint fits.
+ * Geometry selection does not validate host buffers, masks, scale or huge host
+ * offsets. Explicit software tiles, including >64 query rows, remain supported
+ * subject to execute admission. No JSON knob or descriptor ABI is added.
  */
 void tu_attention_auto_tile(tu_attention_desc_t *desc);
 

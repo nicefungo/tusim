@@ -1,0 +1,15 @@
+{
+  "base_head": "65262e4439b994e70bb294eabb84c2f94e3051b1",
+  "overlaid_inputs_sha256": {
+    "Makefile": "dee5c076cae903cd5c8ae279b406befb1c5458bf9c6a13c72d8eb1fa3a2a5190",
+    ".gitignore": "dedbac52806af43acf645ae12808d51e265a6ff14ea5a47f36e96dafef4c3c6e",
+    "tu_cmodel/compute/attention_engine.c": "bb7e15e0fc99a4358d1364cd0399f928039a4e0e6e4ad8987aceadb52637c094",
+    "tu_cmodel/compute/attention_engine.h": "7200b33d99509b940719e3c8340ee9184c735d9b6bcd02d8361fc79d3bfb3b61",
+    "tests/test_attention.c": "37b9a36f8b36e189bea4aebf1acb046560f89b8311f66b46ea1da75b244a5e67",
+    "tests/test_attention_staging.c": "5c85ac21e0e1bce9fe532e2035701b397b23423a1027cb5354143280d2fcadcb",
+    "tests/test_attention_staging.py": "7eee996e2170068f5df187507f081a87b7573535e5fa87d5048059a0bea331a6",
+    "tests/test_framework.h": "a8bf7f5e2e5ce9c317f1e089bc28338b4bd298a8bec6c08f40c6a5f12bb979ef",
+    "tests/test_attention_kv.c": "e2f4117428e83fb586d7f875855681cf0cf95c7c1588fb4666cd5ff7ca46cf1d",
+    "tests/test_attention_autotile.c": "50d9299888e217a048ecf50730d59c61fc8be6a4d5c7c547d9ff973b0f52b2c8"
+  }
+}

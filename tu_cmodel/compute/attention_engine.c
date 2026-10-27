@@ -149,69 +149,64 @@ static bool normalize_attention_tile(uint32_t rows, uint32_t cols, uint32_t dim,
 
 /* ── Auto-tiling ──────────────────────────────────────────────── */
 
+/* Shared configured reservation contract. Validate products before byte
+ * scaling so even UINT32_MAX dimensions cannot overflow the sums. */
+typedef struct {
+    uint32_t q_bytes, k_bytes, s_bytes, o_bytes;
+} attention_footprint_t;
+
+static bool attention_footprint(uint32_t tm, uint32_t tn, uint32_t dim,
+                                uint32_t n, attention_footprint_t *out) {
+    if (!tm || !tn || !dim || !n) return false;
+    uint64_t q = (uint64_t)tm * dim, k = (uint64_t)tn * dim;
+    uint64_t s = (uint64_t)tm * tn;
+    if (q > g_tu.rt_cfg.sram_a_size / sizeof(fp16_t) ||
+        k > g_tu.rt_cfg.sram_w_size / (2 * sizeof(fp16_t)) ||
+        s > g_tu.rt_cfg.sram_o_size / sizeof(fp32_t) ||
+        q > g_tu.rt_cfg.sram_o_size / sizeof(fp32_t)) return false;
+    uint64_t o_end = s * sizeof(fp32_t) + q * sizeof(fp32_t);
+    uint64_t s_tile_bytes = s * sizeof(fp32_t);
+    uint64_t state_bytes = tn < n ? (uint64_t)tm * 2 * sizeof(float) : 0;
+    uint64_t max_o_usage = o_end + s_tile_bytes + state_bytes;
+    if (max_o_usage > g_tu.rt_cfg.sram_o_size) return false;
+    if (out) *out = (attention_footprint_t){q * sizeof(fp16_t),
+        k * sizeof(fp16_t), s * sizeof(fp32_t), q * sizeof(fp32_t)};
+    return true;
+}
+
 void tu_attention_auto_tile(tu_attention_desc_t *desc) {
-    /* Available SRAM for tiles (use A-buffer for Q, W-buffer for K/V, O-buffer for S/O) */
-    uint32_t aw = desc->head_dim;  /* the "K" dimension in MMA terms */
-
-    /* Space budget in sram_w (for K_tile and V_tile + K^T_scratch):
-     *   K_tile: tile_n × head_dim × 2 (FP16)
-     *   K^T_scratch: head_dim × tile_n × 2 (FP16) — same size as K_tile
-     *   V_tile: tile_n × head_dim × 2 (FP16) — loaded after K, reused space
-     * Maximum needed at once: 2 × tile_n × head_dim × 2 (K + K^T)
-     */
-    uint32_t sram_w_capacity = TU_SRAM_W_SIZE;
-    uint32_t sram_o_capacity = TU_SRAM_O_SIZE;
-
-    /* K_tile + K^T_scratch must fit in sram_w */
-    uint32_t max_tile_n_by_w = sram_w_capacity / (2 * aw * sizeof(fp16_t));
-    if (max_tile_n_by_w > desc->seq_len_kv) max_tile_n_by_w = desc->seq_len_kv;
-
-    /* We start with a small tile_m and increase until sram_o is full */
-    uint32_t best_m = 1, best_n = 1;
-    uint64_t best_score = 0; /* tile utilization: tile_m * tile_n */
-
+    if (!desc) return;
+    desc->tile_m = desc->tile_n = 0;
+    if (!desc->seq_len_q || !desc->seq_len_kv || !desc->head_dim) return;
+    uint32_t dim = desc->head_dim, n = desc->seq_len_kv;
+    uint64_t max_n = g_tu.rt_cfg.sram_w_size / (4ull * dim);
+    if (max_n > n) max_n = n;
+    uint64_t best_score = 0;
+    /* Retain the bounded 64-query search, not a physical optimum claim.
+     * At fixed tm, footprint grows with tn except when full N removes row
+     * state. Test that endpoint separately, then solve the streaming budget.
+     * Ragged edges are executable; never round an admitted tile upward. */
     for (uint32_t tm = 1; tm <= desc->seq_len_q && tm <= 64; tm++) {
-        /* S_tile size = tm × tn × 4 */
-        /* O_tile size = tm × aw × 4 */
-        uint32_t o_tile_bytes = tm * aw * sizeof(fp32_t);
-        uint32_t s_o_remaining = (sram_o_capacity > o_tile_bytes) ?
-                                 (sram_o_capacity - o_tile_bytes) : 0;
-        if (s_o_remaining == 0) break;
-
-        uint32_t max_tn_by_o = s_o_remaining / (tm * sizeof(fp32_t));
-        if (max_tn_by_o > max_tile_n_by_w) max_tn_by_o = max_tile_n_by_w;
-        if (max_tn_by_o > desc->seq_len_kv) max_tn_by_o = desc->seq_len_kv;
-        if (max_tn_by_o == 0) continue;
-
-        /* Score: prefer larger tiles, balance tm and tn */
-        uint64_t score = (uint64_t)tm * max_tn_by_o;
+        uint32_t tn = 0;
+        if (max_n == n && attention_footprint(tm, n, dim, n, NULL)) {
+            tn = n;
+        } else if (n > 1) {
+            uint64_t row_budget = g_tu.rt_cfg.sram_o_size / tm;
+            uint64_t fixed = 4ull * dim + 8;
+            uint64_t bound = row_budget > fixed ? (row_budget - fixed) / 8 : 0;
+            if (bound > max_n) bound = max_n;
+            if (bound >= n) bound = n - 1;
+            tn = (uint32_t)bound;
+        }
+        if (!attention_footprint(tm, tn, dim, n, NULL)) continue;
+        uint64_t score = (uint64_t)tm * tn;
+        /* Ascending tm plus strict improvement defines ties: smaller tm. */
         if (score > best_score) {
             best_score = score;
-            best_m = tm;
-            best_n = max_tn_by_o;
+            desc->tile_m = tm;
+            desc->tile_n = tn;
         }
     }
-
-    /* Cap to sequence lengths */
-    if (best_m > desc->seq_len_q) best_m = desc->seq_len_q;
-    if (best_n > desc->seq_len_kv) best_n = desc->seq_len_kv;
-
-    /* Align to PE dimensions for efficiency */
-    uint16_t pe_rows = TU_PE_ROWS;
-    uint16_t pe_cols = TU_PE_COLS;
-    best_m = ((best_m + pe_rows - 1) / pe_rows) * pe_rows;
-    best_n = ((best_n + pe_cols - 1) / pe_cols) * pe_cols;
-
-    if (best_m < pe_rows) best_m = pe_rows;
-    if (best_n < pe_cols) best_n = pe_cols;
-
-    desc->tile_m = best_m;
-    desc->tile_n = best_n;
-
-    TU_LOG_INFO(TU_COMP_CORE,
-        "Attention auto-tile: tile_m=%u, tile_n=%u (head_dim=%u, "
-        "Q_len=%u, KV_len=%u)",
-        best_m, best_n, desc->head_dim, desc->seq_len_q, desc->seq_len_kv);
 }
 
 /* ── Validation ───────────────────────────────────────────────── */
@@ -296,44 +291,26 @@ int tu_attention_execute(const tu_attention_desc_t *desc,
     uint16_t pe_rows = g_tu.rt_cfg.pe_rows;
     uint16_t pe_cols = g_tu.rt_cfg.pe_cols;
 
-    /* Get SRAM region sizes for bounds checking */
-    uint32_t sram_w_cap = g_tu.rt_cfg.sram_w_size;
-    uint32_t sram_a_cap = g_tu.rt_cfg.sram_a_size;
-    uint32_t sram_o_cap = g_tu.rt_cfg.sram_o_size;
 
-    /* Verify tiles fit in SRAM */
-    /* Compare element products before scaling/narrowing to byte offsets. */
-    uint64_t q_elements = (uint64_t)tile_m * aw;
-    uint64_t k_elements = (uint64_t)tile_n * aw;
-    uint64_t s_elements = (uint64_t)tile_m * tile_n;
-    if (q_elements > sram_a_cap / sizeof(fp16_t) ||
-        k_elements > sram_w_cap / (2 * sizeof(fp16_t)) ||
-        s_elements > sram_o_cap / sizeof(fp32_t) ||
-        q_elements > sram_o_cap / sizeof(fp32_t)) {
+    /* One admission producer is shared with auto selection. */
+    attention_footprint_t footprint;
+    if (!attention_footprint(tile_m, tile_n, aw, N, &footprint)) {
         TU_LOG_ERR(TU_COMP_CORE, "Attention: tile element footprint exceeds SRAM");
         return -1;
     }
-    uint32_t q_tile_bytes = q_elements * sizeof(fp16_t);
-    uint32_t k_tile_bytes = k_elements * sizeof(fp16_t);
+    uint32_t q_tile_bytes = footprint.q_bytes;
+    uint32_t k_tile_bytes = footprint.k_bytes;
     uint32_t kt_tile_bytes = k_tile_bytes;
-    uint32_t s_tile_bytes = s_elements * sizeof(fp32_t);
-    uint32_t o_tile_bytes = q_elements * sizeof(fp32_t);
+    uint32_t s_tile_bytes = footprint.s_bytes;
+    uint32_t o_tile_bytes = footprint.o_bytes;
 
 
-    /* Compute O-buffer layout and verify total fits */
+    /* Derive offsets from the already admitted shared footprint. */
     /* O remains live while S is FP32, not only after packing P to FP16.
      * Reserve disjoint score/probability, accumulator and mask regions. */
     uint32_t O_off_aligned = s_tile_bytes;
     uint64_t o_end = (uint64_t)O_off_aligned + o_tile_bytes;
     bool streaming = tile_n < N;
-    uint64_t state_bytes = streaming ? (uint64_t)tile_m * 2 * sizeof(float) : 0;
-    uint64_t max_o_usage = o_end + s_tile_bytes + state_bytes;
-    if (max_o_usage > sram_o_cap) {
-        TU_LOG_ERR(TU_COMP_CORE,
-            "Attention: total O-buffer usage (%llu B) exceeds capacity (%u B)",
-            (unsigned long long)max_o_usage, sram_o_cap);
-        return -1;
-    }
 
     /* SRAM offsets */
     uint32_t Q_off  = 0;                    /* sram_a: Q tile */

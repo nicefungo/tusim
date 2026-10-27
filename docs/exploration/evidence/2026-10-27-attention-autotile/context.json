@@ -1,0 +1,23 @@
+{
+  "input_head": "65262e4439b994e70bb294eabb84c2f94e3051b1",
+  "date": "2026-10-27",
+  "mode": "pre-spec",
+  "ready_at_entry": 1,
+  "items_completed": 1,
+  "baseline_build_quick_exit": 0,
+  "final_build_quick_full_focused_exit": 0,
+  "sanitizer_runner_commands": 66,
+  "autotile": {
+    "metadata_cases": 90747,
+    "metadata_no_fit": 85765,
+    "live_calls": 69,
+    "checks": 507611,
+    "failures": 0
+  },
+  "scope_exclusions": [
+    "docs/exploration/TERMS.md",
+    "HANDOFF/session continuation artifacts"
+  ],
+  "terms_sha256": "d01d6c5282c9b666ea2b2f733d44ee8f695644844c8adc7e3d4a164f0cb2b46a",
+  "tracked_generated_artifacts": []
+}

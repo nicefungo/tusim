@@ -1,0 +1,46 @@
+{
+  "input_head": "65262e4439b994e70bb294eabb84c2f94e3051b1",
+  "commands": [
+    {
+      "label": "build",
+      "command": [
+        "make",
+        "-j4"
+      ],
+      "expected": 0,
+      "returncode": 0,
+      "sha256": "5f340a5354f198b8000c3913240ccba5f8df571e2e9f54c9175ce719bad6a248"
+    },
+    {
+      "label": "link",
+      "command": [
+        "cc",
+        "-O2",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-std=c11",
+        "-I.",
+        "-Itu_cmodel",
+        "tests/test_attention_kv.c",
+        "./libtucmodel.a",
+        "-lm",
+        "-o",
+        "auto-baseline"
+      ],
+      "expected": 0,
+      "returncode": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "probe",
+      "command": [
+        "./auto-baseline",
+        "--auto-probe"
+      ],
+      "expected": 1,
+      "returncode": 1,
+      "sha256": "cfae177f64417d79fbf3b9024851d8afd2bc4bebebbf2740021816f57bcb47f8"
+    }
+  ]
+}
