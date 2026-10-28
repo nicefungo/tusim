@@ -282,10 +282,13 @@ int tu_agen_iterator_init(tu_agen_iterator_t *it,
     case TU_AGEN_MODE_BLOCK_INTERLEAVED: {
         const uint32_t *cfg = (const uint32_t *)config;
         if (!cfg) return -1;
+        uint32_t size = cfg[3] ? cfg[3] : 4;
+        if (!affine_geometry_valid(base_addr, 1, 1, cfg[0], 0, 0, size))
+            return -1;
         it->total_elements = cfg[0];
         it->num_banks = cfg[1] ? cfg[1] : 1;
         it->bank_width = cfg[2] ? cfg[2] : 1;
-        it->elem_size = cfg[3] ? cfg[3] : 4;
+        it->elem_size = size;
         break;
     }
 

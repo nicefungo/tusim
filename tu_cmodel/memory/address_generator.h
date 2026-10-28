@@ -48,7 +48,7 @@ typedef enum {
     TU_AGEN_MODE_TILED_2D     = 3,  /* 2D matrix decomposed into tiles */
     TU_AGEN_MODE_TILED_3D     = 4,  /* 3D volume decomposed into tiles */
     TU_AGEN_MODE_IM2COL       = 5,  /* im2col for convolution */
-    TU_AGEN_MODE_BLOCK_INTERLEAVED = 6,  /* Bank-interleaved */
+    TU_AGEN_MODE_BLOCK_INTERLEAVED = 6,  /* Linear sequence; bank metadata only */
     TU_AGEN_MODE_TRANSPOSED   = 7,  /* Column-major access */
 } tu_agen_mode_t;
 
@@ -184,6 +184,14 @@ void tu_agen_compute_tiling(tu_agen_tiling_t *tiling);
  *          Padding still returns legacy 0xFFFFFF00, not a zero-fill operation;
  *          padded iteration is NOT certified for range-to-DMA execution. The
  *          separate tu_agen_addr_im2col helper validates its own point queries.
+ *          BLOCK_INTERLEAVED uses uint32_t[4] = {count,banks,block_width,size};
+ *          zero banks/block_width mean 1 and zero size means 4 B. Its existing
+ *          sequence is base + index*size; bank fields are retained metadata,
+ *          not a bank-major permutation, bank-ID decoder or arbitration model.
+ *          Nonempty full byte extent must end at or before UINT32_MAX exclusive;
+ *          invalid views reject empty, while count 0 is empty at any base/width.
+ *          This preserves the compatibility address sequence, not certification
+ *          of physical banking or the unchecked tu_agen_addr_banked helper.
  *
  * Returns 0 on success, -1 on invalid parameters.
  */

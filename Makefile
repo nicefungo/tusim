@@ -505,6 +505,11 @@ test-agen-range-admission: tests/test_agen_range_admission.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a -Wl,--wrap=calloc $(LDFLAGS)
 	./test-agen-range-admission
 
+.PHONY: test-agen-block-bounds
+test-agen-block-bounds: tests/test_agen_block_bounds.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
+	./test-agen-block-bounds
+
 .PHONY: test-agen-affine-bounds
 test-agen-affine-bounds: tests/test_agen_affine_bounds.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
@@ -739,7 +744,7 @@ test-asm: libtucmodel.a
 
 # Run full test suite: build library + all unit tests + integration
 .PHONY: test test-quick test-random test-full
-test: test-attention-autotile test-attention-kv test-attention-staging test-dma-drr-stage-width test-agen-tiling-plan test-config-generation test-cmodel test-reinit test-cmdq test-dma test-dma-drr-scan-width test-dram test-isa test-golden \
+test: test-agen-block-bounds test-attention-autotile test-attention-kv test-attention-staging test-dma-drr-stage-width test-agen-tiling-plan test-config-generation test-cmodel test-reinit test-cmdq test-dma test-dma-drr-scan-width test-dram test-isa test-golden \
       test-elementwise test-bf16 test-memhier test-norm test-dataflow \
       test-logging test-int-quant test-conv test-asm test-rounding test-fp8 \
       test-attention test-perf test-pool test-pipeline test-agen test-agen-im2col-point test-agen-im2col-bounds test-agen-range-admission test-agen-affine-bounds test-agen-tiled-sweep test-agen-dma-chain test-multicore \
@@ -750,7 +755,7 @@ test: test-attention-autotile test-attention-kv test-attention-staging test-dma-
 	@echo "═══════════════════════════════════════════"
 
 # Quick smoke test (pre-commit)
-test-quick: test-attention-autotile test-attention-kv test-attention-staging test-dma-drr-stage-width test-config-generation test-cmodel test-reinit test-agen test-agen-tiling-plan test-agen-im2col-point test-agen-im2col-bounds test-agen-range-admission test-agen-affine-bounds test-agen-tiled-sweep test-agen-dma-chain test-multicast test-cmdq test-dma test-dma-drr-scan-width test-dma-burst-boundary-sweep test-dma-external-boundary-sweep test-asm
+test-quick: test-agen-block-bounds test-attention-autotile test-attention-kv test-attention-staging test-dma-drr-stage-width test-config-generation test-cmodel test-reinit test-agen test-agen-tiling-plan test-agen-im2col-point test-agen-im2col-bounds test-agen-range-admission test-agen-affine-bounds test-agen-tiled-sweep test-agen-dma-chain test-multicast test-cmdq test-dma test-dma-drr-scan-width test-dma-burst-boundary-sweep test-dma-external-boundary-sweep test-asm
 	@echo ""
 	@echo "═══ Quick smoke test passed ═══"
 
@@ -792,6 +797,7 @@ config-docs: libtucmodel.a
 
 # ---- Clean ----
 clean:
+	rm -f test-agen-block-bounds
 	rm -f test-attention-autotile
 	rm -f test-attention-kv
 	rm -f test-attention-staging

@@ -1,0 +1,51 @@
+{
+  "date": "2026-10-28",
+  "baseline_head": "63593602487acb2287a7601e74a04551478f0903",
+  "baseline_address_source_blob": "ffb4c2c048fae9c7d481b5043e477ffd936046ee",
+  "validated_preseal_index_tree": "d308e93bc3196b454acdba946476272df31e6b2b",
+  "scope": "one newly evidenced byte-span correction; physical banking not implemented",
+  "observed_final_summary": {
+    "status": "PASS",
+    "cases": 46860,
+    "rejected": 30487,
+    "bounded_sequences": 10424,
+    "checks": 1803905,
+    "failures": 0
+  },
+  "observed_baseline_source_summary": {
+    "status": "FAIL",
+    "cases": 46860,
+    "rejected": 0,
+    "bounded_sequences": 10424,
+    "checks": 1620983,
+    "failures": 30487
+  },
+  "baseline_source_gate_expected_and_observed_exit": 1,
+  "observed_zero_exit_gates": [
+    "baseline clean build and quick",
+    "final clean build, quick and full aggregate",
+    "additional config/conv/scatter-gather",
+    "all-object ASan/UBSan/LSan focused targets",
+    "fresh staged preseal clean build, quick and focused targets",
+    "unmodified mutation control and four safe mutant rejections",
+    "GCC analyzer production source and final test"
+  ],
+  "ready_candidates_remaining": [],
+  "preserved_untracked": {
+    "path": "docs/exploration/TERMS.md",
+    "sha256": "d01d6c5282c9b666ea2b2f733d44ee8f695644844c8adc7e3d4a164f0cb2b46a"
+  },
+  "compiler": "cc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0",
+  "logs": [
+    "baseline.log.gz",
+    "final-live.log.gz",
+    "final-probes.log.gz",
+    "old-source-final-harness.log.gz",
+    "sanitizer-build.log.gz",
+    "sanitizer-tests.log.gz",
+    "mutants.log.gz",
+    "analyzer.log.gz",
+    "staged-snapshot.log.gz"
+  ],
+  "final_index_revalidation": "performed after evidence staging; final command log retained in scratch, not recursively embedded"
+}

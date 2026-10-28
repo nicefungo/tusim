@@ -80,6 +80,7 @@ test-perf
 test-pool
 test-pipeline
 test-agen
+test-agen-block-bounds
 test-agen-im2col-bounds
 test-agen-range-admission
 test-agen-affine-bounds
