@@ -4,6 +4,7 @@ __pycache__/
 build/
 
 # Test binaries
+test-sram-bounds
 test-attention-autotile
 test-attention-kv
 test-attention-staging

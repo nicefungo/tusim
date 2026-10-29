@@ -92,7 +92,11 @@ void tu_sram_destroy(tu_sram_region_t *r);
 /*
  * All accesses now go through bandwidth arbitration.
  * addr: byte offset within the region.
- * Returns the number of stall cycles incurred (0 = no stall).
+ * Returns the number of stall cycles incurred (0 = no stall). An invalid
+ * region span reports TU_ERR_SRAM_OVERFLOW, performs no copy or metering, and
+ * returns 0; the return value is not an error status. Callers that need error
+ * handling must clear and inspect tu_get_last_error(), or use abort mode.
+ * Bulk zero-byte accesses within or exactly at the end are no-ops.
  */
 
 /* Read a single word (bank_width bytes). Returns stall cycles. */

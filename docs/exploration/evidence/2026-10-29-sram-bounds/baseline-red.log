@@ -1,0 +1,43 @@
+SRAM bounds-test overflow: addr=14 size=4 max=16
+FAIL line 36: memcmp(output_before, output, sizeof(output)) == 0
+FAIL line 37: r.banks.reads == 0 && r.banks.writes == 0
+FAIL line 40: r.banks.bw_banks[i].words_available == 1
+FAIL line 41: r.banks.bw_banks[i].total_cycles_used == 0
+SRAM bounds-test overflow: addr=16 size=4 max=16
+FAIL line 36: memcmp(output_before, output, sizeof(output)) == 0
+FAIL line 37: r.banks.reads == 0 && r.banks.writes == 0
+FAIL line 40: r.banks.bw_banks[i].words_available == 1
+FAIL line 41: r.banks.bw_banks[i].total_cycles_used == 0
+SRAM bounds-test overflow: addr=14 size=4 max=16
+FAIL line 35: memcmp(before, r.banks.data, 32) == 0
+FAIL line 37: r.banks.reads == 0 && r.banks.writes == 0
+FAIL line 40: r.banks.bw_banks[i].words_available == 1
+FAIL line 41: r.banks.bw_banks[i].total_cycles_used == 0
+SRAM bounds-test overflow: addr=16 size=4 max=16
+FAIL line 35: memcmp(before, r.banks.data, 32) == 0
+FAIL line 37: r.banks.reads == 0 && r.banks.writes == 0
+FAIL line 40: r.banks.bw_banks[i].words_available == 1
+FAIL line 41: r.banks.bw_banks[i].total_cycles_used == 0
+SRAM bounds-test overflow: addr=14 size=4 max=16
+FAIL line 36: memcmp(output_before, output, sizeof(output)) == 0
+FAIL line 37: r.banks.reads == 0 && r.banks.writes == 0
+FAIL line 40: r.banks.bw_banks[i].words_available == 1
+FAIL line 41: r.banks.bw_banks[i].total_cycles_used == 0
+SRAM bounds-test overflow: addr=16 size=4 max=16
+FAIL line 36: memcmp(output_before, output, sizeof(output)) == 0
+FAIL line 37: r.banks.reads == 0 && r.banks.writes == 0
+FAIL line 40: r.banks.bw_banks[i].words_available == 1
+FAIL line 41: r.banks.bw_banks[i].total_cycles_used == 0
+SRAM bounds-test overflow: addr=17 size=0 max=16
+SRAM bounds-test overflow: addr=14 size=4 max=16
+FAIL line 35: memcmp(before, r.banks.data, 32) == 0
+FAIL line 37: r.banks.reads == 0 && r.banks.writes == 0
+FAIL line 40: r.banks.bw_banks[i].words_available == 1
+FAIL line 41: r.banks.bw_banks[i].total_cycles_used == 0
+SRAM bounds-test overflow: addr=16 size=4 max=16
+FAIL line 35: memcmp(before, r.banks.data, 32) == 0
+FAIL line 37: r.banks.reads == 0 && r.banks.writes == 0
+FAIL line 40: r.banks.bw_banks[i].words_available == 1
+FAIL line 41: r.banks.bw_banks[i].total_cycles_used == 0
+SRAM bounds-test overflow: addr=17 size=0 max=16
+SRAM bounds safe: 195 checks, 32 failures

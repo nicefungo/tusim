@@ -136,13 +136,15 @@ void tu_sram_set_bw_modeling(tu_sram_region_t *r, bool enabled) {
 
 /* ---- Access Functions ---- */
 
-static void bounds_check(const tu_sram_region_t *r, uint32_t addr, uint32_t size) {
-    if (addr + size > r->total_size) {
+static bool bounds_check(const tu_sram_region_t *r, uint32_t addr, uint32_t size) {
+    /* Subtraction avoids wrapping addr + size, including for empty accesses. */
+    if (addr > r->total_size || size > r->total_size - addr) {
         fprintf(stderr, "SRAM %s overflow: addr=%u size=%u max=%u\n",
                 r->name, addr, size, r->total_size);
         TU_REPORT_ERR(TU_ERR_SRAM_OVERFLOW, "SRAM bounds check failed");
-        return;
+        return false;
     }
+    return true;
 }
 
 /* ---- Internal: get active data pointer (respects double buffering) ---- */
@@ -154,7 +156,7 @@ static uint8_t *sram_data_ptr(tu_sram_region_t *r) {
 }
 
 uint64_t tu_sram_read(tu_sram_region_t *r, uint32_t addr, void *out) {
-    bounds_check(r, addr, r->banks.bank_width);
+    if (!bounds_check(r, addr, r->banks.bank_width)) return 0;
     uint32_t bank = tu_sram_bank_index(r, addr);
 
     /* Bandwidth arbitration */
@@ -166,7 +168,7 @@ uint64_t tu_sram_read(tu_sram_region_t *r, uint32_t addr, void *out) {
 }
 
 uint64_t tu_sram_write(tu_sram_region_t *r, uint32_t addr, const void *data) {
-    bounds_check(r, addr, r->banks.bank_width);
+    if (!bounds_check(r, addr, r->banks.bank_width)) return 0;
     uint32_t bank = tu_sram_bank_index(r, addr);
 
     /* Bandwidth arbitration */
@@ -178,10 +180,10 @@ uint64_t tu_sram_write(tu_sram_region_t *r, uint32_t addr, const void *data) {
 }
 
 uint64_t tu_sram_read_bulk(tu_sram_region_t *r, uint32_t addr, void *out, uint32_t bytes) {
-    bounds_check(r, addr, bytes);
+    if (!bounds_check(r, addr, bytes) || bytes == 0) return 0;
     uint32_t bw = r->banks.bank_width;
     uint64_t total_stall = 0;
-    uint32_t words = (bytes + bw - 1) / bw;
+    uint32_t words = 1 + (bytes - 1) / bw;
 
     for (uint32_t i = 0; i < words; i++) {
         uint32_t off = addr + i * bw;
@@ -195,10 +197,10 @@ uint64_t tu_sram_read_bulk(tu_sram_region_t *r, uint32_t addr, void *out, uint32
 }
 
 uint64_t tu_sram_write_bulk(tu_sram_region_t *r, uint32_t addr, const void *data, uint32_t bytes) {
-    bounds_check(r, addr, bytes);
+    if (!bounds_check(r, addr, bytes) || bytes == 0) return 0;
     uint32_t bw = r->banks.bank_width;
     uint64_t total_stall = 0;
-    uint32_t words = (bytes + bw - 1) / bw;
+    uint32_t words = 1 + (bytes - 1) / bw;
 
     for (uint32_t i = 0; i < words; i++) {
         uint32_t off = addr + i * bw;

@@ -1,0 +1,17 @@
+SRAM bounds-test overflow: addr=14 size=4 max=16
+SRAM bounds-test overflow: addr=16 size=4 max=16
+SRAM bounds-test overflow: addr=4294967294 size=4 max=16
+SRAM bounds-test overflow: addr=14 size=4 max=16
+SRAM bounds-test overflow: addr=16 size=4 max=16
+SRAM bounds-test overflow: addr=4294967294 size=4 max=16
+SRAM bounds-test overflow: addr=14 size=4 max=16
+SRAM bounds-test overflow: addr=16 size=4 max=16
+SRAM bounds-test overflow: addr=4294967294 size=4 max=16
+SRAM bounds-test overflow: addr=17 size=0 max=16
+SRAM bounds-test overflow: addr=0 size=4294967295 max=16
+SRAM bounds-test overflow: addr=14 size=4 max=16
+SRAM bounds-test overflow: addr=16 size=4 max=16
+SRAM bounds-test overflow: addr=4294967294 size=4 max=16
+SRAM bounds-test overflow: addr=17 size=0 max=16
+SRAM bounds-test overflow: addr=0 size=4294967295 max=16
+SRAM bounds full: 279 checks, 0 failures
