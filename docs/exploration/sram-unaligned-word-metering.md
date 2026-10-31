@@ -1,6 +1,66 @@
 # SRAM unaligned word metering: compatibility and address-span hypotheses
 
-Date: 2026-10-30. Executed baseline: `b9bb04ca375b2e3b668b382ea656f5cafebdd9aa`.
+## 2026-10-31 implementation and scope
+
+The SRAM scalar/bulk API now implements both `size_only` (zero/default) and
+`address_span`, selectable by `tu.memory.banking.word_metering` in JSON/YAML,
+canonical-to-runtime config, or `tu_sram_set_word_metering` on a region. Invalid
+JSON names/types and invalid setter values are rejected. Invalid direct runtime
+values reject initialization before teardown; the legacy void initializer
+reports to stderr rather than returning a status. Public structs grew, so binary
+clients must rebuild. Existing scalar accesses still copy exactly one bank word.
+
+For a nonempty byte range the new mode meters each aligned bank word
+intersecting the range; the default meters `ceil(bytes/word_width)` starting at
+the initial bank. Both use the same existing immediate-copy, same-cycle meter.
+Aggregate `reads`/`writes` count metered words, including stalled ones; in the
+new mode an unaligned scalar may add two rather than one. No-op and rejected
+spans do not meter. This setting applies **only to calls through
+`tu_sram_read/write[_bulk]`**, not every use of a region: DMA descriptor and
+elementwise implementations have independent meters, and raw-pointer paths
+bypass it. `tu_dma_load_o` does use the bulk API, while descriptor DMA does not.
+An async/sync descriptor control at address 1 and 16 bytes reports bank events
+1/1/1/1 in *both* modes (51/52 recorded completion cycles, respectively),
+where API span mode reports 2/1/1/1. Changing DMA's segmented/multicast
+accounting requires a separately verified descriptor/event contract; this
+setting must not be advertised as a global physical SRAM configuration.
+
+The complete 70-row mode/address/size table is in
+`evidence/2026-10-31-sram-word-meter/matrix.txt`; four banks, 4 B words, one
+grant per 4-cycle window and two-cycle penalty, fresh state for each row.
+Examples (bank event vectors, local stall cycles):
+
+| Address, bytes | size-only | address-span |
+|---|---|---|
+| 3, 2 | 1/0/0/0, 0 | 1/1/0/0, 0 |
+| 1, 16 | 1/1/1/1, 0 | 2/1/1/1, 2 |
+| 15, 16 | 1/1/1/1, 0 | 1/1/1/2, 2 |
+
+These are local model counters/stalls, not physical latency or throughput:
+calls copy immediately and do not replay stalled operations. The 39,936-case,
+3,440,996-check oracle covers widths 1/2/4/8, 1/3/4/8 banks, scalar/bulk,
+read/write, unaligned offsets, bank wraps, data and counter equality, setter
+rejection, empty/bounds behavior, JSON/config/core propagation, and independent
+DMA scope controls. Full all-object ASan/UBSan/LSan passes exercised paths;
+the prior 80-row default-mode matrix is byte-identical. YAML-generated default
+header identity and an alternate generated mode compile are gated. Clean
+build, quick and full aggregates, config, SRAM cadence, multicore and DMA
+scatter/gather tests passed. Run `make test-sram-word-meter`; test binaries link
+the static archive, and the aggregates may require `LD_LIBRARY_PATH=$PWD`.
+
+**Trade-offs:** size-only retains existing software/counter compatibility and
+can model an abstract byte mover; span mode exposes more word-bank activity and
+possibly more local stall for misalignment. Span detection may require alignment
+and mask/split control and raises verification complexity; it may motivate
+compiler alignment, but could overstate traffic on hardware with merging. Bytes
+and numerical values are unchanged. Actual SRAM/DRAM traffic, end-to-end
+throughput/latency, area, power/energy, port scheduling and physical movement
+are unquantified; no gain is claimed. Rejection or explicit micro-operations
+remain blocked on status, replay, and fault/retirement contracts.
+
+## Historical exploration (2026-10-30)
+
+Executed baseline: `b9bb04ca375b2e3b668b382ea656f5cafebdd9aa`.
 
 ## Question and reproducible observation
 

@@ -44,6 +44,7 @@ def main() -> int:
 
         yaml_text = (ROOT / "config" / "tu_config.yaml").read_text()
         alternatives = {
+            'word_metering: "size_only"': 'word_metering: "address_span"',
             'dataflow: "weight_stationary"': 'dataflow: "output_stationary"',
             "gbuf_size_kb: 1024": "gbuf_size_kb: 2048",
             'type: "ideal"': 'type: "hbm3"',
@@ -111,6 +112,7 @@ def main() -> int:
             '#include "tu_config.h"\n'
             '#include "tu_cmodel/tu_cmodel.h"\n'
             '_Static_assert(TU_DATAFLOW_MODE == TU_DATAFLOW_MODE_OS, "dataflow");\n'
+            '_Static_assert(TU_SRAM_WORD_METERING == 1, "sram word metering");\n'
             '_Static_assert(TU_MEM_GBUF_SIZE == 2048 * 1024, "gbuf");\n'
             '_Static_assert(TU_DRAM_TYPE == TU_DRAM_HBM3, "dram type");\n'
             '_Static_assert(TU_DRAM_CHANNELS == 4, "dram channels");\n'
@@ -134,6 +136,7 @@ def main() -> int:
             '_Static_assert(TU_FP16_ROUNDING_MODE == TU_FP16_ROUNDING_STOCHASTIC, "rounding");\n'
             'int main(void) { tu_runtime_config_t c = tu_runtime_config_default(); '
             'return c.dataflow_mode != TU_DATAFLOW_MODE_OS || '
+            'c.sram_word_metering != 1 || '
             'c.dma_issue_payload_mode != TU_DMA_ISSUE_PAYLOAD_DEFAULT_OVERLAPPED || '
             'c.dma_burst_boundary_mode != TU_DMA_BURST_BOUNDARY_BOTH_ADDRESS || '
             'c.dma_arb_policy != TU_DMA_ARB_DEFAULT_AGING_PRIORITY || '

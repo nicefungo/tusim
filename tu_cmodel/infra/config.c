@@ -408,6 +408,7 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->sram_conflict_mode  = 1;
     cfg->sram_stall_penalty  = 2;
     cfg->sram_bw_window_cycles = 4;
+    cfg->sram_word_metering = TU_SRAM_WORD_METERING;
     cfg->sram_bw_modeling    = true;
 
     cfg->gbuf_size_kb        = 1024;
@@ -549,6 +550,7 @@ tu_runtime_config_t tu_config_to_runtime(const struct tu_config_t *cfg) {
     rt.sram_words_per_cycle = (uint8_t)cfg->sram_words_per_cycle;
     rt.sram_stall_penalty = cfg->sram_stall_penalty;
     rt.sram_bw_window_cycles = cfg->sram_bw_window_cycles;
+    rt.sram_word_metering = cfg->sram_word_metering;
     double latency_clock = cfg->dram_core_clock_ghz > 0.0 ?
                            cfg->dram_core_clock_ghz : 1.0;
     rt.dma_read_latency_cycles = (uint32_t)ceil(
@@ -699,6 +701,13 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
             if (parse_opt_int64(bank, "stall_penalty_cycles", &iv))
                 cfg->sram_stall_penalty =
                     (iv >= 1 && iv <= UINT8_MAX) ? (uint8_t)iv : 0;
+            const tu_json_value_t *meter = tu_json_get(bank, "word_metering");
+            if (meter) {
+                const char *name = tu_json_as_string(meter, NULL);
+                cfg->sram_word_metering = !name ? -1 :
+                    strcmp(name, "size_only") == 0 ? 0 :
+                    strcmp(name, "address_span") == 0 ? 1 : -1;
+            }
             const tu_json_value_t *cm = tu_json_get(bank, "conflict_model");
             if (cm && cm->type == TU_JSON_STRING)
                 cfg->sram_conflict_mode = parse_conflict_str(tu_json_as_string(cm, NULL));
@@ -1174,6 +1183,11 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
                      "SRAM stall_penalty_cycles must be [1,255]");
+        return -1;
+    }
+    if (cfg->sram_word_metering < 0 || cfg->sram_word_metering > 1) {
+        if (error_buf && error_size > 0)
+            snprintf(error_buf, error_size, "SRAM word_metering must be size_only or address_span");
         return -1;
     }
     uint32_t bw = cfg->dma_bus_width_bits;
@@ -1807,6 +1821,7 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             cfg->sram_stall_penalty);
     fprintf(out, "| `sram_bw_window_cycles` | %lu | uint64 | Bandwidth refill window |\n",
             (unsigned long)cfg->sram_bw_window_cycles);
+    fprintf(out, "| `sram_word_metering` | %d | int | SRAM API: size_only=0, address_span=1; DMA and elementwise meters unaffected |\n", cfg->sram_word_metering);
     fprintf(out, "| `sram_bw_modeling` | %s | bool | Enable bandwidth modeling |\n",
             fmt_bool(cfg->sram_bw_modeling));
     fprintf(out, "| `gbuf_size_kb` | %u | uint32 | Global buffer size (KB), 0=disabled |\n",

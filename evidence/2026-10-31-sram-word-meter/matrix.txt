@@ -1,0 +1,98 @@
+cc -O2 -Wall -Wextra -std=c11 -fPIC -I. -Itu_cmodel -o test-sram-word-meter tests/test_sram_word_meter.c ./libtucmodel.a -lm
+./test-sram-word-meter
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m TU initialized from config: 16×16 PE, 256 KB SRAM
+Invalid SRAM word metering runtime configuration
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m TU initialized from config: 16×16 PE, 256 KB SRAM
+Invalid SRAM word metering runtime configuration
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m tu_core_t [0] created
+[       0] CORE  [1;32mINFO [0m tu_core_t [0] destroyed
+SRAM bounds overflow: addr=15 size=2 max=16
+[TU ERROR] tu_cmodel/tu_sram.c:166 in bounds_check(): SRAM bounds check failed (code=21: SRAM overflow)
+SRAM bounds overflow: addr=15 size=2 max=16
+[TU ERROR] tu_cmodel/tu_sram.c:166 in bounds_check(): SRAM bounds check failed (code=21: SRAM overflow)
+SRAM bounds overflow: addr=15 size=2 max=16
+[TU ERROR] tu_cmodel/tu_sram.c:166 in bounds_check(): SRAM bounds check failed (code=21: SRAM overflow)
+SRAM bounds overflow: addr=15 size=2 max=16
+[TU ERROR] tu_cmodel/tu_sram.c:166 in bounds_check(): SRAM bounds check failed (code=21: SRAM overflow)
+dma scope mode=0 async=0 bank-events=1,1,1,1 cycles=51
+dma scope mode=1 async=0 bank-events=1,1,1,1 cycles=51
+dma scope mode=0 async=1 bank-events=1,1,1,1 cycles=52
+dma scope mode=1 async=1 bank-events=1,1,1,1 cycles=52
+mode addr bytes bank0 bank1 bank2 bank3 stall
+size 0 0 0 0 0 0 0
+size 0 1 1 0 0 0 0
+size 0 2 1 0 0 0 0
+size 0 4 1 0 0 0 0
+size 0 5 1 1 0 0 0
+size 0 16 1 1 1 1 0
+size 0 17 2 1 1 1 2
+size 1 0 0 0 0 0 0
+size 1 1 1 0 0 0 0
+size 1 2 1 0 0 0 0
+size 1 4 1 0 0 0 0
+size 1 5 1 1 0 0 0
+size 1 16 1 1 1 1 0
+size 1 17 2 1 1 1 2
+size 3 0 0 0 0 0 0
+size 3 1 1 0 0 0 0
+size 3 2 1 0 0 0 0
+size 3 4 1 0 0 0 0
+size 3 5 1 1 0 0 0
+size 3 16 1 1 1 1 0
+size 3 17 2 1 1 1 2
+size 4 0 0 0 0 0 0
+size 4 1 0 1 0 0 0
+size 4 2 0 1 0 0 0
+size 4 4 0 1 0 0 0
+size 4 5 0 1 1 0 0
+size 4 16 1 1 1 1 0
+size 4 17 1 2 1 1 2
+size 15 0 0 0 0 0 0
+size 15 1 0 0 0 1 0
+size 15 2 0 0 0 1 0
+size 15 4 0 0 0 1 0
+size 15 5 1 0 0 1 0
+size 15 16 1 1 1 1 0
+size 15 17 1 1 1 2 2
+span 0 0 0 0 0 0 0
+span 0 1 1 0 0 0 0
+span 0 2 1 0 0 0 0
+span 0 4 1 0 0 0 0
+span 0 5 1 1 0 0 0
+span 0 16 1 1 1 1 0
+span 0 17 2 1 1 1 2
+span 1 0 0 0 0 0 0
+span 1 1 1 0 0 0 0
+span 1 2 1 0 0 0 0
+span 1 4 1 1 0 0 0
+span 1 5 1 1 0 0 0
+span 1 16 2 1 1 1 2
+span 1 17 2 1 1 1 2
+span 3 0 0 0 0 0 0
+span 3 1 1 0 0 0 0
+span 3 2 1 1 0 0 0
+span 3 4 1 1 0 0 0
+span 3 5 1 1 0 0 0
+span 3 16 2 1 1 1 2
+span 3 17 2 1 1 1 2
+span 4 0 0 0 0 0 0
+span 4 1 0 1 0 0 0
+span 4 2 0 1 0 0 0
+span 4 4 0 1 0 0 0
+span 4 5 0 1 1 0 0
+span 4 16 1 1 1 1 0
+span 4 17 1 2 1 1 2
+span 15 0 0 0 0 0 0
+span 15 1 0 0 0 1 0
+span 15 2 1 0 0 1 0
+span 15 4 1 0 0 1 0
+span 15 5 1 0 0 1 0
+span 15 16 1 1 1 2 2
+span 15 17 1 1 1 2 2
+SRAM word meter: cases=39936 checks=3440996 failures=0

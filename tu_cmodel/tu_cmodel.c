@@ -69,8 +69,8 @@ int tu_init_from_file(const char *config_path,
 }
 
 int tu_init_from_config(const struct tu_config_t *cfg) {
-    if (!cfg) {
-        TU_LOG_ERR(TU_COMP_CORE, "tu_init_from_config: null config");
+    if (!cfg || cfg->sram_word_metering < 0 || cfg->sram_word_metering > 1) {
+        TU_LOG_ERR(TU_COMP_CORE, "tu_init_from_config: null config or invalid SRAM word metering");
         return -1;
     }
 
@@ -84,6 +84,11 @@ int tu_init_from_config(const struct tu_config_t *cfg) {
 }
 
 void tu_init_with_config(const tu_runtime_config_t *cfg) {
+    /* This legacy void API cannot return an error; reject before teardown. */
+    if (!cfg || cfg->sram_word_metering < 0 || cfg->sram_word_metering > 1) {
+        fprintf(stderr, "Invalid SRAM word metering runtime configuration\n");
+        return;
+    }
     /* Initialize logging first */
     tu_log_init();
     TU_LOG_INFO(TU_COMP_CORE, "TinyTU CModel initializing...");
@@ -109,6 +114,9 @@ void tu_init_with_config(const tu_runtime_config_t *cfg) {
                          cfg->sram_num_banks, TU_SRAM_BANK_WIDTH,
                          cfg->sram_words_per_cycle, cfg->sram_stall_penalty,
                          cfg->sram_bw_window_cycles);
+    tu_sram_set_word_metering(&g_tu.sram_w, cfg->sram_word_metering);
+    tu_sram_set_word_metering(&g_tu.sram_a, cfg->sram_word_metering);
+    tu_sram_set_word_metering(&g_tu.sram_o, cfg->sram_word_metering);
 
     /* Initialize DMA engine from the executable runtime configuration. */
     tu_dma_init_config_boundary_aging_policy_drr_cost_service(cfg->dma_async_mode,

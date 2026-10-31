@@ -69,6 +69,7 @@ extern "C" {
 #define TU_SRAM_WORDS_PER_CYCLE 1
 #define TU_SRAM_BW_WINDOW_CYCLES 4
 #define TU_SRAM_BW_STALL_PENALTY 2
+#define TU_SRAM_WORD_METERING 0
 #define TU_SRAM_ARB_NONE          0
 #define TU_SRAM_ARB_ROUND_ROBIN   1
 #define TU_SRAM_ARB_PRIORITY      2
@@ -336,6 +337,7 @@ typedef struct {
     uint8_t  sram_words_per_cycle;
     uint8_t  sram_stall_penalty;
     uint64_t sram_bw_window_cycles;
+    int      sram_word_metering;
     uint32_t dma_read_latency_cycles;
     uint32_t dma_write_latency_cycles;
     bool     dma_latency_configured;
@@ -406,6 +408,7 @@ static inline tu_runtime_config_t tu_runtime_config_default(void) {
         .sram_words_per_cycle = TU_SRAM_WORDS_PER_CYCLE,
         .sram_stall_penalty = TU_SRAM_BW_STALL_PENALTY,
         .sram_bw_window_cycles = TU_SRAM_BW_WINDOW_CYCLES,
+        .sram_word_metering = TU_SRAM_WORD_METERING,
         .dma_read_latency_cycles = TU_LATENCY_DRAM_READ,
         .dma_write_latency_cycles = TU_LATENCY_DRAM_WRITE,
         .dma_latency_configured = true,

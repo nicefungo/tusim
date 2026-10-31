@@ -54,6 +54,7 @@ typedef struct {
     uint8_t    arb_mode;         /* Arbitration policy */
     uint8_t    stall_penalty;    /* Cycles to add per bandwidth stall */
     bool       bw_modeling;      /* Whether bandwidth modeling is active */
+    int        word_metering;    /* 0=size-only, 1=intersected aligned words */
 } tu_sram_bank_t;
 
 /* SRAM region (W-buffer, A-buffer, O-buffer) */
@@ -121,6 +122,10 @@ void tu_sram_refill_bw(tu_sram_region_t *r);
 
 /* Enable/disable bandwidth modeling at runtime */
 void tu_sram_set_bw_modeling(tu_sram_region_t *r, bool enabled);
+
+/* SRAM API metering only. Invalid modes reject without changing state. */
+enum { TU_SRAM_METER_SIZE_ONLY = 0, TU_SRAM_METER_ADDRESS_SPAN = 1 };
+int tu_sram_set_word_metering(tu_sram_region_t *r, int mode);
 
 /* ---- Access Helpers ---- */
 

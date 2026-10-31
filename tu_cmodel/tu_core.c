@@ -16,6 +16,8 @@ tu_core_t *g_default_core = NULL;
 
 tu_core_t *tu_core_create_with_id(uint32_t core_id,
                                    const tu_runtime_config_t *cfg) {
+    if (!cfg || cfg->sram_word_metering < 0 || cfg->sram_word_metering > 1)
+        return NULL;
     tu_core_t *core = calloc(1, sizeof(tu_core_t));
     if (!core) return NULL;
 

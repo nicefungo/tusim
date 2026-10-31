@@ -45,6 +45,7 @@
 | `sram_conflict_mode` | 1 | int | Conflict: 0=None, 1=Detect, 2=Stall |
 | `sram_stall_penalty` | 2 | uint8 | Stall penalty cycles |
 | `sram_bw_window_cycles` | 4 | uint64 | Bandwidth refill window |
+| `sram_word_metering` | 0 | int | SRAM API: size_only=0, address_span=1; DMA and elementwise meters unaffected |
 | `sram_bw_modeling` | `true` | bool | Enable bandwidth modeling |
 | `gbuf_size_kb` | 1024 | uint32 | Global buffer size (KB), 0=disabled |
 | `gbuf_banks` | 16 | uint32 | Global buffer banks |

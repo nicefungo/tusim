@@ -232,6 +232,7 @@ typedef struct tu_config_t {
     int      sram_conflict_mode;    /* NONE=0, DETECT=1, STALL=2 */
     uint8_t  sram_stall_penalty;
     uint64_t sram_bw_window_cycles;
+    int      sram_word_metering;    /* 0=size-only, 1=address-span; SRAM API only */
     bool     sram_bw_modeling;
 
     /* ---- Memory: Global Buffer ---- */
