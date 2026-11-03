@@ -1,0 +1,10 @@
+window,direction,advance_calls,access_cycles,stalls,served,stalled,last_refill,result
+4,read,batched,0;5;8,0;0;2,2,1,5,PASS
+4,read,intermediate,0;5;8,0;0;0,3,0,8,PASS
+4,write,batched,0;5;8,0;0;2,2,1,5,PASS
+4,write,intermediate,0;5;8,0;0;0,3,0,8,PASS
+8,read,batched,0;9;16,0;0;2,2,1,9,PASS
+8,read,intermediate,0;9;16,0;0;0,3,0,16,PASS
+8,write,batched,0;9;16,0;0;2,2,1,9,PASS
+8,write,intermediate,0;9;16,0;0;0,3,0,16,PASS
+failures=0
