@@ -223,7 +223,7 @@ $(TU_DIR)/bindings/tu_dpi.o: $(TU_DIR)/bindings/tu_dpi.c $(TU_DIR)/bindings/tu_d
 
 # ---- Test: cmodel correctness ----
 test-cmodel: tests/test_cmodel.c libtucmodel.a
-	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	$(CC) $(CFLAGS) -I. -o $@ $< ./libtucmodel.a $(LDFLAGS)
 	./test-cmodel
 
 # ---- Test: global lifecycle / repeated re-initialization ----
@@ -233,7 +233,7 @@ test-reinit: tests/test_reinit.c libtucmodel.a
 
 # ---- Test: command queue ----
 test-cmdq: tests/test_command_queue.c libtucmodel.a
-	$(CC) $(CFLAGS) -I. -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	$(CC) $(CFLAGS) -I. -o $@ $< ./libtucmodel.a $(LDFLAGS)
 	./test-cmdq
 
 # ---- Test: DMA descriptor engine ----
@@ -744,9 +744,9 @@ test-compiler:
 # ---- Test: ASM interpreter ----
 test-asm: libtucmodel.a
 	@echo "=== Building ASM test ==="
-	$(CC) $(CFLAGS) -I. -o /tmp/test_asm tests/test_asm.c -L. -ltucmodel $(LDFLAGS)
+	$(CC) $(CFLAGS) -I. -o test-asm-bin tests/test_asm.c ./libtucmodel.a $(LDFLAGS)
 	@echo "=== Running ASM interpreter ==="
-	/tmp/test_asm
+	./test-asm-bin
 
 # ══════════════════════════════════════════════════════════════════
 # Test Suite — Comprehensive (Gap V3: CI/Regression Framework)
@@ -829,5 +829,5 @@ clean:
 	rm -f test-int-quant test-conv test-random
 	rm -f test-rounding test-fp8 test-attention test-perf test-pool test-pipeline
 	rm -f test-agen test-multicore test-multicore-sweep test-multicore-dataflow-sweep test-compress test-errors test-config test-softmax test-double test-context test-context-switch-sweep test-compress test-weight-compression-sweep test-sparsity test-sparsity-sweep test-scheduler test-scheduler-sweep test-interconnect-topology-sweep test-interconnect-switching-sweep test-interconnect-contention-sweep test-interconnect-routing-sweep test-liveness test-power test-power-assumptions-sweep test-dpi test-dataflow-sweep test-rounding-sweep test-attention-sweep test-pooling-sweep test-softmax-sweep test-conv-sweep test-norm-sweep test-norm-attention-sweep test-conv-groups-sweep test-conv-pool-cascade test-mma-activation-sweep test-softmax-attention-sweep
-	rm -f /tmp/gpt_block_tu /tmp/gpt_block_tu.c /tmp/test_asm
+	rm -f test-asm-bin
 	rm -rf build/ci_reports

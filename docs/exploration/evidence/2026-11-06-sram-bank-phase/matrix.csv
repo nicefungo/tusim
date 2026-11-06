@@ -1,0 +1,13 @@
+direction,step,cycle,bank,live_penalty,first_use_hypothesis,live_last0,live_last1,data_ok
+read,0,0,0,0,0,0,0,1
+read,1,2,1,0,0,0,0,1
+read,2,4,0,0,0,4,4,1
+read,3,4,1,0,2,4,4,1
+read,4,6,0,2,2,4,4,1
+read,5,6,1,2,0,4,4,1
+write,0,0,0,0,0,0,0,1
+write,1,2,1,0,0,0,0,1
+write,2,4,0,0,0,4,4,1
+write,3,4,1,0,2,4,4,1
+write,4,6,0,2,2,4,4,1
+write,5,6,1,2,0,4,4,1
