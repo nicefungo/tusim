@@ -235,14 +235,26 @@ float tu_sram_get_bandwidth_utilization(const tu_sram_region_t *r) {
     /* Max possible words served = bank_count × words_per_cycle × refill_periods */
     uint64_t refill_periods = b->current_cycle / b->bw_refill_window;
     if (refill_periods == 0) refill_periods = 1;
-    uint64_t max_possible = (uint64_t)b->bank_count * b->words_per_cycle * refill_periods;
-
+    uint64_t capacity = (uint64_t)b->bank_count * b->words_per_cycle;
+    bool overflow = capacity && refill_periods > UINT64_MAX / capacity;
+    uint64_t max_possible = capacity * refill_periods;
     uint64_t total_served = 0;
+    long double wide_served = 0;
     for (uint32_t i = 0; i < b->bank_count; i++) {
-        total_served += b->bw_banks[i].reads_served + b->bw_banks[i].writes_served;
+        uint64_t reads = b->bw_banks[i].reads_served;
+        uint64_t writes = b->bw_banks[i].writes_served;
+        wide_served += (long double)reads + (long double)writes;
+        if (UINT64_MAX - total_served < reads) overflow = true;
+        total_served += reads;
+        if (UINT64_MAX - total_served < writes) overflow = true;
+        total_served += writes;
     }
 
-    if (max_possible == 0) return 0.0f;
+    if (!capacity) return 0.0f;
+    if (overflow) {
+        long double util = wide_served / ((long double)capacity * refill_periods);
+        return util > 1.0L ? 1.0f : (float)util;
+    }
     float util = (float)total_served / (float)max_possible;
     return util > 1.0f ? 1.0f : util;
 }
@@ -272,8 +284,17 @@ void tu_sram_get_bank_bw_stats(const tu_sram_region_t *r, uint32_t bank_idx,
         if (refill_periods == 0) refill_periods = 1;
         uint64_t max_bank = (uint64_t)b->words_per_cycle * refill_periods;
         uint64_t served = bw->reads_served + bw->writes_served;
-        float u = max_bank > 0 ? (float)served / (float)max_bank : 0.0f;
-        *utilization_out = u > 1.0f ? 1.0f : u;
+        bool overflow = (b->words_per_cycle && refill_periods > UINT64_MAX / b->words_per_cycle) ||
+                        UINT64_MAX - bw->reads_served < bw->writes_served;
+        if (overflow) {
+            long double numerator = (long double)bw->reads_served + bw->writes_served;
+            long double denominator = (long double)b->words_per_cycle * refill_periods;
+            long double u = denominator > 0 ? numerator / denominator : 0;
+            *utilization_out = u > 1.0L ? 1.0f : (float)u;
+        } else {
+            float u = max_bank > 0 ? (float)served / (float)max_bank : 0.0f;
+            *utilization_out = u > 1.0f ? 1.0f : u;
+        }
     }
 }
 
