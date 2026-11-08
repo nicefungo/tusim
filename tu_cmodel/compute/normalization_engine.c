@@ -399,6 +399,12 @@ const char *tu_norm_mode_name(tu_norm_mode_t mode) {
     }
 }
 
+/* Descriptor extents are checked before any parameter load or output write. */
+static bool norm_span_fits(const tu_sram_region_t *region, uint32_t offset,
+                           uint32_t count) {
+    return (uint64_t)offset + (uint64_t)count * sizeof(float) <= region->total_size;
+}
+
 bool tu_norm_validate_desc(const tu_norm_desc_t *desc) {
     if (!desc) {
         fprintf(stderr, "tu_norm_validate: null descriptor\n");
@@ -423,17 +429,13 @@ bool tu_norm_validate_desc(const tu_norm_desc_t *desc) {
                 desc->norm_axis_dim, desc->elem_count);
         return false;
     }
-    if (!desc->in_place) {
-        /* out_offset validation would need knowledge of available SRAM */
-    }
-
-    /* Check data bounds */
-    uint32_t data_end = desc->data_offset + desc->elem_count * sizeof(float);
-    if (data_end > desc->data_sram->total_size) {
-        fprintf(stderr, "tu_norm_validate: data exceeds SRAM bounds "
-                "(offset=%u + %u*4 = %u > %u)\n",
-                desc->data_offset, desc->elem_count, data_end,
-                desc->data_sram->total_size);
+    uint32_t axis = desc->norm_axis_dim ? desc->norm_axis_dim : desc->elem_count;
+    if (!norm_span_fits(desc->data_sram, desc->data_offset, desc->elem_count) ||
+        (!desc->in_place && !norm_span_fits(desc->data_sram, desc->out_offset, desc->elem_count)) ||
+        (desc->gamma_sram && !norm_span_fits(desc->gamma_sram, desc->gamma_offset, axis)) ||
+        (desc->beta_sram && desc->mode == TU_NORM_LAYER_NORM &&
+         !norm_span_fits(desc->beta_sram, desc->beta_offset, axis))) {
+        fprintf(stderr, "tu_norm_validate: descriptor span exceeds SRAM bounds\n");
         return false;
     }
 

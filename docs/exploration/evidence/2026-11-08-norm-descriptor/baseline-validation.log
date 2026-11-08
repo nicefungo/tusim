@@ -1,0 +1,174 @@
+tu_norm_validate: data exceeds SRAM bounds (offset=121 + 2*4 = 129 > 128)
+tu_norm_validate: data exceeds SRAM bounds (offset=124 + 2*4 = 132 > 128)
+tu_norm_validate: data exceeds SRAM bounds (offset=128 + 2*4 = 136 > 128)
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+tu_norm_validate: data exceeds SRAM bounds (offset=121 + 2*4 = 129 > 128)
+tu_norm_validate: data exceeds SRAM bounds (offset=124 + 2*4 = 132 > 128)
+tu_norm_validate: data exceeds SRAM bounds (offset=128 + 2*4 = 136 > 128)
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+tu_norm_validate: data exceeds SRAM bounds (offset=121 + 2*4 = 129 > 128)
+tu_norm_validate: data exceeds SRAM bounds (offset=124 + 2*4 = 132 > 128)
+tu_norm_validate: data exceeds SRAM bounds (offset=128 + 2*4 = 136 > 128)
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+tu_norm_validate: data exceeds SRAM bounds (offset=121 + 2*4 = 129 > 128)
+tu_norm_validate: data exceeds SRAM bounds (offset=124 + 2*4 = 132 > 128)
+tu_norm_validate: data exceeds SRAM bounds (offset=128 + 2*4 = 136 > 128)
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+tu_norm_validate: data exceeds SRAM bounds (offset=121 + 2*4 = 129 > 128)
+tu_norm_validate: data exceeds SRAM bounds (offset=124 + 2*4 = 132 > 128)
+tu_norm_validate: data exceeds SRAM bounds (offset=128 + 2*4 = 136 > 128)
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+tu_norm_validate: data exceeds SRAM bounds (offset=121 + 2*4 = 129 > 128)
+tu_norm_validate: data exceeds SRAM bounds (offset=124 + 2*4 = 132 > 128)
+tu_norm_validate: data exceeds SRAM bounds (offset=128 + 2*4 = 136 > 128)
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+tu_norm_validate: data exceeds SRAM bounds (offset=121 + 2*4 = 129 > 128)
+tu_norm_validate: data exceeds SRAM bounds (offset=124 + 2*4 = 132 > 128)
+tu_norm_validate: data exceeds SRAM bounds (offset=128 + 2*4 = 136 > 128)
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+tu_norm_validate: data exceeds SRAM bounds (offset=121 + 2*4 = 129 > 128)
+tu_norm_validate: data exceeds SRAM bounds (offset=124 + 2*4 = 132 > 128)
+tu_norm_validate: data exceeds SRAM bounds (offset=128 + 2*4 = 136 > 128)
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+tu_norm_validate: data exceeds SRAM bounds (offset=121 + 2*4 = 129 > 128)
+tu_norm_validate: data exceeds SRAM bounds (offset=124 + 2*4 = 132 > 128)
+tu_norm_validate: data exceeds SRAM bounds (offset=128 + 2*4 = 136 > 128)
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+tu_norm_validate: data exceeds SRAM bounds (offset=121 + 2*4 = 129 > 128)
+tu_norm_validate: data exceeds SRAM bounds (offset=124 + 2*4 = 132 > 128)
+tu_norm_validate: data exceeds SRAM bounds (offset=128 + 2*4 = 136 > 128)
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+tu_norm_validate: data exceeds SRAM bounds (offset=121 + 2*4 = 129 > 128)
+tu_norm_validate: data exceeds SRAM bounds (offset=124 + 2*4 = 132 > 128)
+tu_norm_validate: data exceeds SRAM bounds (offset=128 + 2*4 = 136 > 128)
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+tu_norm_validate: data exceeds SRAM bounds (offset=121 + 2*4 = 129 > 128)
+tu_norm_validate: data exceeds SRAM bounds (offset=124 + 2*4 = 132 > 128)
+tu_norm_validate: data exceeds SRAM bounds (offset=128 + 2*4 = 136 > 128)
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 46: admitted==valid
+FAIL line 106: !tu_norm_validate_desc(&d)
+FAIL line 109: !tu_norm_validate_desc(&d)
+FAIL line 112: !tu_norm_validate_desc(&d)
+normalization descriptor bounds: 432 cases, 906 checks, 137 failures (validation only)

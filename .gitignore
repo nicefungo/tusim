@@ -5,6 +5,7 @@ build/
 
 # Test binaries
 test-sram-utilization-overflow
+test-norm-descriptor-bounds
 test-sram-word-meter
 test-sram-bounds
 test-attention-autotile

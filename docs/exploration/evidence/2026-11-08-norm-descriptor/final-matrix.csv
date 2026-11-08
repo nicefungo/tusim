@@ -1,0 +1,14 @@
+engine,mode,count,axis,status,last_output,tail_unchanged,stats_row2_unchanged
+norm,layer,4,2,success,99,1,1
+norm,layer,5,2,success,99,1,1
+norm,rms,4,2,success,99,1,1
+norm,rms,5,2,success,99,1,1
+softmax,standard,4,2,valid,-,-,-
+softmax,standard,5,2,invalid,-,-,-
+validation_case,accepted
+exact_end,1
+out_of_bounds_output,0
+wrapped_input,0
+out_of_bounds_gamma,0
+out_of_bounds_beta,0
+snapshot_failures,0

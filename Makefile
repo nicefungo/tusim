@@ -12,6 +12,11 @@ COMPILER   = compiler/onnx_to_tu.py
 
 all: libtucmodel.a libtucmodel.so
 
+.PHONY: test-norm-descriptor-bounds
+test-norm-descriptor-bounds: tests/test_norm_descriptor_bounds.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
+	./$@
+
 .PHONY: test-sram-bounds
 test-sram-bounds: tests/test_sram_bounds.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
@@ -759,7 +764,7 @@ test-asm: libtucmodel.a
 
 # Run full test suite: build library + all unit tests + integration
 .PHONY: test test-quick test-random test-full
-test: test-sram-utilization-overflow test-sram-word-meter test-sram-bounds test-agen-block-bounds test-attention-autotile test-attention-kv test-attention-staging test-dma-drr-stage-width test-agen-tiling-plan test-config-generation test-cmodel test-reinit test-cmdq test-dma test-dma-drr-scan-width test-dram test-isa test-golden \
+test: test-norm-descriptor-bounds test-sram-utilization-overflow test-sram-word-meter test-sram-bounds test-agen-block-bounds test-attention-autotile test-attention-kv test-attention-staging test-dma-drr-stage-width test-agen-tiling-plan test-config-generation test-cmodel test-reinit test-cmdq test-dma test-dma-drr-scan-width test-dram test-isa test-golden \
       test-elementwise test-bf16 test-memhier test-norm test-dataflow \
       test-logging test-int-quant test-conv test-asm test-rounding test-fp8 \
       test-attention test-perf test-pool test-pipeline test-agen test-agen-im2col-point test-agen-im2col-bounds test-agen-range-admission test-agen-affine-bounds test-agen-tiled-sweep test-agen-dma-chain test-multicore \
@@ -770,7 +775,7 @@ test: test-sram-utilization-overflow test-sram-word-meter test-sram-bounds test-
 	@echo "═══════════════════════════════════════════"
 
 # Quick smoke test (pre-commit)
-test-quick: test-sram-utilization-overflow test-sram-word-meter test-sram-bounds test-agen-block-bounds test-attention-autotile test-attention-kv test-attention-staging test-dma-drr-stage-width test-config-generation test-cmodel test-reinit test-agen test-agen-tiling-plan test-agen-im2col-point test-agen-im2col-bounds test-agen-range-admission test-agen-affine-bounds test-agen-tiled-sweep test-agen-dma-chain test-multicast test-cmdq test-dma test-dma-drr-scan-width test-dma-burst-boundary-sweep test-dma-external-boundary-sweep test-asm
+test-quick: test-norm-descriptor-bounds test-sram-utilization-overflow test-sram-word-meter test-sram-bounds test-agen-block-bounds test-attention-autotile test-attention-kv test-attention-staging test-dma-drr-stage-width test-config-generation test-cmodel test-reinit test-agen test-agen-tiling-plan test-agen-im2col-point test-agen-im2col-bounds test-agen-range-admission test-agen-affine-bounds test-agen-tiled-sweep test-agen-dma-chain test-multicast test-cmdq test-dma test-dma-drr-scan-width test-dma-burst-boundary-sweep test-dma-external-boundary-sweep test-asm
 	@echo ""
 	@echo "═══ Quick smoke test passed ═══"
 
@@ -812,6 +817,7 @@ config-docs: libtucmodel.a
 
 # ---- Clean ----
 clean:
+	rm -f test-norm-descriptor-bounds
 	rm -f test-sram-utilization-overflow
 	rm -f test-sram-bounds
 	rm -f test-sram-word-meter

@@ -86,7 +86,9 @@ typedef struct {
  *   2. Normalize, scale, and bias each element
  *
  * Returns total stall cycles incurred from SRAM bandwidth contention.
- * Returns UINT64_MAX on error (check stderr for details).
+ * Returns UINT64_MAX on error (check stderr for details). Descriptor input,
+ * output, and consumed parameter spans are checked before SRAM access. This
+ * does not certify convenience-wrapper scratch placement or partial overlap.
  */
 uint64_t tu_norm_execute(const tu_norm_desc_t *desc);
 
