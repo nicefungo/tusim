@@ -1,6 +1,6 @@
 # Normalization descriptor admission and row partitioning
 
-**Input revision:** `fbdc1e836eb44954fd1ccd6133540c53f7e08aee`. This is a pre-spec software-model correctness exploration, not a calibrated normalization hardware benchmark. `tests/explore_norm_descriptor.c` is an executable **snapshot probe**, not a conformance gate: its final zero failure count only checks the observations selected by that probe. Full before/after probe output is retained in `evidence/2026-11-08-norm-descriptor/`.
+**Input revision:** `fbdc1e836eb44954fd1ccd6133540c53f7e08aee`. This is a pre-spec software-model correctness exploration, not a calibrated normalization hardware benchmark. `tests/explore_norm_descriptor.c` is an executable **snapshot probe**, not a conformance gate: its final zero failure count only checks the observations selected by that probe. Full before/after probe output is retained in `evidence/2026-11-08-norm-descriptor/`. The later rectangular-admission follow-up is documented in `normalization-rectangular-rows.md`; references to the final state below describe this original bounds-only change, not that follow-up.
 
 ## Question and live observations
 

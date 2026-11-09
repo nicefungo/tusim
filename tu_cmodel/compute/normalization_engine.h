@@ -65,7 +65,7 @@ typedef struct {
 
     /* Normalization parameters */
     float            epsilon;       /* Small constant to avoid division by zero (default 1e-5) */
-    uint32_t         norm_axis_dim; /* Dimension size for per-row normalization (0 = whole tensor) */
+    uint32_t         norm_axis_dim; /* Row width (0 = whole tensor); must divide elem_count */
 
     /* Output configuration */
     bool             in_place;      /* true = write result back to data_sram */
@@ -87,7 +87,7 @@ typedef struct {
  *
  * Returns total stall cycles incurred from SRAM bandwidth contention.
  * Returns UINT64_MAX on error (check stderr for details). Descriptor input,
- * output, and consumed parameter spans are checked before SRAM access. This
+ * output, consumed parameter spans, and rectangular rows are checked before SRAM access. This
  * does not certify convenience-wrapper scratch placement or partial overlap.
  */
 uint64_t tu_norm_execute(const tu_norm_desc_t *desc);

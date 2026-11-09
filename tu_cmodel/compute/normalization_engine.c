@@ -171,7 +171,6 @@ uint64_t tu_norm_execute(const tu_norm_desc_t *desc) {
 
     /* Compute rows */
     uint32_t num_rows = elem_count / axis_dim;
-    if (num_rows == 0) num_rows = 1;
 
     /* Extract gamma and beta from SRAM if needed */
     float *gamma_host = NULL;
@@ -201,10 +200,6 @@ uint64_t tu_norm_execute(const tu_norm_desc_t *desc) {
         uint32_t row_off    = desc->data_offset + r * axis_dim * sizeof(float);
         uint32_t row_out    = out_off + r * axis_dim * sizeof(float);
         uint32_t cols       = axis_dim;
-        /* Last row might be shorter if axis_dim doesn't divide evenly */
-        if (r == num_rows - 1 && axis_dim * num_rows > elem_count) {
-            cols = elem_count - r * axis_dim;
-        }
 
         float mean_dummy, var_dummy;
         uint64_t s = normalize_row(sram, row_off, row_out, cols,
@@ -427,6 +422,11 @@ bool tu_norm_validate_desc(const tu_norm_desc_t *desc) {
     if (desc->norm_axis_dim > desc->elem_count) {
         fprintf(stderr, "tu_norm_validate: axis_dim %u > elem_count %u\n",
                 desc->norm_axis_dim, desc->elem_count);
+        return false;
+    }
+    if (desc->norm_axis_dim && desc->elem_count % desc->norm_axis_dim != 0) {
+        fprintf(stderr, "tu_norm_validate: elem_count %u not divisible by axis_dim %u\n",
+                desc->elem_count, desc->norm_axis_dim);
         return false;
     }
     uint32_t axis = desc->norm_axis_dim ? desc->norm_axis_dim : desc->elem_count;
