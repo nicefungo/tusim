@@ -231,6 +231,14 @@ uint64_t tu_norm_execute(const tu_norm_desc_t *desc) {
 
 /* ---- Convenience wrappers ---- */
 
+/* Reject wrapped tensor shapes before any scratch or parameter writes. */
+static bool norm_2d_count(uint32_t rows, uint32_t cols, uint32_t *count) {
+    uint64_t product = (uint64_t)rows * cols;
+    if (product > UINT32_MAX) return false;
+    *count = (uint32_t)product;
+    return true;
+}
+
 uint64_t tu_layernorm(tu_sram_region_t *data_sram, uint32_t offset,
                       uint32_t elem_count,
                       const float *gamma, const float *beta,
@@ -313,11 +321,13 @@ uint64_t tu_layernorm_2d(tu_sram_region_t *data_sram, uint32_t offset,
                          uint32_t rows, uint32_t cols,
                          const float *gamma, const float *beta,
                          float epsilon) {
+    uint32_t count;
+    if (!norm_2d_count(rows, cols, &count)) return UINT64_MAX;
     tu_norm_desc_t desc = {
         .mode          = TU_NORM_LAYER_NORM,
         .data_sram     = data_sram,
         .data_offset   = offset,
-        .elem_count    = rows * cols,
+        .elem_count    = count,
         .gamma_sram    = NULL,
         .beta_sram     = NULL,
         .epsilon       = epsilon,
@@ -354,11 +364,13 @@ uint64_t tu_layernorm_2d(tu_sram_region_t *data_sram, uint32_t offset,
 uint64_t tu_rmsnorm_2d(tu_sram_region_t *data_sram, uint32_t offset,
                        uint32_t rows, uint32_t cols,
                        const float *gamma, float epsilon) {
+    uint32_t count;
+    if (!norm_2d_count(rows, cols, &count)) return UINT64_MAX;
     tu_norm_desc_t desc = {
         .mode          = TU_NORM_RMS_NORM,
         .data_sram     = data_sram,
         .data_offset   = offset,
-        .elem_count    = rows * cols,
+        .elem_count    = count,
         .gamma_sram    = NULL,
         .beta_sram     = NULL,
         .epsilon       = epsilon,

@@ -130,6 +130,9 @@ uint64_t tu_rmsnorm(tu_sram_region_t *data_sram, uint32_t offset,
  *   gamma:      scale per column (FP32, cols elements; NULL = ones)
  *   beta:       bias per column (FP32, cols elements; NULL = zeros)
  *   epsilon:    small constant
+ *
+ * Both 2D wrappers reject rows*cols exceeding UINT32_MAX before scratch writes.
+ * This does not validate all wrapper scratch/alias cases.
  */uint64_t tu_layernorm_2d(tu_sram_region_t *data_sram, uint32_t offset,
                          uint32_t rows, uint32_t cols,
                          const float *gamma, const float *beta,

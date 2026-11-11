@@ -1,0 +1,21 @@
+mode=layer params=0 rows=2147483649 cols=2 result=success changed=1 reads=2 writes=2 stalls=4
+mode=layer params=0 rows=1431655766 cols=3 result=reject changed=0 reads=0 writes=0 stalls=0
+mode=layer params=0 rows=1073741825 cols=4 result=success changed=1 reads=4 writes=4 stalls=8
+mode=layer params=0 rows=4294967295 cols=2 result=reject changed=0 reads=0 writes=0 stalls=0
+mode=layer params=0 rows=2147483648 cols=2 result=reject changed=0 reads=0 writes=0 stalls=0
+mode=layer params=1 rows=2147483649 cols=2 result=success changed=1 reads=6 writes=6 stalls=16
+mode=layer params=1 rows=1431655766 cols=3 result=reject changed=1 reads=0 writes=6 stalls=4
+mode=layer params=1 rows=1073741825 cols=4 result=success changed=1 reads=12 writes=12 stalls=40
+mode=layer params=1 rows=4294967295 cols=2 result=reject changed=0 reads=0 writes=0 stalls=0
+mode=layer params=1 rows=2147483648 cols=2 result=reject changed=1 reads=0 writes=4 stalls=0
+mode=rms params=0 rows=2147483649 cols=2 result=success changed=1 reads=2 writes=2 stalls=4
+mode=rms params=0 rows=1431655766 cols=3 result=reject changed=0 reads=0 writes=0 stalls=0
+mode=rms params=0 rows=1073741825 cols=4 result=success changed=1 reads=4 writes=4 stalls=8
+mode=rms params=0 rows=4294967295 cols=2 result=reject changed=0 reads=0 writes=0 stalls=0
+mode=rms params=0 rows=2147483648 cols=2 result=reject changed=0 reads=0 writes=0 stalls=0
+mode=rms params=1 rows=2147483649 cols=2 result=success changed=1 reads=4 writes=4 stalls=8
+mode=rms params=1 rows=1431655766 cols=3 result=reject changed=1 reads=0 writes=3 stalls=0
+mode=rms params=1 rows=1073741825 cols=4 result=success changed=1 reads=8 writes=8 stalls=24
+mode=rms params=1 rows=4294967295 cols=2 result=reject changed=0 reads=0 writes=0 stalls=0
+mode=rms params=1 rows=2147483648 cols=2 result=reject changed=1 reads=0 writes=2 stalls=0
+2D wrapper count: 20 invalid cases, 48 valid cases, 348 checks, 32 failures
