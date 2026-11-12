@@ -1,5 +1,12 @@
 # LayerNorm vs RMSNorm — Bandwidth Comparison
 
+> **2026-11-12 correction:** The numbers and per-operation explanation below
+> are historical, not current stall accounting or physical bandwidth evidence.
+> Input-read penalties were omitted from the return value. The same 14-row
+> harness now reports 4, not 2, local penalty cycles/element for its prefilled
+> SRAM fixture; it does not measure elapsed time. See
+> [normalization-stall-accounting.md](normalization-stall-accounting.md).
+
 **Date:** 2026-06-30
 **Question:** Does RMSNorm have a memory-bandwidth advantage over LayerNorm?
 

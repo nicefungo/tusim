@@ -8,6 +8,8 @@
 > does not establish pipeline latency. The percentages and fusion advice below
 > are withdrawn pending an explicit output-layout interface, exact downstream
 > numerical oracle and compatible timing domain; preserved numbers are historical.
+> The historical norm return also omitted read penalties; its 2-cycle-per-element
+> interpretation is superseded by [normalization-stall-accounting.md](normalization-stall-accounting.md).
 
 **Date:** 2026-07-04
 **Question:** What fraction of transformer block latency does normalization (LayerNorm/RMSNorm) add after attention, across PE array sizes and head dimensions?

@@ -1,6 +1,6 @@
 # Realistic-Design Implementation Backlog
 
-**Last audit:** 2026-11-11
+**Last audit:** 2026-11-12
 **Scope:** Evidence-backed pre-spec alternatives; `PRODUCTION_TU_REDESIGN.md` is reference only.
 
 ## Status legend
@@ -105,7 +105,11 @@
 
 | P0 | Normalization 2D wrapper element count: checked uint32 admission / wider or segmented execution / unchecked wrap | `normalization-wrapper-count-overflow.md`; baseline 32-bit row×column wrap can silently normalize a small prefix or stage parameters before rejecting | Checked admission prevents false success/side effects for overflow; wider/segmented execution supports larger tensors but needs new extent, scheduling and error contracts. Host check overhead and physical throughput/latency, area/power/energy and memory traffic unquantified; valid numerical behavior unchanged in tested fixtures | Five shapes × two modes × parameters absent/present, exact SRAM/meter immutability, independent valid-output oracle | **DONE for product overflow 2026-11-11.** Shared uint64 check before scratch; baseline 32/348 failures, fixed 0/348; 20 invalid and 48 valid cases, clean build/quick/full and all-object sanitizers pass. Wider execution and other wrapper arithmetic/alias/pointer contracts remain BLOCKED. |
 
+| P0 | Normalization SRAM penalties: complete local serial-event sum / omitted reads / physical concurrent scheduling | `normalization-stall-accounting.md`; baseline discarded input and parameter read returns despite per-bank counters recording them | Complete accounting corrects reported penalties, not hardware throughput. Shared vs separate storage and wider grants expose model-local resource trade-offs, with physical area/power/latency unquantified; serial sum is not a parallel makespan | 192 combinations across modes/placements/parameters/banks/grants, counter deltas, outputs, disabled meter and existing history | **DONE for descriptor local-penalty sum 2026-11-12.** Baseline 110/1,542 assertions fail, corrected 0/1,542; quick/full/focused and all-object sanitizers pass. Existing return values intentionally change; no ABI, numerical, architecture-default or access change. Wrapper staging, replay, parallel overlap and physical timing remain BLOCKED on explicit contracts. |
+
 ## Audit notes
+
+- **2026-11-12:** no pre-existing READY row; re-audited normalization wrapper/BatchNorm, SRAM refill/context, arbitration, physical bank mapping, padded DMA and compressed feed. One new local-penalty exploration exposed ignored normalization input/parameter read returns and corrected the reported sum, with 192 configurations and two epoch controls. Old 14-row norm sweep moves from 2*N to 4*N *local penalty cycles* for its exhausted-window fixture; this is not a physical speed change. Baseline and final clean builds/quick, full aggregate, focused tests and all-object ASan/UBSan/LSan gate pass. Historical norm documents are marked superseded; the pre-existing untracked `TERMS.md` is untouched and excluded. See `normalization-stall-accounting.md`.
 
 - **2026-11-11:** audited blocked wrapper scratch, RMS statistics, BatchNorm semantics, SRAM state/phase/arbitration, physical bank mapping and padded DMA. No previous READY row was identified. A new 20-row 2D wrapper overflow exploration found false success and parameter staging before failure. A narrow shared overflow admission fixes that case without asserting general wrapper safety; 48 valid numerical controls also pass. Baseline/fixed full matrices retained; clean archive builds, quick/full and all-object focused sanitizers pass. Physical performance and costs remain unquantified; `TERMS.md` is untouched and excluded. See `normalization-wrapper-count-overflow.md`.
 

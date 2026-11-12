@@ -12,6 +12,13 @@ COMPILER   = compiler/onnx_to_tu.py
 
 all: libtucmodel.a libtucmodel.so
 
+.PHONY: test-norm-stall-accounting
+test-norm-stall-accounting: tests/test_norm_stall_accounting.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
+	./$@
+
+test test-quick: test-norm-stall-accounting
+
 .PHONY: test-norm-wrapper-count
 test-norm-wrapper-count: tests/test_norm_wrapper_count.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
@@ -822,6 +829,7 @@ config-docs: libtucmodel.a
 
 # ---- Clean ----
 clean:
+	rm -f test-norm-stall-accounting
 	rm -f test-norm-wrapper-count
 	rm -f test-norm-descriptor-bounds
 	rm -f test-sram-utilization-overflow

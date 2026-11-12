@@ -85,7 +85,9 @@ typedef struct {
  *   1. Compute statistics (mean/variance or rms²)
  *   2. Normalize, scale, and bias each element
  *
- * Returns total stall cycles incurred from SRAM bandwidth contention.
+ * Returns the sum of local SRAM penalties returned by input reads, output
+ * writes, and consumed gamma/beta reads. This is not elapsed engine latency:
+ * scalar accesses do not replay stalls or advance the SRAM clock.
  * Returns UINT64_MAX on error (check stderr for details). Descriptor input,
  * output, consumed parameter spans, and rectangular rows are checked before SRAM access. This
  * does not certify convenience-wrapper scratch placement or partial overlap.

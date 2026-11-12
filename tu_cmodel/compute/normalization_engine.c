@@ -21,8 +21,7 @@ static uint64_t sram_load_floats(tu_sram_region_t *sram, uint32_t byte_offset,
     uint64_t total_stall = 0;
     for (uint32_t i = 0; i < count; i++) {
         uint32_t off = byte_offset + i * sizeof(float);
-        uint64_t s = 0;
-        tu_sram_read(sram, off, &out[i]);
+        uint64_t s = tu_sram_read(sram, off, &out[i]);
         total_stall += s;
     }
     return total_stall;
@@ -175,12 +174,13 @@ uint64_t tu_norm_execute(const tu_norm_desc_t *desc) {
     /* Extract gamma and beta from SRAM if needed */
     float *gamma_host = NULL;
     float *beta_host  = NULL;
+    uint64_t total_stall = 0;
 
     if (desc->gamma_sram) {
         gamma_host = (float *)malloc(axis_dim * sizeof(float));
         if (!gamma_host) return UINT64_MAX;
-        sram_load_floats(desc->gamma_sram, desc->gamma_offset,
-                          gamma_host, axis_dim);
+        total_stall += sram_load_floats(desc->gamma_sram, desc->gamma_offset,
+                                      gamma_host, axis_dim);
     }
 
     if (desc->beta_sram && mode == TU_NORM_LAYER_NORM) {
@@ -189,12 +189,11 @@ uint64_t tu_norm_execute(const tu_norm_desc_t *desc) {
             free(gamma_host);
             return UINT64_MAX;
         }
-        sram_load_floats(desc->beta_sram, desc->beta_offset,
-                          beta_host, axis_dim);
+        total_stall += sram_load_floats(desc->beta_sram, desc->beta_offset,
+                                      beta_host, axis_dim);
     }
 
     uint32_t out_off = desc->in_place ? desc->data_offset : desc->out_offset;
-    uint64_t total_stall = 0;
 
     for (uint32_t r = 0; r < num_rows; r++) {
         uint32_t row_off    = desc->data_offset + r * axis_dim * sizeof(float);

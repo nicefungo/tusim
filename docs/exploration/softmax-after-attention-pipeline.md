@@ -7,6 +7,8 @@
 > incompatible accounting domains. The percentages, physical-cycle budget and
 > end-to-end/fusion conclusions below are withdrawn pending an explicit output
 > boundary, numerical oracle and coherent timing model. Tables remain historical.
+> The comparison to a 2-cycle norm return is also superseded by
+> [normalization-stall-accounting.md](normalization-stall-accounting.md).
 
 **Date:** 2026-07-08
 **Question:** What overhead does a standalone softmax pass add to attention latency across PE array sizes and head dimensions?
