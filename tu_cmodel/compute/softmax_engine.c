@@ -319,6 +319,17 @@ uint64_t tu_softmax_execute(const tu_softmax_desc_t *desc) {
 
 /* ---- Convenience wrappers ---- */
 
+/* Reject row*column products that wrap uint32 before descriptor construction;
+ * a wrapped count silently normalizes a prefix of a huge tensor as success. */
+static bool softmax_2d_count_ok(uint32_t rows, uint32_t cols) {
+    if ((uint64_t)rows * (uint64_t)cols > UINT32_MAX) {
+        fprintf(stderr, "tu_softmax_2d: rows(%u) * cols(%u) exceeds uint32 "
+                "element count\n", rows, cols);
+        return false;
+    }
+    return true;
+}
+
 uint64_t tu_softmax(tu_sram_region_t *data_sram, uint32_t offset,
                     uint32_t count, float scale, bool in_place) {
     tu_softmax_desc_t desc = {
@@ -342,6 +353,7 @@ uint64_t tu_softmax(tu_sram_region_t *data_sram, uint32_t offset,
 uint64_t tu_softmax_2d(tu_sram_region_t *data_sram, uint32_t offset,
                         uint32_t rows, uint32_t cols,
                         float scale, bool in_place) {
+    if (!softmax_2d_count_ok(rows, cols)) return UINT64_MAX;
     tu_softmax_desc_t desc = {
         .mode             = TU_SOFTMAX_STANDARD,
         .data_sram        = data_sram,
@@ -364,6 +376,7 @@ uint64_t tu_softmax_masked(tu_sram_region_t *data_sram, uint32_t offset,
                             uint32_t rows, uint32_t cols,
                             const float *mask, float mask_fill,
                             float scale) {
+    if (!softmax_2d_count_ok(rows, cols)) return UINT64_MAX;
     tu_softmax_desc_t desc = {
         .mode             = TU_SOFTMAX_STANDARD,
         .data_sram        = data_sram,
@@ -405,6 +418,7 @@ uint64_t tu_log_softmax(tu_sram_region_t *data_sram, uint32_t offset,
 uint64_t tu_log_softmax_2d(tu_sram_region_t *data_sram, uint32_t offset,
                             uint32_t rows, uint32_t cols,
                             float scale, bool in_place) {
+    if (!softmax_2d_count_ok(rows, cols)) return UINT64_MAX;
     tu_softmax_desc_t desc = {
         .mode             = TU_SOFTMAX_LOG,
         .data_sram        = data_sram,
@@ -479,22 +493,27 @@ bool tu_softmax_validate_desc(const tu_softmax_desc_t *desc) {
         return false;
     }
 
-    /* Check data bounds */
-    uint32_t data_end = desc->data_offset + desc->elem_count * sizeof(float);
+    /* Check data bounds — 64-bit intermediates: uint32 offset+count*4 wraps
+     * for large element counts and admitted fictitious work as success. */
+    uint64_t data_end = (uint64_t)desc->data_offset
+                      + (uint64_t)desc->elem_count * sizeof(float);
     if (data_end > desc->data_sram->total_size) {
         fprintf(stderr, "tu_softmax_validate: data exceeds SRAM bounds "
-                "(offset=%u + %u*4 = %u > %u)\n",
-                desc->data_offset, desc->elem_count, data_end,
+                "(offset=%u + %u*4 = %llu > %u)\n",
+                desc->data_offset, desc->elem_count,
+                (unsigned long long)data_end,
                 desc->data_sram->total_size);
         return false;
     }
 
-    /* Out-of-place: validate out_offset */
+    /* Out-of-place: validate out_offset (same 64-bit wrap guard) */
     if (!desc->in_place) {
-        uint32_t out_end = desc->out_offset + desc->elem_count * sizeof(float);
+        uint64_t out_end = (uint64_t)desc->out_offset
+                         + (uint64_t)desc->elem_count * sizeof(float);
         if (out_end > desc->data_sram->total_size) {
             fprintf(stderr, "tu_softmax_validate: output exceeds SRAM bounds "
-                    "(%u > %u)\n", out_end, desc->data_sram->total_size);
+                    "(%llu > %u)\n", (unsigned long long)out_end,
+                    desc->data_sram->total_size);
             return false;
         }
     }

@@ -511,6 +511,17 @@ test-pool: tests/test_pooling.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -Itests -o $@ $< -L. -ltucmodel $(LDFLAGS)
 	./test-pool
 
+# Softmax functional suite (statically linked: see focused-target stale-.so pitfall)
+test-softmax: tests/test_softmax.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< ./libtucmodel.a $(LDFLAGS)
+	./test-softmax
+
+# Softmax overflow-admission gate (2026-11-13)
+.PHONY: test-softmax-overflow
+test-softmax-overflow: tests/test_softmax_overflow.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< ./libtucmodel.a $(LDFLAGS)
+	./test-softmax-overflow
+
 # ---- Test: Software Pipelining Controller (E2) ----
 test-pipeline: tests/test_pipeline.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
@@ -634,7 +645,7 @@ test-pooling-sweep: tests/test_pooling_sweep.c libtucmodel.a
 
 # ---- Test: Softmax Mode Sweep (exploration harness) ----
 test-softmax-sweep: tests/test_softmax_sweep.c libtucmodel.a
-	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< ./libtucmodel.a $(LDFLAGS)
 	./test-softmax-sweep
 
 # ---- Test: Convolution Kernel×Stride Sweep (exploration harness) ----
@@ -664,7 +675,7 @@ test-norm-attention-sweep: tests/test_norm_attention_sweep.c libtucmodel.a
 
 # ---- Test: Softmax-After-Attention Pipeline Sweep (cross-engine exploration) ----
 test-softmax-attention-sweep: tests/test_softmax_attention_sweep.c libtucmodel.a
-	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< -L. -ltucmodel $(LDFLAGS)
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< ./libtucmodel.a $(LDFLAGS)
 	./test-softmax-attention-sweep
 
 # ---- Test: Weight Compression (M5) ----
@@ -776,10 +787,10 @@ test-asm: libtucmodel.a
 
 # Run full test suite: build library + all unit tests + integration
 .PHONY: test test-quick test-random test-full
-test: test-norm-wrapper-count test-norm-descriptor-bounds test-sram-utilization-overflow test-sram-word-meter test-sram-bounds test-agen-block-bounds test-attention-autotile test-attention-kv test-attention-staging test-dma-drr-stage-width test-agen-tiling-plan test-config-generation test-cmodel test-reinit test-cmdq test-dma test-dma-drr-scan-width test-dram test-isa test-golden \
+test: test-softmax-overflow test-norm-wrapper-count test-norm-descriptor-bounds test-sram-utilization-overflow test-sram-word-meter test-sram-bounds test-agen-block-bounds test-attention-autotile test-attention-kv test-attention-staging test-dma-drr-stage-width test-agen-tiling-plan test-config-generation test-cmodel test-reinit test-cmdq test-dma test-dma-drr-scan-width test-dram test-isa test-golden \
       test-elementwise test-bf16 test-memhier test-norm test-dataflow \
       test-logging test-int-quant test-conv test-asm test-rounding test-fp8 \
-      test-attention test-perf test-pool test-pipeline test-agen test-agen-im2col-point test-agen-im2col-bounds test-agen-range-admission test-agen-affine-bounds test-agen-tiled-sweep test-agen-dma-chain test-multicore \
+      test-attention test-perf test-pool test-softmax test-pipeline test-agen test-agen-im2col-point test-agen-im2col-bounds test-agen-range-admission test-agen-affine-bounds test-agen-tiled-sweep test-agen-dma-chain test-multicore \
       test-multicast test-scatter-gather test-trace test-config test-sparsity test-scheduler test-liveness test-dpi
 	@echo ""
 	@echo "═══════════════════════════════════════════"
@@ -787,7 +798,7 @@ test: test-norm-wrapper-count test-norm-descriptor-bounds test-sram-utilization-
 	@echo "═══════════════════════════════════════════"
 
 # Quick smoke test (pre-commit)
-test-quick: test-norm-wrapper-count test-norm-descriptor-bounds test-sram-utilization-overflow test-sram-word-meter test-sram-bounds test-agen-block-bounds test-attention-autotile test-attention-kv test-attention-staging test-dma-drr-stage-width test-config-generation test-cmodel test-reinit test-agen test-agen-tiling-plan test-agen-im2col-point test-agen-im2col-bounds test-agen-range-admission test-agen-affine-bounds test-agen-tiled-sweep test-agen-dma-chain test-multicast test-cmdq test-dma test-dma-drr-scan-width test-dma-burst-boundary-sweep test-dma-external-boundary-sweep test-asm
+test-quick: test-softmax-overflow test-norm-wrapper-count test-norm-descriptor-bounds test-sram-utilization-overflow test-sram-word-meter test-sram-bounds test-agen-block-bounds test-attention-autotile test-attention-kv test-attention-staging test-dma-drr-stage-width test-config-generation test-cmodel test-reinit test-agen test-agen-tiling-plan test-agen-im2col-point test-agen-im2col-bounds test-agen-range-admission test-agen-affine-bounds test-agen-tiled-sweep test-agen-dma-chain test-multicast test-cmdq test-dma test-dma-drr-scan-width test-dma-burst-boundary-sweep test-dma-external-boundary-sweep test-asm
 	@echo ""
 	@echo "═══ Quick smoke test passed ═══"
 
@@ -835,7 +846,7 @@ clean:
 	rm -f test-sram-utilization-overflow
 	rm -f test-sram-bounds
 	rm -f test-sram-word-meter
-	rm -f test-agen-block-bounds
+	rm -f test-agen-block-bounds test-softmax-overflow
 	rm -f test-attention-autotile
 	rm -f test-attention-kv
 	rm -f test-attention-staging
