@@ -1,0 +1,16 @@
+Softmax Mode Sweep: Standard vs Log vs Online
+Metrics: SRAM stall cycles (lower = less bandwidth contention)
+
+Workload                   Elems      Std      Log   Online     Best Std=Baseline
+-------------------------------------------------------------------------------
+1×64   (single row, small head)     64      256      256      256 Standard     100.0%
+1×128  (typical attention head)    128      512      512      512 Standard     100.0%
+1×256  (large head_dim)     256     1024     1024     1024 Standard     100.0%
+1×512  (very large head_dim)    512     2048     2048     2048 Standard     100.0%
+16×64  (batched small)     1024     4096     4096     4096 Standard     100.0%
+16×128 (batched typical)   2048     8192     8192     8192 Standard     100.0%
+64×64  (square attention score)   4096    16384    16384    16384 Standard     100.0%
+128×128 (large square)    16384    65536    65536    65536 Standard     100.0%
+256×128 (seq_len×head_dim)  32768   131072   131072   131072 Standard     100.0%
+
+Done.

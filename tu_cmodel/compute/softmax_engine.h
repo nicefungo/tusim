@@ -20,8 +20,8 @@
  *       m' = max(m, x_i)
  *       s' = s * exp(m - m') + exp(x_i - m')
  *       This avoids two passes but requires FP32 multiplies per element.
- *       The two-pass implementation is the default as it's faster in
- *       hardware (no per-element rescaling multiplication).
+ *       The two-pass implementation remains the compatibility default.
+ *       Physical latency/area/energy require a separate arithmetic model.
  *
  *   The engine supports fused computation scenarios:
  *     - Softmax only (standalone)
@@ -98,7 +98,10 @@ typedef struct {
  *   3. Divide each exp(x_i - max) by sum
  *
  * For online mode, uses single-pass rescaling algorithm.
- * For log-softmax, computes ln after normalization.
+ * For log-softmax, retains shifted logits and subtracts log(exp-sum),
+ * rather than taking log of rounded probabilities. This preserves finite
+ * negative tails when exp underflows. Finite FP32 preprocessing and shifted
+ * logits are required for this guarantee; NaN/Inf policy is not specified.
  *
  * Returns total stall cycles from SRAM bandwidth contention.
  * Returns UINT64_MAX on error (check stderr for details).

@@ -512,6 +512,13 @@ test-pool: tests/test_pooling.c libtucmodel.a
 	./test-pool
 
 # Softmax functional suite (statically linked: see focused-target stale-.so pitfall)
+.PHONY: test-softmax-log-range
+test-softmax-log-range: tests/test_softmax_log_range.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
+	./$@
+
+test test-quick: test-softmax-log-range
+
 test-softmax: tests/test_softmax.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< ./libtucmodel.a $(LDFLAGS)
 	./test-softmax
@@ -840,6 +847,7 @@ config-docs: libtucmodel.a
 
 # ---- Clean ----
 clean:
+	rm -f test-softmax-log-range
 	rm -f test-norm-stall-accounting
 	rm -f test-norm-wrapper-count
 	rm -f test-norm-descriptor-bounds

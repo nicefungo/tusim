@@ -1,0 +1,54 @@
+make: Entering directory '/home/zxy/.hermes/cache/scratch/tusim-20261114-softmax/sanitizer-src'
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/compute/softmax_engine.o tu_cmodel/compute/softmax_engine.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/compute/attention_engine.o tu_cmodel/compute/attention_engine.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/bindings/tu_dpi.o tu_cmodel/bindings/tu_dpi.c
+ar rcs libtucmodel.a tu_cmodel/tu_cmodel.o tu_cmodel/tu_asm.o tu_cmodel/tu_precision.o tu_cmodel/tu_sram.o tu_cmodel/tu_dma.o tu_cmodel/dma_descriptor.o tu_cmodel/rounding.o tu_cmodel/fp8.o tu_cmodel/tf32.o tu_cmodel/command_queue.o tu_cmodel/memory/dram_model.o tu_cmodel/memory/memory_hierarchy.o tu_cmodel/memory/double_buffer.o tu_cmodel/memory/address_generator.o tu_cmodel/isa/tu_isa.o tu_cmodel/compute/elementwise_pipeline.o tu_cmodel/compute/normalization_engine.o tu_cmodel/compute/softmax_engine.o tu_cmodel/compute/convolution_engine.o tu_cmodel/compute/attention_engine.o tu_cmodel/compute/pooling_engine.o tu_cmodel/infra/logging.o tu_cmodel/infra/json_reader.o tu_cmodel/infra/config.o tu_cmodel/tu_int_quant.o tu_cmodel/perf/performance_counters.o tu_cmodel/perf/event_trace.o tu_cmodel/perf/power_model.o tu_cmodel/compute/pipeline_controller.o tu_cmodel/compute/dataflow/dataflow_registry.o tu_cmodel/compute/dataflow/dataflow_dispatcher.o tu_cmodel/compute/dataflow/weight_stationary.o tu_cmodel/compute/dataflow/output_stationary.o tu_cmodel/compute/dataflow/row_stationary.o tu_cmodel/tu_core.o tu_cmodel/tu_cluster.o tu_cmodel/tu_status.o tu_cmodel/infra/tu_context.o tu_cmodel/memory/weight_compress.o tu_cmodel/sparsity/structured_2of4.o tu_cmodel/isa/tu_scheduler.o tu_cmodel/isa/tu_liveness.o tu_cmodel/infra/tu_debug.o tu_cmodel/bindings/tu_dpi.o
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -I. -Itu_cmodel -o test-softmax-log-range tests/test_softmax_log_range.c ./libtucmodel.a -lm -fsanitize=address,undefined
+./test-softmax-log-range
+mode=standard output_stats_stalls_fnv64=7835006ea9ecf509 accounting_fnv64=33647d5b0fb85ce1 max_abs_error=3.63912848744e-08
+mode=log output_stats_stalls_fnv64=70edc47c2db0f411 accounting_fnv64=33647d5b0fb85ce1 max_abs_error=0.00122453406948
+mode=online output_stats_stalls_fnv64=cafd1af0bdab8391 accounting_fnv64=fb833c2568674285 max_abs_error=1.71008272321e-07
+log-range cases=4520 checks=305801 failures=0
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -I. -Itu_cmodel -o test-softmax tests/test_softmax.c ./libtucmodel.a -lm -fsanitize=address,undefined
+./test-softmax
+=== TU Softmax Engine Tests ===
+
+  TEST single element ... PASS
+  TEST uniform vector ... PASS
+  TEST known values ... PASS
+  TEST large values (stability) ... PASS
+  TEST negative values ... PASS
+  TEST batched 2D ... PASS
+  TEST log-softmax ... PASS
+  TEST scaled softmax (attention) ... PASS
+  TEST masked softmax ... PASS
+  TEST all negative inf ... PASS
+  TEST zero input ... PASS
+  TEST online mode ... PASS
+  TEST out-of-place ... PASS
+  TEST large row (256D) ... PASS
+  TEST log-softmax 2D ... PASS
+
+=== Results: 15/15 passed, 0 failed ===
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -I. -Itu_cmodel -o test-softmax-overflow tests/test_softmax_overflow.c ./libtucmodel.a -lm -fsanitize=address,undefined
+./test-softmax-overflow
+tu_softmax_validate: data exceeds SRAM bounds (offset=4294967288 + 2*4 = 4294967296 > 1024)
+tu_softmax_validate: output exceeds SRAM bounds (4294967296 > 1024)
+tu_softmax_validate: data exceeds SRAM bounds (offset=0 + 1073741824*4 = 4294967296 > 1024)
+tu_softmax_2d: rows(65537) * cols(65536) exceeds uint32 element count
+tu_softmax_2d: rows(65537) * cols(65536) exceeds uint32 element count
+tu_softmax_2d: rows(65537) * cols(65536) exceeds uint32 element count
+tu_softmax_validate: data exceeds SRAM bounds (offset=0 + 4097*4 = 16388 > 16384)
+PASS data-offset wrap             rejected
+PASS out-offset wrap              rejected
+PASS elem_count byte-extent wrap  rejected
+PASS wrapper rows*cols wrap       rejected
+PASS masked wrapper wrap          rejected
+PASS log wrapper wrap             rejected
+PASS valid 4x8 in-place           accepted (64 stalls)
+PASS valid control numerics
+PASS valid out-of-place           accepted (32 stalls)
+PASS exact-fit full region        accepted (16384 stalls)
+PASS plain overflow (no wrap)     rejected
+test-softmax-overflow: PASS (0 failures)
+make: Leaving directory '/home/zxy/.hermes/cache/scratch/tusim-20261114-softmax/sanitizer-src'

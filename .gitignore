@@ -102,6 +102,7 @@ test-errors
 test-config
 test-softmax
 test-softmax-overflow
+test-softmax-log-range
 test-double
 test-context
 test-context-switch-sweep

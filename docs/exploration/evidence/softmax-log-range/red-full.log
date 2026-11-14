@@ -1,0 +1,16 @@
+FAIL case=98 line=35: isfinite(got) && isfinite(want) && error <= 8e-6 + 3e-7 * fabs(want)
+FAIL case=98 line=35: isfinite(got) && isfinite(want) && error <= 8e-6 + 3e-7 * fabs(want)
+FAIL case=98 line=35: isfinite(got) && isfinite(want) && error <= 8e-6 + 3e-7 * fabs(want)
+FAIL case=101 line=35: isfinite(got) && isfinite(want) && error <= 8e-6 + 3e-7 * fabs(want)
+FAIL case=101 line=35: isfinite(got) && isfinite(want) && error <= 8e-6 + 3e-7 * fabs(want)
+FAIL case=101 line=35: isfinite(got) && isfinite(want) && error <= 8e-6 + 3e-7 * fabs(want)
+FAIL case=116 line=35: isfinite(got) && isfinite(want) && error <= 8e-6 + 3e-7 * fabs(want)
+FAIL case=116 line=35: isfinite(got) && isfinite(want) && error <= 8e-6 + 3e-7 * fabs(want)
+FAIL case=116 line=35: isfinite(got) && isfinite(want) && error <= 8e-6 + 3e-7 * fabs(want)
+FAIL case=119 line=35: isfinite(got) && isfinite(want) && error <= 8e-6 + 3e-7 * fabs(want)
+FAIL case=119 line=35: isfinite(got) && isfinite(want) && error <= 8e-6 + 3e-7 * fabs(want)
+FAIL case=119 line=35: isfinite(got) && isfinite(want) && error <= 8e-6 + 3e-7 * fabs(want)
+mode=standard output_stats_stalls_fnv64=7835006ea9ecf509 accounting_fnv64=33647d5b0fb85ce1 max_abs_error=3.63912848744e-08
+mode=log output_stats_stalls_fnv64=378521ed82ad73bd accounting_fnv64=33647d5b0fb85ce1 max_abs_error=125911.277199
+mode=online output_stats_stalls_fnv64=cafd1af0bdab8391 accounting_fnv64=fb833c2568674285 max_abs_error=1.71008272321e-07
+log-range cases=4520 checks=305801 failures=36760

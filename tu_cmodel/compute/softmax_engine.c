@@ -11,12 +11,12 @@
  *      Pass 1: Read all x_i, find max, compute exp(x_i-max), accumulate sum
  *      Pass 2: y_i = exp(x_i-max) / sum, write back
  *      Pros: Single division per element, no rescaling overhead.
- *      Cons: Two SRAM read passes.
+ *      Cons: Separate max and exponential passes over the host row buffer.
  *
  *   2) TWO-PASS LOG (TU_SOFTMAX_LOG):
  *      Pass 1: Same as standard.
  *      Pass 2: y_i = (x_i - max) - ln(sum), write back
- *      Uses log1p-exp for numerical stability when input is large negative.
+ *      Retains shifted logits rather than recovering them from exponentials.
  *
  *   3) ONLINE SINGLE-PASS (TU_SOFTMAX_ONLINE):
  *      For each element in streaming order:
@@ -26,17 +26,17 @@
  *      After all elements: y_i = exp(x_i - m) / s (requires re-read)
  *      Pros: Single pass for max/sum, useful for streaming
  *      Cons: More FP multiplies, still needs second pass for division
- *      In practice, for SRAM-resident data, the two-pass is preferred.
+ *      No arithmetic-pipeline timing model ranks these organizations here.
  *
  *   For SRAM: we load entire row into host buffer, process, write back.
  *   This models the hardware pattern: SRAM → compute pipeline → SRAM.
  *
  * NUMERICAL STABILITY:
- *   - max-subtract prevents overflow (exp(709) overflows FP32)
+ *   - max-subtract bounds exponential arguments for finite shifted logits
  *   - scale (1/sqrt(head_dim)) applied before softmax for attention
  *   - mask values added before max computation
- *   - when all inputs are -inf, softmax divides by 0; we output 1/N
- *     (uniform distribution) and log-softmax outputs ln(1/N)
+ *   - NaN/Inf, preprocessing overflow and all-masked policies are outside
+ *     the finite-range guarantee; a fallback branch is not conformance proof
  */
 
 #include "softmax_engine.h"
@@ -47,7 +47,6 @@
 
 /* Large negative for "negative infinity" effect in masking */
 #define TU_MASK_NEG_INF  (-1e9f)
-#define TU_LN_INF         (-88.7228f)  /* ln(FLT_MIN) approximation */
 
 /* ---- Internal helpers ---- */
 
@@ -101,13 +100,17 @@ static void softmax_row_two_pass(float *row, uint32_t cols, float scale,
     double sum = 0.0;
     for (uint32_t i = 0; i < cols; i++) {
         float shifted = row[i] - max_val;
-        /* Clamp to prevent overflow: exp(88.72) ≈ 1e38, exp(709) overflows */
+        float exp_val;
+        /* Preserve the existing small-exponential cutoff for the sum. */
         if (shifted < -87.0f) {
-            row[i] = 0.0f;   /* exp(-87) ≈ 1.6e-38, treat as 0 */
+            exp_val = 0.0f;
         } else {
-            row[i] = expf(shifted);
+            exp_val = expf(shifted);
         }
-        sum += (double)row[i];
+        sum += (double)exp_val;
+        /* LOG must retain the shifted logit, not reconstruct it from a
+         * rounded/underflowed exponential. Reuse the same row storage. */
+        row[i] = (mode == TU_SOFTMAX_LOG) ? shifted : exp_val;
     }
 
     /* Step 3: Normalize */
@@ -121,10 +124,7 @@ static void softmax_row_two_pass(float *row, uint32_t cols, float scale,
         if (mode == TU_SOFTMAX_LOG) {
             float log_sum = logf((float)sum);
             for (uint32_t i = 0; i < cols; i++) {
-                /* log_softmax_i = (x_i - max) - log(sum) */
-                /* But row[i] now holds exp(x_i - max), recover x_i - max */
-                float shifted = (row[i] > 0.0f) ? logf(row[i]) : TU_LN_INF;
-                row[i] = shifted - log_sum;
+                row[i] -= log_sum;
             }
         } else {
             for (uint32_t i = 0; i < cols; i++)
