@@ -102,6 +102,10 @@ typedef struct {
  * rather than taking log of rounded probabilities. This preserves finite
  * negative tails when exp underflows. Finite FP32 preprocessing and shifted
  * logits are required for this guarantee; NaN/Inf policy is not specified.
+ * LOG uses log1p of a residual sum excluding exactly one maximum, preserving
+ * small negative outputs without first rounding the exp-sum to one. The
+ * existing exponential cutoff below -87 remains; no subnormal-tail relative
+ * guarantee is implied. Optional sum_out retains its original FP32 rounding.
  *
  * Returns total stall cycles from SRAM bandwidth contention.
  * Returns UINT64_MAX on error (check stderr for details).

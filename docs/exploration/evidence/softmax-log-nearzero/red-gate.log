@@ -1,0 +1,13 @@
+FAIL case=961 line=25: error <= 4e-7L
+FAIL case=961 line=25: error <= 4e-7L
+FAIL case=961 line=25: error <= 4e-7L
+FAIL case=963 line=25: error <= 4e-7L
+FAIL case=963 line=25: error <= 4e-7L
+FAIL case=963 line=25: error <= 4e-7L
+FAIL case=965 line=25: error <= 4e-7L
+FAIL case=965 line=25: error <= 4e-7L
+FAIL case=965 line=25: error <= 4e-7L
+FAIL case=967 line=25: error <= 4e-7L
+FAIL case=967 line=25: error <= 4e-7L
+FAIL case=967 line=25: error <= 4e-7L
+log-nearzero cases=4880 checks=2433342 failures=7665 max_relative_error=1

@@ -1,0 +1,4 @@
+mode=standard output_stats_stalls_fnv64=7835006ea9ecf509 accounting_fnv64=33647d5b0fb85ce1 max_abs_error=3.63912848744e-08
+mode=log output_stats_stalls_fnv64=70edc47c2db0f411 accounting_fnv64=33647d5b0fb85ce1 max_abs_error=0.00122453406948
+mode=online output_stats_stalls_fnv64=cafd1af0bdab8391 accounting_fnv64=fb833c2568674285 max_abs_error=1.71008272321e-07
+log-range cases=4520 checks=305801 failures=0

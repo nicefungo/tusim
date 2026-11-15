@@ -6,6 +6,15 @@
 cutoff, and what changes in storage, access accounting and other modes if the
 engine retains logits instead of recovering them from exponentials?
 
+## Follow-up status
+
+The implementation and numbers below describe the 2026-11-14 snapshot.
+[The 2026-11-15 near-zero correction](softmax-log-nearzero.md) replaces LOG's
+`logf((float)sum)` with a one-anchor residual plus `log1p`, while retaining the
+original sum for statistics. It adds a separate relative-accuracy gate in the
+normal-exponential range; the -87 cutoff and the other boundary exclusions below
+remain. Do not read the historical normalizer formula as the current code.
+
 ## Finding and implementation
 
 The old `softmax_row_two_pass()` overwrote each shifted input with its FP32

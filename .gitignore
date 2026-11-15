@@ -103,6 +103,7 @@ test-config
 test-softmax
 test-softmax-overflow
 test-softmax-log-range
+test-softmax-log-nearzero
 test-double
 test-context
 test-context-switch-sweep

@@ -1,0 +1,137 @@
+make: Entering directory '/home/zxy/.hermes/cache/scratch/tusim-20261115/sanitized'
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -c -o tu_cmodel/tu_cmodel.o tu_cmodel/tu_cmodel.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -c -o tu_cmodel/tu_asm.o tu_cmodel/tu_asm.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -c -o tu_cmodel/tu_precision.o tu_cmodel/tu_precision.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -c -o tu_cmodel/tu_sram.o tu_cmodel/tu_sram.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -c -o tu_cmodel/tu_dma.o tu_cmodel/tu_dma.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -c -o tu_cmodel/dma_descriptor.o tu_cmodel/dma_descriptor.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/rounding.o tu_cmodel/rounding.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/fp8.o tu_cmodel/fp8.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/tf32.o tu_cmodel/tf32.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/command_queue.o tu_cmodel/command_queue.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/memory/dram_model.o tu_cmodel/memory/dram_model.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/memory/memory_hierarchy.o tu_cmodel/memory/memory_hierarchy.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/memory/double_buffer.o tu_cmodel/memory/double_buffer.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/memory/address_generator.o tu_cmodel/memory/address_generator.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/isa/tu_isa.o tu_cmodel/isa/tu_isa.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/compute/elementwise_pipeline.o tu_cmodel/compute/elementwise_pipeline.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/compute/normalization_engine.o tu_cmodel/compute/normalization_engine.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/compute/softmax_engine.o tu_cmodel/compute/softmax_engine.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/compute/convolution_engine.o tu_cmodel/compute/convolution_engine.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/compute/attention_engine.o tu_cmodel/compute/attention_engine.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/compute/pooling_engine.o tu_cmodel/compute/pooling_engine.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/infra/logging.o tu_cmodel/infra/logging.c
+tu_cmodel/infra/logging.c: In function ‘tu_trace_export_vcd’:
+tu_cmodel/infra/logging.c:229:17: warning: unused variable ‘comp_names’ [-Wunused-variable]
+  229 |     const char *comp_names[] = {
+      |                 ^~~~~~~~~~
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/infra/json_reader.o tu_cmodel/infra/json_reader.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/infra/config.o tu_cmodel/infra/config.c
+tu_cmodel/infra/config.c:63:13: warning: ‘parse_opt_uint’ defined but not used [-Wunused-function]
+   63 | static bool parse_opt_uint(const tu_json_value_t *obj, const char *key,
+      |             ^~~~~~~~~~~~~~
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/tu_int_quant.o tu_cmodel/tu_int_quant.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/perf/performance_counters.o tu_cmodel/perf/performance_counters.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/perf/event_trace.o tu_cmodel/perf/event_trace.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/perf/power_model.o tu_cmodel/perf/power_model.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/compute/pipeline_controller.o tu_cmodel/compute/pipeline_controller.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/compute/dataflow/dataflow_registry.o tu_cmodel/compute/dataflow/dataflow_registry.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/compute/dataflow/dataflow_dispatcher.o tu_cmodel/compute/dataflow/dataflow_dispatcher.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/compute/dataflow/weight_stationary.o tu_cmodel/compute/dataflow/weight_stationary.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/compute/dataflow/output_stationary.o tu_cmodel/compute/dataflow/output_stationary.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/compute/dataflow/row_stationary.o tu_cmodel/compute/dataflow/row_stationary.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/tu_core.o tu_cmodel/tu_core.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/tu_cluster.o tu_cmodel/tu_cluster.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/tu_status.o tu_cmodel/tu_status.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/infra/tu_context.o tu_cmodel/infra/tu_context.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/memory/weight_compress.o tu_cmodel/memory/weight_compress.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/sparsity/structured_2of4.o tu_cmodel/sparsity/structured_2of4.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/isa/tu_scheduler.o tu_cmodel/isa/tu_scheduler.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/isa/tu_liveness.o tu_cmodel/isa/tu_liveness.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/infra/tu_debug.o tu_cmodel/infra/tu_debug.c
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -Itu_cmodel -c -o tu_cmodel/bindings/tu_dpi.o tu_cmodel/bindings/tu_dpi.c
+ar rcs libtucmodel.a tu_cmodel/tu_cmodel.o tu_cmodel/tu_asm.o tu_cmodel/tu_precision.o tu_cmodel/tu_sram.o tu_cmodel/tu_dma.o tu_cmodel/dma_descriptor.o tu_cmodel/rounding.o tu_cmodel/fp8.o tu_cmodel/tf32.o tu_cmodel/command_queue.o tu_cmodel/memory/dram_model.o tu_cmodel/memory/memory_hierarchy.o tu_cmodel/memory/double_buffer.o tu_cmodel/memory/address_generator.o tu_cmodel/isa/tu_isa.o tu_cmodel/compute/elementwise_pipeline.o tu_cmodel/compute/normalization_engine.o tu_cmodel/compute/softmax_engine.o tu_cmodel/compute/convolution_engine.o tu_cmodel/compute/attention_engine.o tu_cmodel/compute/pooling_engine.o tu_cmodel/infra/logging.o tu_cmodel/infra/json_reader.o tu_cmodel/infra/config.o tu_cmodel/tu_int_quant.o tu_cmodel/perf/performance_counters.o tu_cmodel/perf/event_trace.o tu_cmodel/perf/power_model.o tu_cmodel/compute/pipeline_controller.o tu_cmodel/compute/dataflow/dataflow_registry.o tu_cmodel/compute/dataflow/dataflow_dispatcher.o tu_cmodel/compute/dataflow/weight_stationary.o tu_cmodel/compute/dataflow/output_stationary.o tu_cmodel/compute/dataflow/row_stationary.o tu_cmodel/tu_core.o tu_cmodel/tu_cluster.o tu_cmodel/tu_status.o tu_cmodel/infra/tu_context.o tu_cmodel/memory/weight_compress.o tu_cmodel/sparsity/structured_2of4.o tu_cmodel/isa/tu_scheduler.o tu_cmodel/isa/tu_liveness.o tu_cmodel/infra/tu_debug.o tu_cmodel/bindings/tu_dpi.o
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -I. -Itu_cmodel -o test-softmax-log-nearzero tests/test_softmax_log_nearzero.c ./libtucmodel.a -lm -fsanitize=address,undefined
+./test-softmax-log-nearzero
+log-nearzero cases=4880 checks=2433342 failures=0 max_relative_error=1.03862458607e-07
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -I. -Itu_cmodel -o test-softmax-log-range tests/test_softmax_log_range.c ./libtucmodel.a -lm -fsanitize=address,undefined
+./test-softmax-log-range
+mode=standard output_stats_stalls_fnv64=7835006ea9ecf509 accounting_fnv64=33647d5b0fb85ce1 max_abs_error=3.63912848744e-08
+mode=log output_stats_stalls_fnv64=2b3e6f53a5424e9d accounting_fnv64=33647d5b0fb85ce1 max_abs_error=0.00122453406948
+mode=online output_stats_stalls_fnv64=cafd1af0bdab8391 accounting_fnv64=fb833c2568674285 max_abs_error=1.71008272321e-07
+log-range cases=4520 checks=305801 failures=0
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -I. -Itu_cmodel -o test-softmax tests/test_softmax.c ./libtucmodel.a -lm -fsanitize=address,undefined
+./test-softmax
+=== TU Softmax Engine Tests ===
+
+  TEST single element ... PASS
+  TEST uniform vector ... PASS
+  TEST known values ... PASS
+  TEST large values (stability) ... PASS
+  TEST negative values ... PASS
+  TEST batched 2D ... PASS
+  TEST log-softmax ... PASS
+  TEST scaled softmax (attention) ... PASS
+  TEST masked softmax ... PASS
+  TEST all negative inf ... PASS
+  TEST zero input ... PASS
+  TEST online mode ... PASS
+  TEST out-of-place ... PASS
+  TEST large row (256D) ... PASS
+  TEST log-softmax 2D ... PASS
+
+=== Results: 15/15 passed, 0 failed ===
+cc -O1 -g -Wall -Wextra -std=c11 -fPIC -fsanitize=address,undefined -fno-omit-frame-pointer -I. -Itu_cmodel -o test-softmax-overflow tests/test_softmax_overflow.c ./libtucmodel.a -lm -fsanitize=address,undefined
+./test-softmax-overflow
+tu_softmax_validate: data exceeds SRAM bounds (offset=4294967288 + 2*4 = 4294967296 > 1024)
+tu_softmax_validate: output exceeds SRAM bounds (4294967296 > 1024)
+tu_softmax_validate: data exceeds SRAM bounds (offset=0 + 1073741824*4 = 4294967296 > 1024)
+tu_softmax_2d: rows(65537) * cols(65536) exceeds uint32 element count
+tu_softmax_2d: rows(65537) * cols(65536) exceeds uint32 element count
+tu_softmax_2d: rows(65537) * cols(65536) exceeds uint32 element count
+tu_softmax_validate: data exceeds SRAM bounds (offset=0 + 4097*4 = 16388 > 16384)
+PASS data-offset wrap             rejected
+PASS out-offset wrap              rejected
+PASS elem_count byte-extent wrap  rejected
+PASS wrapper rows*cols wrap       rejected
+PASS masked wrapper wrap          rejected
+PASS log wrapper wrap             rejected
+PASS valid 4x8 in-place           accepted (64 stalls)
+PASS valid control numerics
+PASS valid out-of-place           accepted (32 stalls)
+PASS exact-fit full region        accepted (16384 stalls)
+PASS plain overflow (no wrap)     rejected
+test-softmax-overflow: PASS (0 failures)
+make: Leaving directory '/home/zxy/.hermes/cache/scratch/tusim-20261115/sanitized'
+mode,gap,output_max,output_tail,reference_log_max,log_relative_error,exp_sum,reads,writes,local_penalty
+standard,0,0.5,0.5,-0.69314718056,0,2,2,2,8
+standard,12,0.999993860722,6.14417467659e-06,-6.14419347773e-06,0,1.00000619888,2,2,8
+standard,16,0.999999880791,1.12535161634e-07,-1.12535168387e-07,0,1.00000011921,2,2,8
+standard,17,0.999999940395,4.13993781478e-08,-4.13993763309e-08,0,1,2,2,8
+standard,20,1,2.06115369217e-09,-2.06115362031e-09,0,1,2,2,8
+standard,40,1,4.24835413114e-18,-4.24835425529e-18,0,1,2,2,8
+standard,80,1,1.80485132858e-35,-1.80485138785e-35,0,1,2,2,8
+standard,87,1,1.64581145375e-38,-1.64581143108e-38,0,1,2,2,8
+standard,88,1,0,-6.0546018954e-39,0,1,2,2,8
+standard,104,1,0,-6.81355682155e-46,0,1,2,2,8
+log,0,-0.693147182465,-0.693147182465,-0.69314718056,2.74783531316e-09,2,2,2,8
+log,12,-6.14419332123e-06,-12.000005722,-6.14419347773e-06,2.54710713005e-08,1.00000619888,2,2,8
+log,16,-1.12535168739e-07,-16,-1.12535168387e-07,3.12824138959e-09,1.00000011921,2,2,8
+log,17,-4.13993781478e-08,-17,-4.13993763309e-08,4.38882557427e-08,1,2,2,8
+log,20,-2.06115369217e-09,-20,-2.06115362031e-09,3.48607538926e-08,1,2,2,8
+log,40,-4.24835413114e-18,-40,-4.24835425529e-18,2.92237703836e-08,1,2,2,8
+log,80,-1.80485132858e-35,-80,-1.80485138785e-35,3.28340465994e-08,1,2,2,8
+log,87,-1.64581145375e-38,-87,-1.64581143108e-38,1.37756486677e-08,1,2,2,8
+log,88,0,-88,-6.0546018954e-39,1,1,2,2,8
+log,104,0,-104,-6.81355682155e-46,1,1,2,2,8
+online,0,0.5,0.5,-0.69314718056,0,2,2,2,8
+online,12,0.999993801117,6.14417422184e-06,-6.14419347773e-06,0,1.00000619888,2,2,8
+online,16,0.999999880791,1.12535161634e-07,-1.12535168387e-07,0,1.00000011921,2,2,8
+online,17,1,4.13993781478e-08,-4.13993763309e-08,0,1,2,2,8
+online,20,1,2.06115369217e-09,-2.06115362031e-09,0,1,2,2,8
+online,40,1,4.24835413114e-18,-4.24835425529e-18,0,1,2,2,8
+online,80,1,1.80485132858e-35,-1.80485138785e-35,0,1,2,2,8
+online,87,1,1.64581145375e-38,-1.64581143108e-38,0,1,2,2,8
+online,88,1,0,-6.0546018954e-39,0,1,2,2,8
+online,104,1,0,-6.81355682155e-46,0,1,2,2,8
+log-nearzero cases=0 checks=117 failures=0 max_relative_error=4.38882557427e-08

@@ -89,15 +89,19 @@ static void softmax_row_two_pass(float *row, uint32_t cols, float scale,
 
     /* Step 1: Apply scale if needed, find max */
     float max_val = -INFINITY;
+    uint32_t max_index = 0;
     for (uint32_t i = 0; i < cols; i++) {
         if (scale != 0.0f)
             row[i] *= scale;
-        if (row[i] > max_val)
+        if (row[i] > max_val) {
             max_val = row[i];
+            max_index = i;
+        }
     }
 
     /* Step 2: Compute exp(x_i - max) and sum */
     double sum = 0.0;
+    double log_residual = 0.0;
     for (uint32_t i = 0; i < cols; i++) {
         float shifted = row[i] - max_val;
         float exp_val;
@@ -108,6 +112,11 @@ static void softmax_row_two_pass(float *row, uint32_t cols, float scale,
             exp_val = expf(shifted);
         }
         sum += (double)exp_val;
+        /* Exclude exactly one exp(0)=1 anchor. Adding small tails to one
+         * before log loses near-zero LOG results, even with a double sum.
+         * Keep the original sum separately for compatible sum_out values. */
+        if (mode == TU_SOFTMAX_LOG && i != max_index)
+            log_residual += (double)exp_val;
         /* LOG must retain the shifted logit, not reconstruct it from a
          * rounded/underflowed exponential. Reuse the same row storage. */
         row[i] = (mode == TU_SOFTMAX_LOG) ? shifted : exp_val;
@@ -122,7 +131,7 @@ static void softmax_row_two_pass(float *row, uint32_t cols, float scale,
     } else {
         double inv_sum = 1.0 / sum;
         if (mode == TU_SOFTMAX_LOG) {
-            float log_sum = logf((float)sum);
+            float log_sum = (float)log1p(log_residual);
             for (uint32_t i = 0; i < cols; i++) {
                 row[i] -= log_sum;
             }

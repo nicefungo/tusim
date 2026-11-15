@@ -1,0 +1,8 @@
+/home/zxy/.hermes/cache/scratch/softmax-nearzero-mutants-qf9rj41g/exclude-all-tied-maxima.c: In function ‘softmax_row_two_pass’:
+/home/zxy/.hermes/cache/scratch/softmax-nearzero-mutants-qf9rj41g/exclude-all-tied-maxima.c:92:14: warning: variable ‘max_index’ set but not used [-Wunused-but-set-variable]
+   92 |     uint32_t max_index = 0;
+      |              ^~~~~~~~~
+log-of-double-sum: exit=1 log-nearzero cases=4880 checks=2433342 failures=3930 max_relative_error=1
+exclude-all-tied-maxima: exit=1 log-nearzero cases=4880 checks=2433342 failures=484860 max_relative_error=1
+wrong-anchor-position: exit=1 log-nearzero cases=4880 checks=2433342 failures=361430 max_relative_error=4.21158323107e+37
+All three safe numerical mutants rejected.

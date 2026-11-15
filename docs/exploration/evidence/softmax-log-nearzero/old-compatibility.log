@@ -1,0 +1,96 @@
+make: Entering directory '/home/zxy/.hermes/cache/scratch/tusim-20261115/baseline'
+cc -O2 -Wall -Wextra -std=c11 -fPIC -I. -Itu_cmodel -o test-softmax-log-range tests/test_softmax_log_range.c ./libtucmodel.a -lm
+./test-softmax-log-range
+mode=standard output_stats_stalls_fnv64=7835006ea9ecf509 accounting_fnv64=33647d5b0fb85ce1 max_abs_error=3.63912848744e-08
+mode=log output_stats_stalls_fnv64=70edc47c2db0f411 accounting_fnv64=33647d5b0fb85ce1 max_abs_error=0.00122453406948
+mode=online output_stats_stalls_fnv64=cafd1af0bdab8391 accounting_fnv64=fb833c2568674285 max_abs_error=1.71008272321e-07
+log-range cases=4520 checks=305801 failures=0
+cc -O2 -Wall -Wextra -std=c11 -fPIC -I. -Itu_cmodel -o test-softmax-sweep tests/test_softmax_sweep.c ./libtucmodel.a -lm
+./test-softmax-sweep
+Softmax Mode Sweep: Standard vs Log vs Online
+Metrics: SRAM stall cycles (lower = less bandwidth contention)
+
+Workload                   Elems      Std      Log   Online     Best Std=Baseline
+-------------------------------------------------------------------------------
+1×64   (single row, small head)     64      256      256      256 Standard     100.0%
+1×128  (typical attention head)    128      512      512      512 Standard     100.0%
+1×256  (large head_dim)     256     1024     1024     1024 Standard     100.0%
+1×512  (very large head_dim)    512     2048     2048     2048 Standard     100.0%
+16×64  (batched small)     1024     4096     4096     4096 Standard     100.0%
+16×128 (batched typical)   2048     8192     8192     8192 Standard     100.0%
+64×64  (square attention score)   4096    16384    16384    16384 Standard     100.0%
+128×128 (large square)    16384    65536    65536    65536 Standard     100.0%
+256×128 (seq_len×head_dim)  32768   131072   131072   131072 Standard     100.0%
+
+Done.
+cc -O2 -Wall -Wextra -std=c11 -fPIC -I. -Itu_cmodel -o test-softmax-attention-sweep tests/test_softmax_attention_sweep.c ./libtucmodel.a -lm
+tests/test_softmax_attention_sweep.c: In function ‘main’:
+tests/test_softmax_attention_sweep.c:109:39: warning: format ‘%s’ expects a matching ‘char *’ argument [-Wformat=]
+  109 |                 printf("%-22s %-14s %8s (alloc fail)\n", w->label, p->label);
+      |                                     ~~^
+      |                                       |
+      |                                       char *
+tests/test_softmax_attention_sweep.c:135:39: warning: format ‘%s’ expects a matching ‘char *’ argument [-Wformat=]
+  135 |                 printf("%-22s %-14s %8s (attn fail)\n", w->label, p->label);
+      |                                     ~~^
+      |                                       |
+      |                                       char *
+./test-softmax-attention-sweep
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 8×8 PE, 128 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention: M=32 N=64 d=64 scale=0.125000 tile_m=32 tile_n=64 Q=4096B K=8192B KT=8192B S=8192B O=8192B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=24576 B, MMA tiles=512, FLOPs=524288, cycles=49984 (compute=41856, dma=8128), util=0.84
+[       0] CORE  [1;32mINFO [0m Attention: M=64 N=64 d=64 scale=0.125000 tile_m=42 tile_n=64 Q=5376B K=8192B KT=8192B S=10752B O=10752B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=49152 B, MMA tiles=1152, FLOPs=1048576, cycles=101504 (compute=85120, dma=16384), util=0.84
+[       0] CORE  [1;32mINFO [0m Attention: M=32 N=64 d=128 scale=0.088388 tile_m=32 tile_n=64 Q=8192B K=16384B KT=16384B S=8192B O=16384B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=49152 B, MMA tiles=1024, FLOPs=1048576, cycles=75712 (compute=63424, dma=12288), util=0.84
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 16×16 PE, 256 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention: M=32 N=64 d=64 scale=0.125000 tile_m=32 tile_n=64 Q=4096B K=8192B KT=8192B S=8192B O=8192B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=24576 B, MMA tiles=64, FLOPs=524288, cycles=46144 (compute=38016, dma=8128), util=0.82
+[       0] CORE  [1;32mINFO [0m Attention: M=64 N=64 d=64 scale=0.125000 tile_m=64 tile_n=64 Q=8192B K=8192B KT=8192B S=16384B O=16384B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=32768 B, MMA tiles=128, FLOPs=1048576, cycles=76224 (compute=59840, dma=16384), util=0.79
+[       0] CORE  [1;32mINFO [0m Attention: M=128 N=64 d=64 scale=0.125000 tile_m=64 tile_n=64 Q=8192B K=8192B KT=8192B S=16384B O=16384B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=65536 B, MMA tiles=256, FLOPs=2097152, cycles=152448 (compute=119680, dma=32768), util=0.79
+[       0] CORE  [1;32mINFO [0m Attention: M=32 N=64 d=128 scale=0.088388 tile_m=32 tile_n=64 Q=8192B K=16384B KT=16384B S=8192B O=16384B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=49152 B, MMA tiles=128, FLOPs=1048576, cycles=68032 (compute=55744, dma=12288), util=0.82
+[       0] CORE  [1;32mINFO [0m Attention: M=64 N=64 d=128 scale=0.088388 tile_m=64 tile_n=64 Q=16384B K=16384B KT=16384B S=16384B O=32768B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=65536 B, MMA tiles=256, FLOPs=2097152, cycles=103360 (compute=78784, dma=24576), util=0.76
+[       0] CORE  [1;32mINFO [0m TinyTU CModel initializing...
+[       0] CORE  [1;32mINFO [0m Initialized: 32×32 PE, 512 KB SRAM, dataflow=weight_stationary
+[       0] CORE  [1;32mINFO [0m Attention: M=32 N=64 d=64 scale=0.125000 tile_m=32 tile_n=64 Q=4096B K=8192B KT=8192B S=8192B O=8192B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=24576 B, MMA tiles=8, FLOPs=524288, cycles=45184 (compute=37056, dma=8128), util=0.82
+[       0] CORE  [1;32mINFO [0m Attention: M=64 N=64 d=64 scale=0.125000 tile_m=64 tile_n=64 Q=8192B K=8192B KT=8192B S=16384B O=16384B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=32768 B, MMA tiles=16, FLOPs=1048576, cycles=74304 (compute=57920, dma=16384), util=0.78
+[       0] CORE  [1;32mINFO [0m Attention: M=128 N=64 d=64 scale=0.125000 tile_m=64 tile_n=64 Q=8192B K=8192B KT=8192B S=16384B O=16384B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=65536 B, MMA tiles=32, FLOPs=2097152, cycles=148608 (compute=115840, dma=32768), util=0.78
+[       0] CORE  [1;32mINFO [0m Attention: M=32 N=64 d=128 scale=0.088388 tile_m=32 tile_n=64 Q=8192B K=16384B KT=16384B S=8192B O=16384B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=49152 B, MMA tiles=16, FLOPs=1048576, cycles=66112 (compute=53824, dma=12288), util=0.81
+[       0] CORE  [1;32mINFO [0m Attention: M=64 N=64 d=128 scale=0.088388 tile_m=64 tile_n=64 Q=16384B K=16384B KT=16384B S=16384B O=32768B
+[       0] CORE  [1;32mINFO [0m Attention complete: DMA=65536 B, MMA tiles=32, FLOPs=2097152, cycles=99520 (compute=74944, dma=24576), util=0.75
+Softmax-After-Attention Pipeline Sweep
+======================================
+Question: What overhead does standalone softmax add to attention latency?
+
+Workload               PE              AttnCyc  SMstallCy   SMoverhead%    SMc/e
+----------------------------------------------------------------------------------------------
+prefill-32x64          8x8 (128K)        49984       8192        16.39%    4.00
+prefill-64x64          8x8 (128K)       101504      16384        16.14%    4.00
+prefill-128x64         8x8 (128K)            -          -             -        -  (O-buf skip)
+prefill-32x128         8x8 (128K)        75712      16384        21.64%    4.00
+prefill-64x128         8x8 (128K)            -          -             -        -  (O-buf skip)
+prefill-32x64          16x16 (256K)      46144       8192        17.75%    4.00
+prefill-64x64          16x16 (256K)      76224      16384        21.49%    4.00
+prefill-128x64         16x16 (256K)     152448      32768        21.49%    4.00
+prefill-32x128         16x16 (256K)      68032      16384        24.08%    4.00
+prefill-64x128         16x16 (256K)     103360      32768        31.70%    4.00
+prefill-32x64          32x32 (512K)      45184       8192        18.13%    4.00
+prefill-64x64          32x32 (512K)      74304      16384        22.05%    4.00
+prefill-128x64         32x32 (512K)     148608      32768        22.05%    4.00
+prefill-32x128         32x32 (512K)      66112      16384        24.78%    4.00
+prefill-64x128         32x32 (512K)      99520      32768        32.93%    4.00
+----------------------------------------------------------------------------------------------
+Done. Softmax cycles measured as SRAM stall cycles.
+Softmax uses 2-pass algorithm: read+find_max+write per elem in pass 1,
+read+exp+normalize+write per elem in pass 2 = 4×elem SRAM operations.
+make: Leaving directory '/home/zxy/.hermes/cache/scratch/tusim-20261115/baseline'
