@@ -104,6 +104,8 @@ test-softmax
 test-softmax-overflow
 test-softmax-log-range
 test-softmax-log-nearzero
+test-softmax-exp-policy
+test-softmax-exp-policy-internal
 test-double
 test-context
 test-context-switch-sweep

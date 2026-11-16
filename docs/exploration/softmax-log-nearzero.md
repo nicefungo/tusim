@@ -115,6 +115,12 @@ independently rebuilt before publication; its log is retained there as well.
 
 ## Backlog audit and next bounded design question
 
+**Follow-up, 2026-11-16:** the below historical READY plan is now implemented as
+runtime descriptor LEGACY/FTZ/GRADUAL alternatives. See
+[softmax-exponential-range.md](softmax-exponential-range.md) for the exact
+exponential-result-only contract, 81-row matrix, compatibility and verification.
+The results earlier in this document remain the unchanged LEGACY policy.
+
 Rechecked current normalization wrapper scratch arithmetic, context SRAM
 snapshot/time ownership, scalar arbitration mode consumption, and im2col padding
 sentinel/range handling. Their recorded contracts remain blocked; none was

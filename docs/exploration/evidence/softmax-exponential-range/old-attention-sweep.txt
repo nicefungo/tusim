@@ -1,0 +1,25 @@
+Softmax-After-Attention Pipeline Sweep
+======================================
+Question: What overhead does standalone softmax add to attention latency?
+
+Workload               PE              AttnCyc  SMstallCy   SMoverhead%    SMc/e
+----------------------------------------------------------------------------------------------
+prefill-32x64          8x8 (128K)        49984       8192        16.39%    4.00
+prefill-64x64          8x8 (128K)       101504      16384        16.14%    4.00
+prefill-128x64         8x8 (128K)            -          -             -        -  (O-buf skip)
+prefill-32x128         8x8 (128K)        75712      16384        21.64%    4.00
+prefill-64x128         8x8 (128K)            -          -             -        -  (O-buf skip)
+prefill-32x64          16x16 (256K)      46144       8192        17.75%    4.00
+prefill-64x64          16x16 (256K)      76224      16384        21.49%    4.00
+prefill-128x64         16x16 (256K)     152448      32768        21.49%    4.00
+prefill-32x128         16x16 (256K)      68032      16384        24.08%    4.00
+prefill-64x128         16x16 (256K)     103360      32768        31.70%    4.00
+prefill-32x64          32x32 (512K)      45184       8192        18.13%    4.00
+prefill-64x64          32x32 (512K)      74304      16384        22.05%    4.00
+prefill-128x64         32x32 (512K)     148608      32768        22.05%    4.00
+prefill-32x128         32x32 (512K)      66112      16384        24.78%    4.00
+prefill-64x128         32x32 (512K)      99520      32768        32.93%    4.00
+----------------------------------------------------------------------------------------------
+Done. Softmax cycles measured as SRAM stall cycles.
+Softmax uses 2-pass algorithm: read+find_max+write per elem in pass 1,
+read+exp+normalize+write per elem in pass 2 = 4×elem SRAM operations.

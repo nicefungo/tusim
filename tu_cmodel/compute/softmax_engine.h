@@ -52,6 +52,13 @@ typedef enum {
     TU_SOFTMAX_ONLINE    = 2,  /* Online single-pass softmax (rescaling) */
 } tu_softmax_mode_t;
 
+/* Exponential-result handling, not global FP/DAZ or final-output flushing. */
+typedef enum {
+    TU_SOFTMAX_EXP_LEGACY = 0, /* Historical -87 cutoff; online sum uses expf. */
+    TU_SOFTMAX_EXP_FTZ = 1,    /* Flush rounded subnormal expf results only. */
+    TU_SOFTMAX_EXP_GRADUAL = 2 /* Preserve host expf subnormal results. */
+} tu_softmax_exp_policy_t;
+
 /* ---- Descriptor ---- */
 typedef struct {
     tu_softmax_mode_t mode;          /* Standard, log, or online */
@@ -85,6 +92,7 @@ typedef struct {
     /* Statistics output (optional) */
     float            *max_out;       /* Per-row max values (caller allocates: num_rows floats) */
     float            *sum_out;       /* Per-row exp-sum values */
+    tu_softmax_exp_policy_t exp_policy; /* Zero/default preserves old behavior. */
 } tu_softmax_desc_t;
 
 /* ---- API ---- */
@@ -104,8 +112,15 @@ typedef struct {
  * logits are required for this guarantee; NaN/Inf policy is not specified.
  * LOG uses log1p of a residual sum excluding exactly one maximum, preserving
  * small negative outputs without first rounding the exp-sum to one. The
- * existing exponential cutoff below -87 remains; no subnormal-tail relative
- * guarantee is implied. Optional sum_out retains its original FP32 rounding.
+ * selected exponential policy applies before summation, including ONLINE
+ * rescaling. LEGACY retains the -87 output/two-pass cutoff and the historical
+ * uncut ONLINE sum. FTZ flushes subnormal exponential results, not final
+ * probabilities or log outputs; GRADUAL preserves expf results. Neither is
+ * a correctly-rounded transcendental guarantee. Host gradual FP arithmetic
+ * is required for GRADUAL; global FTZ/DAZ or fast-math builds are unsupported.
+ * Optional sum_out retains its mode-specific FP32 rounding. Convenience and
+ * host wrappers always select LEGACY. Appending exp_policy requires binary
+ * consumers to rebuild; zero-initialized source callers remain compatible.
  *
  * Returns total stall cycles from SRAM bandwidth contention.
  * Returns UINT64_MAX on error (check stderr for details).

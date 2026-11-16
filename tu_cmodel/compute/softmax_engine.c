@@ -50,6 +50,18 @@
 
 /* ---- Internal helpers ---- */
 
+/* Legacy ONLINE accumulation bypassed the cutoff. Preserve that exception;
+ * every exponential in the new policies shares one result contract. */
+static float softmax_exp(float x, tu_softmax_exp_policy_t policy,
+                         bool online_accumulator) {
+    if (policy == TU_SOFTMAX_EXP_LEGACY && !online_accumulator && x < -87.0f)
+        return 0.0f;
+    float value = expf(x);
+    if (policy == TU_SOFTMAX_EXP_FTZ && fpclassify(value) == FP_SUBNORMAL)
+        return 0.0f;
+    return value;
+}
+
 /* Load N FP32 elements from SRAM to host buffer. Returns stall cycles. */
 static uint64_t sram_load_floats(tu_sram_region_t *s, uint32_t off,
                                   float *out, uint32_t n) {
@@ -80,6 +92,7 @@ static uint64_t sram_store_floats(tu_sram_region_t *s, uint32_t off,
  */
 static void softmax_row_two_pass(float *row, uint32_t cols, float scale,
                                   tu_softmax_mode_t mode,
+                                  tu_softmax_exp_policy_t exp_policy,
                                   float *max_out, float *sum_out) {
     if (cols == 0) {
         if (max_out) *max_out = 0.0f;
@@ -104,13 +117,7 @@ static void softmax_row_two_pass(float *row, uint32_t cols, float scale,
     double log_residual = 0.0;
     for (uint32_t i = 0; i < cols; i++) {
         float shifted = row[i] - max_val;
-        float exp_val;
-        /* Preserve the existing small-exponential cutoff for the sum. */
-        if (shifted < -87.0f) {
-            exp_val = 0.0f;
-        } else {
-            exp_val = expf(shifted);
-        }
+        float exp_val = softmax_exp(shifted, exp_policy, false);
         sum += (double)exp_val;
         /* Exclude exactly one exp(0)=1 anchor. Adding small tails to one
          * before log loses near-zero LOG results, even with a double sum.
@@ -162,6 +169,7 @@ static void softmax_row_two_pass(float *row, uint32_t cols, float scale,
  */
 static void softmax_row_online(float *row, uint32_t cols, float scale,
                                 tu_softmax_mode_t mode,
+                                tu_softmax_exp_policy_t exp_policy,
                                 float *max_out, float *sum_out) {
     if (cols == 0) {
         if (max_out) *max_out = 0.0f;
@@ -183,11 +191,12 @@ static void softmax_row_online(float *row, uint32_t cols, float scale,
             /* New max discovered: rescale accumulated sum.
              * All previous exp(x_j - old_max) become exp(x_j - new_max)
              * by multiplying by exp(old_max - new_max). */
-            float ratio = (max_val == -INFINITY) ? 1.0f : expf(max_val - x);
+            float ratio = (max_val == -INFINITY) ? 1.0f
+                : softmax_exp(max_val - x, exp_policy, true);
             exp_sum = exp_sum * ratio + 1.0f;
             max_val = x;
         } else {
-            float exp_val = expf(x - max_val);
+            float exp_val = softmax_exp(x - max_val, exp_policy, true);
             exp_sum += exp_val;
         }
         /* row[i] retains x_i — NOT overwritten with exp */
@@ -206,13 +215,7 @@ static void softmax_row_online(float *row, uint32_t cols, float scale,
     } else {
         for (uint32_t i = 0; i < cols; i++) {
             float shifted = row[i] - max_val;
-            /* Clamp to prevent exp overflow (should never happen since
-             * shifted <= 0 by definition of max) */
-            if (shifted < -87.0f) {
-                row[i] = 0.0f;
-            } else {
-                row[i] = expf(shifted) * inv_sum;
-            }
+            row[i] = softmax_exp(shifted, exp_policy, false) * inv_sum;
         }
     }
 
@@ -226,6 +229,7 @@ static uint64_t softmax_single_row(tu_sram_region_t *sram,
                                     uint32_t in_offset, uint32_t out_offset,
                                     uint32_t cols, float scale,
                                     tu_softmax_mode_t mode,
+                                    tu_softmax_exp_policy_t exp_policy,
                                     const float *mask, bool additive_mask,
                                     float mask_fill,
                                     float *max_out, float *sum_out) {
@@ -262,9 +266,9 @@ static uint64_t softmax_single_row(tu_sram_region_t *sram,
 
     /* ---- Execute softmax ---- */
     if (mode == TU_SOFTMAX_ONLINE) {
-        softmax_row_online(row, cols, scale, mode, max_out, sum_out);
+        softmax_row_online(row, cols, scale, mode, exp_policy, max_out, sum_out);
     } else {
-        softmax_row_two_pass(row, cols, scale, mode, max_out, sum_out);
+        softmax_row_two_pass(row, cols, scale, mode, exp_policy, max_out, sum_out);
     }
 
     /* ---- Write result back ---- */
@@ -307,7 +311,7 @@ uint64_t tu_softmax_execute(const tu_softmax_desc_t *desc) {
 
         float max_dummy, sum_dummy;
         uint64_t s = softmax_single_row(sram, row_in, row_out, cols,
-                                         desc->scale, mode,
+                                         desc->scale, mode, desc->exp_policy,
                                          row_mask, desc->mask_is_additive,
                                          desc->mask_fill,
                                          desc->max_out ? &max_dummy : NULL,
@@ -451,13 +455,15 @@ uint64_t tu_log_softmax_2d(tu_sram_region_t *data_sram, uint32_t offset,
 void tu_softmax_host(float *data, uint32_t count, float scale) {
     tu_softmax_mode_t m = TU_SOFTMAX_STANDARD;
     float max_val, sum_val;
-    softmax_row_two_pass(data, count, scale, m, &max_val, &sum_val);
+    softmax_row_two_pass(data, count, scale, m, TU_SOFTMAX_EXP_LEGACY,
+                        &max_val, &sum_val);
 }
 
 void tu_log_softmax_host(float *data, uint32_t count, float scale) {
     tu_softmax_mode_t m = TU_SOFTMAX_LOG;
     float max_val, sum_val;
-    softmax_row_two_pass(data, count, scale, m, &max_val, &sum_val);
+    softmax_row_two_pass(data, count, scale, m, TU_SOFTMAX_EXP_LEGACY,
+                        &max_val, &sum_val);
 }
 
 /* ---- Utility ---- */
@@ -486,6 +492,12 @@ bool tu_softmax_validate_desc(const tu_softmax_desc_t *desc) {
     }
     if (desc->mode > TU_SOFTMAX_ONLINE) {
         fprintf(stderr, "tu_softmax_validate: invalid mode %d\n", desc->mode);
+        return false;
+    }
+
+    if ((unsigned)desc->exp_policy > TU_SOFTMAX_EXP_GRADUAL) {
+        fprintf(stderr, "tu_softmax_validate: invalid exponential policy %d\n",
+                desc->exp_policy);
         return false;
     }
 
