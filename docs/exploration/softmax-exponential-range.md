@@ -147,3 +147,9 @@ normalization wrapper scratch placement, and im2col padding sentinels: their
 recorded contract dependencies remain, not ready alternatives rejected for speed.
 No new speculative engine or global configuration knob was added. See
 [IMPLEMENTATION_BACKLOG.md](IMPLEMENTATION_BACKLOG.md).
+
+**2026-11-17 follow-up:** [scale/mask stage ordering](softmax-preprocess-order.md)
+adds two independent runtime preprocessing organizations while retaining all
+three exponential policies. The original 81-row exponential matrix remains
+byte-identical under the default ordering; this does not extend nonfinite,
+all-masked or independent attention-kernel guarantees.

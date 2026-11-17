@@ -230,6 +230,7 @@ static uint64_t softmax_single_row(tu_sram_region_t *sram,
                                     uint32_t cols, float scale,
                                     tu_softmax_mode_t mode,
                                     tu_softmax_exp_policy_t exp_policy,
+                                    tu_softmax_preprocess_order_t preprocess_order,
                                     const float *mask, bool additive_mask,
                                     float mask_fill,
                                     float *max_out, float *sum_out) {
@@ -245,6 +246,15 @@ static uint64_t softmax_single_row(tu_sram_region_t *sram,
 
     /* ---- Load row from SRAM ---- */
     stall += sram_load_floats(sram, in_offset, row, cols);
+
+    /* Keep legacy scaling inside the row kernel for bitwise compatibility.
+     * The alternative scales once before the existing mask/threshold stage;
+     * zero remains the public no-scaling sentinel, not a numerical multiply. */
+    if (preprocess_order == TU_SOFTMAX_SCALE_THEN_MASK) {
+        if (scale != 0.0f)
+            for (uint32_t i = 0; i < cols; i++) row[i] *= scale;
+        scale = 0.0f;
+    }
 
     /* ---- Apply mask if provided ---- */
     if (mask) {
@@ -312,6 +322,7 @@ uint64_t tu_softmax_execute(const tu_softmax_desc_t *desc) {
         float max_dummy, sum_dummy;
         uint64_t s = softmax_single_row(sram, row_in, row_out, cols,
                                          desc->scale, mode, desc->exp_policy,
+                                         desc->preprocess_order,
                                          row_mask, desc->mask_is_additive,
                                          desc->mask_fill,
                                          desc->max_out ? &max_dummy : NULL,
@@ -498,6 +509,12 @@ bool tu_softmax_validate_desc(const tu_softmax_desc_t *desc) {
     if ((unsigned)desc->exp_policy > TU_SOFTMAX_EXP_GRADUAL) {
         fprintf(stderr, "tu_softmax_validate: invalid exponential policy %d\n",
                 desc->exp_policy);
+        return false;
+    }
+
+    if ((unsigned)desc->preprocess_order > TU_SOFTMAX_SCALE_THEN_MASK) {
+        fprintf(stderr, "tu_softmax_validate: invalid preprocessing order %d\n",
+                desc->preprocess_order);
         return false;
     }
 

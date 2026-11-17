@@ -59,6 +59,12 @@ typedef enum {
     TU_SOFTMAX_EXP_GRADUAL = 2 /* Preserve host expf subnormal results. */
 } tu_softmax_exp_policy_t;
 
+/* Order of the existing scale and mask/threshold stages. */
+typedef enum {
+    TU_SOFTMAX_MASK_THEN_SCALE = 0, /* Compatibility: scale(mask/threshold(x)). */
+    TU_SOFTMAX_SCALE_THEN_MASK = 1  /* mask/threshold(scale(x)). */
+} tu_softmax_preprocess_order_t;
+
 /* ---- Descriptor ---- */
 typedef struct {
     tu_softmax_mode_t mode;          /* Standard, log, or online */
@@ -80,7 +86,8 @@ typedef struct {
     const float      *mask;          /* Mask buffer (NULL = no mask) */
     bool              mask_is_additive; /* true = add mask before softmax (typical),
                                            false = multiply mask (less common) */
-    float             mask_fill;     /* Value for masked positions (e.g., -inf) */
+    float             mask_fill;     /* Nonzero threshold: replace values <= it
+                                       (or NaN) with fixed -1e9 after mask op. */
 
     /* Scaling (for attention: divide by sqrt(head_dim)) */
     float             scale;         /* Apply scale before softmax (0 = no scaling) */
@@ -93,6 +100,7 @@ typedef struct {
     float            *max_out;       /* Per-row max values (caller allocates: num_rows floats) */
     float            *sum_out;       /* Per-row exp-sum values */
     tu_softmax_exp_policy_t exp_policy; /* Zero/default preserves old behavior. */
+    tu_softmax_preprocess_order_t preprocess_order; /* Zero = mask then scale. */
 } tu_softmax_desc_t;
 
 /* ---- API ---- */
@@ -121,6 +129,19 @@ typedef struct {
  * Optional sum_out retains its mode-specific FP32 rounding. Convenience and
  * host wrappers always select LEGACY. Appending exp_policy requires binary
  * consumers to rebuild; zero-initialized source callers remain compatible.
+ *
+ * preprocess_order selects MASK_THEN_SCALE (zero/default) or SCALE_THEN_MASK.
+ * The mask stage adds/multiplies the supplied float mask, then, if mask_fill
+ * is nonzero, replaces values <= mask_fill (or NaN) with fixed -1e9. It is
+ * a numeric threshold, NOT a Boolean exclusion mask or a configurable fill.
+ * Scaling by zero (including -0) means skip in either order. Thus with no
+ * threshold, additive masks compute scale*(x+mask) versus scale*x+mask;
+ * every operation rounds separately to FP32 (no fused multiply-add).
+ * Choose order to match the producer's score/bias units, not a speed ranking.
+ * All convenience/host wrappers retain MASK_THEN_SCALE. Binary consumers must
+ * rebuild for the appended selector. No global config or attention-kernel
+ * selection is implied. Finite preprocessing is the tested numerical scope;
+ * nonfinite/all-masked policies and arbitrary buffer aliasing remain separate.
  *
  * Returns total stall cycles from SRAM bandwidth contention.
  * Returns UINT64_MAX on error (check stderr for details).
@@ -166,12 +187,14 @@ uint64_t tu_softmax_2d(tu_sram_region_t *data_sram, uint32_t offset,
  *   rows:       number of rows
  *   cols:       elements per row
  *   mask:       mask buffer (row-major FP32, same shape; NULL = no mask)
- *   mask_fill:  value to add at masked positions (e.g., -1e9f for -inf effect)
+ *   mask_fill:  nonzero post-mask threshold; values <= it become fixed -1e9
  *   scale:      pre-softmax scaling (e.g., 1/sqrt(head_dim))
  *
  * Mask values are ADDED to the input before softmax.
- * To zero out a position, add a large negative number.
- * For causal masks, positions j > i get mask_fill.
+ * The caller supplies every mask entry (including any causal pattern); this
+ * wrapper does not generate a causal mask. The mask/threshold stage precedes
+ * scaling for compatibility. Finite negative sentinels do not guarantee exact
+ * exclusion for every scale or all-masked row.
  * Returns total stall cycles.
  */
 uint64_t tu_softmax_masked(tu_sram_region_t *data_sram, uint32_t offset,

@@ -512,6 +512,13 @@ test-pool: tests/test_pooling.c libtucmodel.a
 	./test-pool
 
 # Softmax functional suite (statically linked: see focused-target stale-.so pitfall)
+.PHONY: test-softmax-preprocess-order
+test-softmax-preprocess-order: tests/test_softmax_preprocess_order.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
+	./$@
+
+test test-quick: test-softmax-preprocess-order
+
 .PHONY: test-softmax-exp-policy test-softmax-exp-policy-internal
 test-softmax-exp-policy: tests/test_softmax_exp_policy.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
@@ -865,6 +872,7 @@ config-docs: libtucmodel.a
 
 # ---- Clean ----
 clean:
+	rm -f test-softmax-preprocess-order
 	rm -f test-softmax-exp-policy test-softmax-exp-policy-internal
 	rm -f test-softmax-log-nearzero
 	rm -f test-softmax-log-range
