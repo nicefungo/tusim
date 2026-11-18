@@ -102,6 +102,9 @@ Boolean masks, different threshold placement independent of the mask, nonfinite
 and all-masked policies require distinct numerical/error and compatibility
 contracts; they are not excluded because of speed. Arbitrary SRAM/host aliasing,
 non-four-byte scalar SRAM and preprocessing overflow are outside this gate.
+The 2026-11-18 [row-schedule follow-up](softmax-row-schedule.md) separately adds
+safe contiguous input/output overlap and fixed forward/reverse admission;
+host mask/statistics aliasing remains unsupported.
 
 ## Verification executed
 

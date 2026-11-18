@@ -1,0 +1,47 @@
+Execution-input baseline: 0839141726b7dfa8630341694bfc143979fc15f9
+Logs and isolated verification drivers: /home/zxy/Workplace/archives/tusim-20261118-softmax-row-schedule
+New production inputs are the source files in the containing commit.
+Baseline clean build / quick: exit 0
+Final clean build / quick / full: exit 0
+Full suite command: LD_LIBRARY_PATH="$PWD${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" make test
+Sanitizer: complete library -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1
+Sanitized focused targets and matrix: exit 0
+Existing warnings: logging.c comp_names and config.c parse_opt_uint unused.
+Matrix: 45 rows; 39 accepted / 6 rejected; complete row counts and penalty table validated.
+Standalone and attention-softmax sweep paired outputs equal baseline.
+Legacy-safe output/statistics/per-bank fingerprint equal baseline.
+
+tracer-red.log:
+forward-overlap: row1.y0=0.5 expected=0.119202922022 FAIL
+schedule-red-corrected.log:
+softmax-row-schedule: cases=28542 checks=1748646 rejected=2604 failures=77496 fingerprint=7bd91c7d97f88c04
+schedule-green.log:
+softmax-row-schedule: cases=28542 checks=1748646 rejected=2604 failures=0 fingerprint=7bd91c7d97f88c04
+baseline-archive-red.log:
+softmax-row-schedule: cases=28542 checks=1748646 rejected=2604 failures=163224 fingerprint=932529def654cf7c
+baseline-archive-legacy.log:
+softmax-row-schedule: cases=8214 checks=530562 rejected=0 failures=0 fingerprint=ebb9a2108e8b59c8
+legacy.log:
+softmax-row-schedule: cases=8214 checks=530562 rejected=0 failures=0 fingerprint=ebb9a2108e8b59c8
+matrix.log:
+softmax-row-schedule: cases=45 checks=2802 rejected=6 failures=0 fingerprint=57fb1db1bdf2cd1b
+mutant-always-forward.log:
+softmax-row-schedule: cases=28542 checks=1748646 rejected=2604 failures=139788 fingerprint=932529def654cf7c
+mutant-ignore-fixed-reverse.log:
+softmax-row-schedule: cases=28542 checks=1748646 rejected=2604 failures=96924 fingerprint=60a23a523a7e9da0
+mutant-physical-mask-index.log:
+softmax-row-schedule: cases=28542 checks=1748646 rejected=2604 failures=49146 fingerprint=5521df29611eb81b
+mutant-physical-stats-index.log:
+softmax-row-schedule: cases=28542 checks=1748646 rejected=2604 failures=8718 fingerprint=148be54fe5626e8c
+mutant-skip-enum-rejection.log:
+softmax-row-schedule: cases=28542 checks=1748646 rejected=2604 failures=108 fingerprint=7bd91c7d97f88c04
+mutant-skip-hazard-rejection.log:
+softmax-row-schedule: cases=28542 checks=1748646 rejected=2604 failures=23328 fingerprint=7bd91c7d97f88c04
+
+Claim-critical input SHA-256:
+d9318e6c090b27d2159443679e6337f5fd1687ad49879f92281cff160f705598  tu_cmodel/compute/softmax_engine.c
+3959cafc2eb7d3699c458ee31620dabc4ff9fa0c8502845547578589347237c9  tu_cmodel/compute/softmax_engine.h
+9b306b1c7143b67428b6a66aee0c9aa2dfd5258bdc035fbba5bd42da109d1f71  tests/test_softmax_row_schedule.c
+db461a3cd8b7a8ae5c8ad13ca64f2639095d054dbd255f2699c56c8f9d778f3f  Makefile
+4b7a404377fbf30735339d8cab1ef85314003565f7352aac9628926898d3f366  .gitignore

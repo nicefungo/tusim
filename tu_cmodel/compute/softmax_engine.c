@@ -309,7 +309,14 @@ uint64_t tu_softmax_execute(const tu_softmax_desc_t *desc) {
     uint32_t out_off = desc->in_place ? desc->data_offset : desc->out_offset;
     uint64_t total_stall = 0;
 
-    for (uint32_t r = 0; r < num_rows; r++) {
+    /* Buffer each complete row; reverse only the inter-row schedule. */
+    bool reverse = desc->row_schedule == TU_SOFTMAX_ROWS_REVERSE ||
+        (desc->row_schedule == TU_SOFTMAX_ROWS_AUTO &&
+         out_off > desc->data_offset &&
+         (uint64_t)out_off < (uint64_t)desc->data_offset +
+                            (uint64_t)elem_count * sizeof(float));
+    for (uint32_t step = 0; step < num_rows; step++) {
+        uint32_t r = reverse ? num_rows - 1 - step : step;
         uint32_t row_in  = desc->data_offset + r * axis_dim * sizeof(float);
         uint32_t row_out = out_off + r * axis_dim * sizeof(float);
         uint32_t cols    = axis_dim;
@@ -518,6 +525,12 @@ bool tu_softmax_validate_desc(const tu_softmax_desc_t *desc) {
         return false;
     }
 
+    if ((unsigned)desc->row_schedule > TU_SOFTMAX_ROWS_REVERSE) {
+        fprintf(stderr, "tu_softmax_validate: invalid row schedule %d\n",
+                desc->row_schedule);
+        return false;
+    }
+
     /* Validate axis_dim divides elem_count */
     if (desc->axis_dim > 0 && (desc->elem_count % desc->axis_dim) != 0) {
         fprintf(stderr, "tu_softmax_validate: elem_count %u not divisible "
@@ -552,6 +565,18 @@ bool tu_softmax_validate_desc(const tu_softmax_desc_t *desc) {
             fprintf(stderr, "tu_softmax_validate: output exceeds SRAM bounds "
                     "(%llu > %u)\n", (unsigned long long)out_end,
                     desc->data_sram->total_size);
+            return false;
+        }
+        /* Each full row is staged before its writes. Exact alias and one-row
+         * overlap are safe either way; masks/stats have a non-alias contract. */
+        bool multirow = desc->axis_dim && desc->axis_dim < desc->elem_count;
+        bool overlap = desc->data_offset < out_end && desc->out_offset < data_end;
+        bool unsafe_forward = desc->row_schedule == TU_SOFTMAX_ROWS_FORWARD &&
+                              desc->out_offset > desc->data_offset;
+        bool unsafe_reverse = desc->row_schedule == TU_SOFTMAX_ROWS_REVERSE &&
+                              desc->out_offset < desc->data_offset;
+        if (multirow && overlap && (unsafe_forward || unsafe_reverse)) {
+            fprintf(stderr, "tu_softmax_validate: row schedule overwrites unread input\n");
             return false;
         }
     }

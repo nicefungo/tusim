@@ -65,6 +65,13 @@ typedef enum {
     TU_SOFTMAX_SCALE_THEN_MASK = 1  /* mask/threshold(scale(x)). */
 } tu_softmax_preprocess_order_t;
 
+/* Whole-row SRAM scheduling; elements inside each row stay forward. */
+typedef enum {
+    TU_SOFTMAX_ROWS_AUTO = 0,    /* Forward unless overlap requires reverse. */
+    TU_SOFTMAX_ROWS_FORWARD = 1,
+    TU_SOFTMAX_ROWS_REVERSE = 2
+} tu_softmax_row_schedule_t;
+
 /* ---- Descriptor ---- */
 typedef struct {
     tu_softmax_mode_t mode;          /* Standard, log, or online */
@@ -101,6 +108,7 @@ typedef struct {
     float            *sum_out;       /* Per-row exp-sum values */
     tu_softmax_exp_policy_t exp_policy; /* Zero/default preserves old behavior. */
     tu_softmax_preprocess_order_t preprocess_order; /* Zero = mask then scale. */
+    tu_softmax_row_schedule_t row_schedule; /* Zero = overlap-safe AUTO. */
 } tu_softmax_desc_t;
 
 /* ---- API ---- */
@@ -141,7 +149,23 @@ typedef struct {
  * All convenience/host wrappers retain MASK_THEN_SCALE. Binary consumers must
  * rebuild for the appended selector. No global config or attention-kernel
  * selection is implied. Finite preprocessing is the tested numerical scope;
- * nonfinite/all-masked policies and arbitrary buffer aliasing remain separate.
+ * nonfinite/all-masked policies remain separate.
+ *
+ * row_schedule selects AUTO (zero/default), FORWARD, or REVERSE whole-row
+ * traversal. AUTO uses forward except when a higher overlapping output span
+ * requires reverse to preserve unread input. A fixed schedule incompatible
+ * with multirow overlap rejects before accesses or statistics writes. Exact
+ * alias, disjoint spans, and single-row overlap permit either fixed order.
+ * Each entire row is buffered before output; element/reduction order within
+ * the row is unchanged. Masks and statistics stay indexed by logical row.
+ * Mask/max_out/sum_out buffers must not alias SRAM or one another, and must
+ * have the documented extents; host-pointer aliasing is not validated.
+ * SRAM scalar width must be sizeof(float). No concurrent mutation is allowed.
+ * AUTO preserves previous forward behavior for previously safe layouts and
+ * corrects higher-address overlapping multirow output (previously corrupted).
+ * All wrappers select AUTO; no YAML/JSON/global attention setting is added.
+ * Binary descriptor consumers must rebuild. Invalid schedule rejection is
+ * atomic; allocation failure after earlier rows is not transactional.
  *
  * Returns total stall cycles from SRAM bandwidth contention.
  * Returns UINT64_MAX on error (check stderr for details).

@@ -102,6 +102,7 @@ test-errors
 test-config
 test-softmax
 test-softmax-overflow
+test-softmax-row-schedule
 test-softmax-preprocess-order
 test-softmax-log-range
 test-softmax-log-nearzero
