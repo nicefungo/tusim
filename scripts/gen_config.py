@@ -463,8 +463,18 @@ def generate_header(config, output_path):
     L(f'#define TU_INTERCONNECT_MODE    {ic_map[mc["interconnect"]]}')
     L(f'#define TU_CACHE_COHERENCE      {1 if mc["cache_coherence"] else 0}')
     switch_map = {'legacy_hop_only': 0, 'cut_through': 1, 'store_and_forward': 2}
-    contention_map = {'ideal_parallel': 0, 'shared_link': 1}
-    mesh_route_map = {'xy': 0, 'yx': 1}
+    contention_map = {'ideal_parallel': 0, 'shared_link': 1, 'shared_link_floor': 2}
+    mesh_route_map = {'xy': 0, 'yx': 1, 'xy_else_yx': 2, 'yx_else_xy': 3}
+    ring_ties = ('clockwise', 'counterclockwise', 'even_cw', 'odd_cw')
+    L('#define TU_ICC_DUPLEX_FULL 0')
+    L('#define TU_ICC_BCAST_SEQUENTIAL 0')
+    L('#define TU_ICC_BCAST_PREFLIGHT 1')
+    L(f'#define TU_ICC_BCAST_MODE {("sequential", "preflight").index(mc.get("broadcast_admission", "sequential"))}')
+    L('#define TU_ICC_DUPLEX_HALF 1')
+    L(f'#define TU_ICC_DUPLEX_MODE {("full", "half").index(mc.get("link_duplex", "full"))}')
+    for i, name in enumerate(ring_ties):
+        L(f'#define TU_ICC_RING_TIE_{name.upper()} {i}')
+    L(f'#define TU_ICC_RING_TIE_MODE {ring_ties.index(mc.get("ring_tie", "clockwise"))}')
     L('#define TU_ICC_SWITCH_LEGACY_HOP_ONLY  0')
     L('#define TU_ICC_SWITCH_CUT_THROUGH      1')
     L('#define TU_ICC_SWITCH_STORE_FORWARD    2')
@@ -473,9 +483,12 @@ def generate_header(config, output_path):
     L(f'#define TU_ICC_ROUTER_LATENCY_CYCLES   {mc["router_latency_cycles"]}')
     L('#define TU_ICC_CONTENTION_IDEAL_PARALLEL 0')
     L('#define TU_ICC_CONTENTION_SHARED_LINK    1')
+    L('#define TU_ICC_CONTENTION_SHARED_FLOOR   2')
     L(f'#define TU_ICC_CONTENTION_MODE           {contention_map[mc["contention"]]}')
     L('#define TU_ICC_MESH_ROUTE_XY             0')
     L('#define TU_ICC_MESH_ROUTE_YX             1')
+    L('#define TU_ICC_MESH_ROUTE_XY_ELSE_YX     2')
+    L('#define TU_ICC_MESH_ROUTE_YX_ELSE_XY     3')
     L(f'#define TU_ICC_MESH_ROUTING_MODE         {mesh_route_map[mc["mesh_routing"]]}')
     L('')
 
@@ -626,6 +639,9 @@ def generate_header(config, output_path):
     L('    int      icc_mesh_routing_mode;')
     L('    uint32_t icc_link_bytes_per_cycle;')
     L('    uint32_t icc_router_latency_cycles;')
+    L('    int      icc_ring_tie_mode;')
+    L('    int      icc_link_duplex;')
+    L('    int      icc_broadcast_admission;')
     L('} tu_runtime_config_t;')
     L('')
     L('static inline tu_runtime_config_t tu_runtime_config_default(void) {')
@@ -697,6 +713,9 @@ def generate_header(config, output_path):
     L(f'        .icc_mesh_routing_mode = TU_ICC_MESH_ROUTING_MODE,')
     L(f'        .icc_link_bytes_per_cycle = TU_ICC_LINK_BYTES_PER_CYCLE,')
     L(f'        .icc_router_latency_cycles = TU_ICC_ROUTER_LATENCY_CYCLES,')
+    L('        .icc_ring_tie_mode = TU_ICC_RING_TIE_MODE,')
+    L('        .icc_link_duplex = TU_ICC_DUPLEX_MODE,')
+    L('        .icc_broadcast_admission = TU_ICC_BCAST_MODE,')
     L('    };')
     L('}')
     L('')

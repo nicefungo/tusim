@@ -506,6 +506,9 @@ void tu_config_default(struct tu_config_t *cfg) {
     cfg->interconnect_mode   = 0;
     cfg->icc_switching_mode  = TU_ICC_SWITCH_LEGACY_HOP_ONLY;
     cfg->icc_contention_mode = TU_ICC_CONTENTION_IDEAL_PARALLEL;
+    cfg->icc_ring_tie_mode = TU_ICC_RING_TIE_MODE;
+    cfg->icc_link_duplex = TU_ICC_DUPLEX_MODE;
+    cfg->icc_broadcast_admission = TU_ICC_BCAST_MODE;
     cfg->icc_mesh_routing_mode = TU_ICC_MESH_ROUTE_XY;
     cfg->icc_link_bytes_per_cycle = TU_ICC_LINK_BYTES_PER_CYCLE;
     cfg->icc_router_latency_cycles = TU_ICC_ROUTER_LATENCY_CYCLES;
@@ -619,6 +622,9 @@ tu_runtime_config_t tu_config_to_runtime(const struct tu_config_t *cfg) {
     rt.icc_switching_mode = cfg->icc_switching_mode;
     rt.icc_contention_mode = cfg->icc_contention_mode;
     rt.icc_mesh_routing_mode = cfg->icc_mesh_routing_mode;
+    rt.icc_ring_tie_mode = cfg->icc_ring_tie_mode;
+    rt.icc_link_duplex = cfg->icc_link_duplex;
+    rt.icc_broadcast_admission = cfg->icc_broadcast_admission;
     rt.icc_link_bytes_per_cycle = cfg->icc_link_bytes_per_cycle;
     rt.icc_router_latency_cycles = cfg->icc_router_latency_cycles;
     return rt;
@@ -1015,22 +1021,52 @@ int tu_config_load_string(const char *json_str, struct tu_config_t *cfg,
             else cfg->icc_switching_mode = -1;
         }
         const tu_json_value_t *cm = tu_json_get(mc, "contention");
-        if (cm && cm->type == TU_JSON_STRING) {
+        if (cm && cm->type != TU_JSON_STRING) cfg->icc_contention_mode = -1;
+        else if (cm) {
             const char *s = tu_json_as_string(cm, NULL);
             if (strcmp(s, "ideal_parallel") == 0)
                 cfg->icc_contention_mode = TU_ICC_CONTENTION_IDEAL_PARALLEL;
             else if (strcmp(s, "shared_link") == 0)
                 cfg->icc_contention_mode = TU_ICC_CONTENTION_SHARED_LINK;
+            else if (strcmp(s, "shared_link_floor") == 0)
+                cfg->icc_contention_mode = TU_ICC_CONTENTION_SHARED_FLOOR;
             else
                 cfg->icc_contention_mode = -1;
         }
+        const tu_json_value_t *duplex = tu_json_get(mc, "link_duplex");
+        const tu_json_value_t *admission = tu_json_get(mc, "broadcast_admission");
+        if (admission) {
+            const char *s = tu_json_as_string(admission, NULL);
+            cfg->icc_broadcast_admission = s && !strcmp(s, "sequential") ? TU_ICC_BCAST_SEQUENTIAL :
+                                           s && !strcmp(s, "preflight") ? TU_ICC_BCAST_PREFLIGHT : -1;
+        }
+        if (duplex) {
+            const char *s = tu_json_as_string(duplex, NULL);
+            cfg->icc_link_duplex = s && !strcmp(s, "full") ? TU_ICC_DUPLEX_FULL :
+                                   s && !strcmp(s, "half") ? TU_ICC_DUPLEX_HALF : -1;
+        }
+        const tu_json_value_t *tie = tu_json_get(mc, "ring_tie");
+        if (tie && tie->type != TU_JSON_STRING) cfg->icc_ring_tie_mode = -1;
+        else if (tie) {
+            const char *s = tu_json_as_string(tie, NULL);
+            if (strcmp(s, "clockwise") == 0) cfg->icc_ring_tie_mode = TU_ICC_RING_TIE_CLOCKWISE;
+            else if (strcmp(s, "counterclockwise") == 0) cfg->icc_ring_tie_mode = TU_ICC_RING_TIE_COUNTERCLOCKWISE;
+            else if (strcmp(s, "even_cw") == 0) cfg->icc_ring_tie_mode = TU_ICC_RING_TIE_EVEN_CW;
+            else if (strcmp(s, "odd_cw") == 0) cfg->icc_ring_tie_mode = TU_ICC_RING_TIE_ODD_CW;
+            else cfg->icc_ring_tie_mode = -1;
+        }
         const tu_json_value_t *mr = tu_json_get(mc, "mesh_routing");
-        if (mr && mr->type == TU_JSON_STRING) {
+        if (mr && mr->type != TU_JSON_STRING) cfg->icc_mesh_routing_mode = -1;
+        else if (mr) {
             const char *s = tu_json_as_string(mr, NULL);
             if (strcmp(s, "xy") == 0)
                 cfg->icc_mesh_routing_mode = TU_ICC_MESH_ROUTE_XY;
             else if (strcmp(s, "yx") == 0)
                 cfg->icc_mesh_routing_mode = TU_ICC_MESH_ROUTE_YX;
+            else if (strcmp(s, "xy_else_yx") == 0)
+                cfg->icc_mesh_routing_mode = TU_ICC_MESH_ROUTE_XY_ELSE_YX;
+            else if (strcmp(s, "yx_else_xy") == 0)
+                cfg->icc_mesh_routing_mode = TU_ICC_MESH_ROUTE_YX_ELSE_XY;
             else
                 cfg->icc_mesh_routing_mode = -1;
         }
@@ -1616,17 +1652,32 @@ int tu_config_validate(const struct tu_config_t *cfg, char *error_buf, size_t er
         return -1;
     }
     if (cfg->icc_contention_mode < TU_ICC_CONTENTION_IDEAL_PARALLEL ||
-        cfg->icc_contention_mode > TU_ICC_CONTENTION_SHARED_LINK) {
+        cfg->icc_contention_mode > TU_ICC_CONTENTION_SHARED_FLOOR) {
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
-                     "interconnect contention must be ideal_parallel or shared_link");
+                     "interconnect contention must be ideal_parallel, shared_link, or shared_link_floor");
         return -1;
     }
     if (cfg->icc_mesh_routing_mode < TU_ICC_MESH_ROUTE_XY ||
-        cfg->icc_mesh_routing_mode > TU_ICC_MESH_ROUTE_YX) {
+        cfg->icc_mesh_routing_mode > TU_ICC_MESH_ROUTE_YX_ELSE_XY) {
         if (error_buf && error_size > 0)
             snprintf(error_buf, error_size,
-                     "interconnect mesh_routing must be xy or yx");
+                     "interconnect mesh_routing must be xy, yx, xy_else_yx or yx_else_xy");
+        return -1;
+    }
+    if (cfg->icc_ring_tie_mode < TU_ICC_RING_TIE_CLOCKWISE || cfg->icc_ring_tie_mode > TU_ICC_RING_TIE_ODD_CW) {
+        if (error_buf && error_size)
+            snprintf(error_buf, error_size, "ring_tie must be clockwise, counterclockwise, even_cw or odd_cw");
+        return -1;
+    }
+    if (cfg->icc_link_duplex != TU_ICC_DUPLEX_FULL && cfg->icc_link_duplex != TU_ICC_DUPLEX_HALF) {
+        if (error_buf && error_size)
+            snprintf(error_buf, error_size, "link_duplex must be full or half");
+        return -1;
+    }
+    if (cfg->icc_broadcast_admission != TU_ICC_BCAST_SEQUENTIAL && cfg->icc_broadcast_admission != TU_ICC_BCAST_PREFLIGHT) {
+        if (error_buf && error_size)
+            snprintf(error_buf, error_size, "broadcast_admission must be sequential or preflight");
         return -1;
     }
     if (cfg->icc_link_bytes_per_cycle == 0) {
@@ -2062,10 +2113,13 @@ void tu_config_emit_docs(const tu_config_t *cfg, FILE *out) {
             cfg->interconnect_mode);
     fprintf(out, "| `icc_switching_mode` | %d | int | 0=Legacy hop-only, 1=Cut-through, 2=Store-and-forward |\n",
             cfg->icc_switching_mode);
-    fprintf(out, "| `icc_contention_mode` | %d | int | 0=Ideal parallel links, 1=Shared-link lower bound |\n",
+    fprintf(out, "| `icc_contention_mode` | %d | int | 0=Ideal parallel links, 1=Shared-link heuristic score, 2=Shared-link necessary floor |\n",
             cfg->icc_contention_mode);
-    fprintf(out, "| `icc_mesh_routing_mode` | %d | int | 0=Deterministic XY, 1=Deterministic YX |\n",
+    fprintf(out, "| `icc_mesh_routing_mode` | %d | int | 0=xy, 1=yx, 2=xy_else_yx, 3=yx_else_xy (absent turn only) |\n",
             cfg->icc_mesh_routing_mode);
+    fprintf(out, "| `icc_ring_tie_mode` | %d | int | ring_tie: clockwise, counterclockwise, even_cw or odd_cw (source ID) |\n", cfg->icc_ring_tie_mode);
+    fprintf(out, "| `icc_link_duplex` | %d | int | link_duplex: independent directions (full) or shared per pair (half) |\n", cfg->icc_link_duplex);
+    fprintf(out, "| `icc_broadcast_admission` | %d | int | broadcast_admission: sequential prefix delivery or preflight all destinations |\n", cfg->icc_broadcast_admission);
     fprintf(out, "| `icc_link_bytes_per_cycle` | %u | uint32 | Physical link payload width |\n",
             cfg->icc_link_bytes_per_cycle);
     fprintf(out, "| `icc_router_latency_cycles` | %u | uint32 | Per-hop router/link latency |\n\n",

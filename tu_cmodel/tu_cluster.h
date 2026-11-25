@@ -51,14 +51,15 @@ typedef struct {
     uint64_t    latency_cycles;     /* Simulated interconnect latency */
 } tu_icc_message_t;
 
-/* Simultaneous traffic-matrix estimate. shared_link is a deterministic-routing
- * lower bound: it captures aggregate directed-link serialization but not queue
- * ordering, finite buffers, virtual channels, or head-of-line blocking. */
+/* Simultaneous traffic snapshot, not a schedule. shared_link is a heuristic:
+ * its maximum route and link service can come from disjoint messages.
+ * shared_link_floor takes max(isolated, busiest link resource service), two
+ * necessary times assuming fixed routes and exclusive finite-width links. */
 typedef struct {
     uint64_t isolated_cycles;
     uint64_t estimated_cycles;
     uint64_t bottleneck_link_cycles;
-    uint32_t bottleneck_src;
+    uint32_t bottleneck_src; /* In half duplex: lower then higher endpoint ID. */
     uint32_t bottleneck_dst;
 } tu_icc_traffic_stats_t;
 
@@ -100,6 +101,9 @@ typedef struct tu_cluster_t {
 
     /* Barrier counter */
     uint32_t        barrier_counter;
+    int             ring_tie_mode; /* direction for an antipodal pair */
+    int             link_duplex;   /* Independent directions or shared capacity per edge. */
+    int             broadcast_admission; /* TU_ICC_BCAST_* */
 } tu_cluster_t;
 
 /* ---- Lifecycle ---- */
@@ -143,6 +147,8 @@ int tu_cluster_send(tu_cluster_t *cluster,
 
 /*
  * Broadcast data from one core to all other cores.
+ * Sequential (default) retains the delivered prefix on failure. Preflight
+ * checks every destination before issuing any copy. Neither is multicast timing.
  *
  * src_core_id:   source core
  * src_offset:    byte offset in source core's O-SRAM
@@ -163,6 +169,8 @@ int tu_cluster_broadcast(tu_cluster_t *cluster,
  * Currently supports element-wise FP32 sum reduction.
  * Data is read from src_offset in each core's O-SRAM,
  * reduced, and written back to dst_offset in each core's O-SRAM.
+ * Returns -1 before any endpoint access if count, participation, spans or
+ * scratch allocation are invalid. This functional helper has no routed timing.
  *
  * num_elements:  number of FP32 elements to reduce
  */
@@ -201,7 +209,8 @@ int tu_cluster_spmd_execute(tu_cluster_t *cluster,
 
 /*
  * Compute the minimum hop distance between two cores.
- * Returns UINT32_MAX if cores cannot communicate.
+ * Geometric distance, not admission under the selected routing policy.
+ * Returns UINT32_MAX for invalid endpoints or disconnected topology.
  */
 uint32_t tu_cluster_hop_distance(const tu_cluster_t *cluster,
                                   uint32_t src, uint32_t dst);
@@ -214,7 +223,7 @@ uint64_t tu_cluster_estimate_transfer_cycles(const tu_cluster_t *cluster,
                                               uint32_t size_bytes);
 
 /* Estimate messages injected simultaneously. RING uses shortest-path routing
- * (clockwise on ties); MESH uses configured deterministic XY or YX routing. */
+ * (configured tie policy); MESH uses a fixed or missing-turn fallback order. */
 int tu_cluster_estimate_traffic_cycles(const tu_cluster_t *cluster,
                                        const tu_icc_message_t *messages,
                                        uint32_t message_count,

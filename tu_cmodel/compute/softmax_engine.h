@@ -72,6 +72,13 @@ typedef enum {
     TU_SOFTMAX_ROWS_REVERSE = 2
 } tu_softmax_row_schedule_t;
 
+/* SRAM request granularity; independent of arithmetic and row direction. */
+typedef enum {
+    TU_SOFTMAX_SRAM_NATIVE = 0, /* One native 4-byte word per FP32. */
+    TU_SOFTMAX_SRAM_ELEMENT,    /* Explicit 4-byte request per FP32. */
+    TU_SOFTMAX_SRAM_ROW         /* One contiguous request per row/direction. */
+} tu_softmax_sram_access_t;
+
 /* ---- Descriptor ---- */
 typedef struct {
     tu_softmax_mode_t mode;          /* Standard, log, or online */
@@ -109,6 +116,7 @@ typedef struct {
     tu_softmax_exp_policy_t exp_policy; /* Zero/default preserves old behavior. */
     tu_softmax_preprocess_order_t preprocess_order; /* Zero = mask then scale. */
     tu_softmax_row_schedule_t row_schedule; /* Zero = overlap-safe AUTO. */
+    tu_softmax_sram_access_t sram_access; /* Zero = native FP32 word. */
 } tu_softmax_desc_t;
 
 /* ---- API ---- */
@@ -160,7 +168,9 @@ typedef struct {
  * the row is unchanged. Masks and statistics stay indexed by logical row.
  * Mask/max_out/sum_out buffers must not alias SRAM or one another, and must
  * have the documented extents; host-pointer aliasing is not validated.
- * SRAM scalar width must be sizeof(float). No concurrent mutation is allowed.
+ * NATIVE (including wrappers) requires a sizeof(float) bank word. ELEMENT
+ * and ROW use sized bulk requests with the region's word meter; no packing
+ * across rows. A valid initialized region is required. No concurrent mutation.
  * AUTO preserves previous forward behavior for previously safe layouts and
  * corrects higher-address overlapping multirow output (previously corrupted).
  * All wrappers select AUTO; no YAML/JSON/global attention setting is added.

@@ -146,8 +146,11 @@
 | `num_cores` | 1 | uint32 | Core count |
 | `interconnect_mode` | 0 | int | 0=None, 1=Ring, 2=Mesh |
 | `icc_switching_mode` | 0 | int | 0=Legacy hop-only, 1=Cut-through, 2=Store-and-forward |
-| `icc_contention_mode` | 0 | int | 0=Ideal parallel links, 1=Shared-link lower bound |
-| `icc_mesh_routing_mode` | 0 | int | 0=Deterministic XY, 1=Deterministic YX |
+| `icc_contention_mode` | 0 | int | 0=Ideal parallel links, 1=Shared-link heuristic score, 2=Shared-link necessary floor |
+| `icc_mesh_routing_mode` | 0 | int | 0=xy, 1=yx, 2=xy_else_yx, 3=yx_else_xy (absent turn only) |
+| `icc_ring_tie_mode` | 0 | int | ring_tie: clockwise, counterclockwise, even_cw or odd_cw (source ID) |
+| `icc_link_duplex` | 0 | int | link_duplex: independent directions (full) or shared per pair (half) |
+| `icc_broadcast_admission` | 0 | int | broadcast_admission: sequential prefix delivery or preflight all destinations |
 | `icc_link_bytes_per_cycle` | 16 | uint32 | Physical link payload width |
 | `icc_router_latency_cycles` | 5 | uint32 | Per-hop router/link latency |
 

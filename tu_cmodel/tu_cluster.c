@@ -19,6 +19,12 @@ static uint32_t tu_abs_diff(uint32_t a, uint32_t b) {
 
 /* ---- Lifecycle ---- */
 
+static bool valid_contention_mode(int mode) {
+    return mode == TU_ICC_CONTENTION_IDEAL_PARALLEL ||
+           mode == TU_ICC_CONTENTION_SHARED_LINK ||
+           mode == TU_ICC_CONTENTION_SHARED_FLOOR;
+}
+
 tu_cluster_t *tu_cluster_create(uint32_t num_cores,
                                  tu_topology_t topology,
                                  uint32_t mesh_rows,
@@ -28,6 +34,17 @@ tu_cluster_t *tu_cluster_create(uint32_t num_cores,
         return NULL;
     }
 
+    if (base_config && (base_config->icc_ring_tie_mode < TU_ICC_RING_TIE_CLOCKWISE ||
+                        base_config->icc_ring_tie_mode > TU_ICC_RING_TIE_ODD_CW)) return NULL;
+    if (base_config && !valid_contention_mode(base_config->icc_contention_mode))
+        return NULL;
+    if (base_config && base_config->icc_broadcast_admission != TU_ICC_BCAST_SEQUENTIAL &&
+        base_config->icc_broadcast_admission != TU_ICC_BCAST_PREFLIGHT) return NULL;
+    if (base_config && base_config->icc_link_duplex != TU_ICC_DUPLEX_FULL &&
+        base_config->icc_link_duplex != TU_ICC_DUPLEX_HALF) return NULL;
+    if (topology == TU_TOPOLOGY_MESH && base_config &&
+        (base_config->icc_mesh_routing_mode < TU_ICC_MESH_ROUTE_XY ||
+         base_config->icc_mesh_routing_mode > TU_ICC_MESH_ROUTE_YX_ELSE_XY)) return NULL;
     if (topology == TU_TOPOLOGY_MESH) {
         if (mesh_rows == 0) {
             fprintf(stderr, "tu_cluster_create: mesh_rows must be > 0 for MESH topology\n");
@@ -39,7 +56,10 @@ tu_cluster_t *tu_cluster_create(uint32_t num_cores,
     if (!cluster) return NULL;
 
     cluster->num_cores = num_cores;
+    cluster->ring_tie_mode = base_config ? base_config->icc_ring_tie_mode : TU_ICC_RING_TIE_MODE;
+    cluster->link_duplex = base_config ? base_config->icc_link_duplex : TU_ICC_DUPLEX_MODE;
     cluster->topology = topology;
+    cluster->broadcast_admission = base_config ? base_config->icc_broadcast_admission : TU_ICC_BCAST_MODE;
     cluster->hop_latency = base_config ? base_config->icc_router_latency_cycles :
                                          TU_ICC_ROUTER_LATENCY_CYCLES;
     cluster->switching_mode = base_config ? base_config->icc_switching_mode :
@@ -53,7 +73,7 @@ tu_cluster_t *tu_cluster_create(uint32_t num_cores,
 
     if (topology == TU_TOPOLOGY_MESH) {
         cluster->mesh_rows = mesh_rows;
-        cluster->mesh_cols = (num_cores + mesh_rows - 1) / mesh_rows;
+        cluster->mesh_cols = 1 + (num_cores - 1) / mesh_rows;
     }
 
     /* Allocate core array */
@@ -151,12 +171,33 @@ uint32_t tu_cluster_hop_distance(const tu_cluster_t *cluster,
     }
 }
 
+/* Populated routers form a row-major prefix. For valid endpoints, a
+ * dimension-order path exists iff its turn router exists: both legs then
+ * lie in contiguous populated row/column intervals. */
+static bool mesh_order(const tu_cluster_t *cluster, uint32_t src, uint32_t dst,
+                       bool *x_first) {
+    uint32_t cols = cluster->mesh_cols;
+    uint32_t xy_turn = src / cols * cols + dst % cols;
+    uint32_t yx_turn = dst / cols * cols + src % cols;
+    switch (cluster->mesh_routing_mode) {
+    case TU_ICC_MESH_ROUTE_XY: *x_first = true; break;
+    case TU_ICC_MESH_ROUTE_YX: *x_first = false; break;
+    case TU_ICC_MESH_ROUTE_XY_ELSE_YX: *x_first = xy_turn < cluster->num_cores; break;
+    case TU_ICC_MESH_ROUTE_YX_ELSE_XY: *x_first = yx_turn >= cluster->num_cores; break;
+    default: return false;
+    }
+    return (*x_first ? xy_turn : yx_turn) < cluster->num_cores;
+}
+
 uint64_t tu_cluster_estimate_transfer_cycles(const tu_cluster_t *cluster,
                                               uint32_t src, uint32_t dst,
                                               uint32_t size_bytes) {
     if (!cluster) return UINT64_MAX;
     uint32_t hops = tu_cluster_hop_distance(cluster, src, dst);
     if (hops == UINT32_MAX) return UINT64_MAX;
+    bool x_first;
+    if (cluster->topology == TU_TOPOLOGY_MESH && !mesh_order(cluster, src, dst, &x_first))
+        return UINT64_MAX;
     if (hops == 0 || size_bytes == 0) return 0;
 
     uint64_t route_cycles = (uint64_t)hops * cluster->hop_latency;
@@ -185,7 +226,17 @@ static int add_route_service(const tu_cluster_t *cluster, uint32_t src,
     if (cluster->topology == TU_TOPOLOGY_RING) {
         uint32_t forward = (dst + n - src) % n;
         uint32_t backward = (src + n - dst) % n;
-        bool clockwise = forward <= backward;
+        bool clockwise = forward < backward;
+        if (forward == backward) {
+            /* Decide at injection, not again at each hop. No mutable cursor. */
+            switch (cluster->ring_tie_mode) {
+            case TU_ICC_RING_TIE_CLOCKWISE: clockwise = true; break;
+            case TU_ICC_RING_TIE_COUNTERCLOCKWISE: clockwise = false; break;
+            case TU_ICC_RING_TIE_EVEN_CW: clockwise = (src % 2 == 0); break;
+            case TU_ICC_RING_TIE_ODD_CW: clockwise = (src % 2 != 0); break;
+            default: return -1;
+            }
+        }
         uint32_t cur = src;
         while (cur != dst) {
             uint32_t next = clockwise ? (cur + 1) % n : (cur + n - 1) % n;
@@ -198,9 +249,8 @@ static int add_route_service(const tu_cluster_t *cluster, uint32_t src,
         uint32_t cols = cluster->mesh_cols;
         uint32_t cur = src;
         uint32_t dst_row = dst / cols, dst_col = dst % cols;
-        bool x_first = cluster->mesh_routing_mode == TU_ICC_MESH_ROUTE_XY;
-        if (!x_first && cluster->mesh_routing_mode != TU_ICC_MESH_ROUTE_YX)
-            return -1;
+        bool x_first;
+        if (!mesh_order(cluster, src, dst, &x_first)) return -1;
         for (int dimension = 0; dimension < 2; ++dimension) {
             bool route_x = dimension == 0 ? x_first : !x_first;
             if (route_x) {
@@ -228,7 +278,8 @@ int tu_cluster_estimate_traffic_cycles(const tu_cluster_t *cluster,
                                        const tu_icc_message_t *messages,
                                        uint32_t message_count,
                                        tu_icc_traffic_stats_t *stats) {
-    if (!cluster || !stats || (message_count && !messages)) return -1;
+    if (!cluster || !stats || (message_count && !messages) ||
+        !valid_contention_mode(cluster->contention_mode)) return -1;
     memset(stats, 0, sizeof(*stats));
     stats->bottleneck_src = UINT32_MAX;
     stats->bottleneck_dst = UINT32_MAX;
@@ -248,7 +299,8 @@ int tu_cluster_estimate_traffic_cycles(const tu_cluster_t *cluster,
         uint32_t hops = tu_cluster_hop_distance(cluster, m->src_core_id,
                                                  m->dst_core_id);
         uint64_t route = (uint64_t)hops * cluster->hop_latency;
-        if (route > max_route_cycles) max_route_cycles = route;
+        /* An empty payload still needs a valid route but consumes no service. */
+        if (m->size_bytes && route > max_route_cycles) max_route_cycles = route;
         uint64_t service = 0;
         if (cluster->switching_mode != TU_ICC_SWITCH_LEGACY_HOP_ONLY &&
             m->size_bytes != 0) {
@@ -265,6 +317,10 @@ int tu_cluster_estimate_traffic_cycles(const tu_cluster_t *cluster,
     for (uint32_t src = 0; src < n; ++src) {
         for (uint32_t dst = 0; dst < n; ++dst) {
             uint64_t load = links[(uint64_t)src * n + dst];
+            if (cluster->link_duplex == TU_ICC_DUPLEX_HALF) {
+                if (src >= dst) continue;
+                load += links[(uint64_t)dst * n + src];
+            }
             if (load > stats->bottleneck_link_cycles) {
                 stats->bottleneck_link_cycles = load;
                 stats->bottleneck_src = src;
@@ -276,11 +332,11 @@ int tu_cluster_estimate_traffic_cycles(const tu_cluster_t *cluster,
 
     stats->estimated_cycles = stats->isolated_cycles;
     if (cluster->contention_mode == TU_ICC_CONTENTION_SHARED_LINK) {
-        uint64_t shared_bound = stats->bottleneck_link_cycles + max_route_cycles;
-        if (shared_bound > stats->estimated_cycles)
-            stats->estimated_cycles = shared_bound;
-    } else if (cluster->contention_mode != TU_ICC_CONTENTION_IDEAL_PARALLEL) {
-        return -1;
+        uint64_t score = stats->bottleneck_link_cycles + max_route_cycles;
+        if (score > stats->estimated_cycles) stats->estimated_cycles = score;
+    } else if (cluster->contention_mode == TU_ICC_CONTENTION_SHARED_FLOOR &&
+               stats->bottleneck_link_cycles > stats->estimated_cycles) {
+        stats->estimated_cycles = stats->bottleneck_link_cycles;
     }
     return 0;
 }
@@ -338,43 +394,31 @@ void tu_cluster_neighbors(const tu_cluster_t *cluster,
 
 /* ---- Inter-Core Communication ---- */
 
-int tu_cluster_send(tu_cluster_t *cluster,
-                     const tu_icc_message_t *msg) {
-    if (!cluster || !msg) return -1;
-    if (msg->src_core_id >= cluster->num_cores ||
-        msg->dst_core_id >= cluster->num_cores) return -1;
-    if (msg->size_bytes == 0) return 0;
-
+/* Pure admission for a nonempty send with known endpoint IDs. */
+static uint64_t plan_send(tu_cluster_t *cluster, const tu_icc_message_t *msg) {
     tu_core_t *src_core = cluster->cores[msg->src_core_id];
     tu_core_t *dst_core = cluster->cores[msg->dst_core_id];
-
-    if (!src_core || !dst_core) return -1;
-    if (!src_core->initialized || !dst_core->initialized) return -1;
+    if (!src_core || !dst_core || !src_core->initialized || !dst_core->initialized)
+        return UINT64_MAX;
 
     tu_sram_region_t *src_sram = tu_core_get_sram_o(src_core);
     tu_sram_region_t *dst_sram = tu_core_get_sram_o(dst_core);
 
-    /* Validate offsets using total_size */
-    if (msg->src_offset + msg->size_bytes > src_sram->total_size) return -1;
-    if (msg->dst_offset + msg->size_bytes > dst_sram->total_size) return -1;
-
-    /* Compute route and serialization latency for the configured switch. */
-    uint64_t latency = tu_cluster_estimate_transfer_cycles(
+    if (!src_sram || !dst_sram ||
+        (uint64_t)msg->src_offset + msg->size_bytes > src_sram->total_size ||
+        (uint64_t)msg->dst_offset + msg->size_bytes > dst_sram->total_size) return UINT64_MAX;
+    return tu_cluster_estimate_transfer_cycles(
         cluster, msg->src_core_id, msg->dst_core_id, msg->size_bytes);
-    if (latency == UINT64_MAX) return -1;
+}
 
-    /* Perform the transfer using bulk SRAM read/write */
-    /* Allocate temporary buffer */
-    void *tmp = malloc(msg->size_bytes);
-    if (!tmp) return -1;
-
-    /* Read from source SRAM */
+/* All storage and admission checks precede this serial commit. */
+static void deliver(tu_cluster_t *cluster, const tu_icc_message_t *msg,
+                    uint64_t latency, void *tmp) {
+    tu_core_t *dst_core = cluster->cores[msg->dst_core_id];
+    tu_sram_region_t *src_sram = tu_core_get_sram_o(cluster->cores[msg->src_core_id]);
+    tu_sram_region_t *dst_sram = tu_core_get_sram_o(dst_core);
     tu_sram_read_bulk(src_sram, msg->src_offset, tmp, msg->size_bytes);
-
-    /* Write to destination SRAM */
     tu_sram_write_bulk(dst_sram, msg->dst_offset, tmp, msg->size_bytes);
-
-    free(tmp);
 
     /* Update stats */
     cluster->stats.total_icc_messages++;
@@ -383,7 +427,18 @@ int tu_cluster_send(tu_cluster_t *cluster,
 
     /* Update cycle counters on the destination core */
     dst_core->state.estimated_cycles += latency;
+}
 
+int tu_cluster_send(tu_cluster_t *cluster, const tu_icc_message_t *msg) {
+    if (!cluster || !msg || msg->src_core_id >= cluster->num_cores ||
+        msg->dst_core_id >= cluster->num_cores) return -1;
+    if (!msg->size_bytes) return 0;
+    uint64_t latency = plan_send(cluster, msg);
+    if (latency == UINT64_MAX) return -1;
+    void *tmp = malloc(msg->size_bytes);
+    if (!tmp) return -1;
+    deliver(cluster, msg, latency, tmp);
+    free(tmp);
     return 0;
 }
 
@@ -393,26 +448,34 @@ int tu_cluster_broadcast(tu_cluster_t *cluster,
                           uint32_t dst_offset,
                           uint32_t size_bytes) {
     if (!cluster || src_core_id >= cluster->num_cores) return -1;
-    if (size_bytes == 0) return 0;
-
+    if (size_bytes == 0 || cluster->num_cores == 1) return 0;
+    tu_icc_message_t msg = {.src_core_id=src_core_id, .src_offset=src_offset,
+                            .dst_offset=dst_offset, .size_bytes=size_bytes, .blocking=true};
+    if (cluster->broadcast_admission == TU_ICC_BCAST_SEQUENTIAL) {
+        for (uint32_t dst = 0; dst < cluster->num_cores; dst++) {
+            msg.dst_core_id = dst;
+            if (dst != src_core_id && tu_cluster_send(cluster, &msg)) return -1;
+        }
+        return 0;
+    }
+    if (cluster->broadcast_admission != TU_ICC_BCAST_PREFLIGHT) return -1;
+    uint64_t *cost = calloc(cluster->num_cores, sizeof(*cost));
+    if (!cost) return -1;
     for (uint32_t dst = 0; dst < cluster->num_cores; dst++) {
         if (dst == src_core_id) continue;
-
-        tu_icc_message_t msg = {
-            .src_core_id = src_core_id,
-            .dst_core_id = dst,
-            .src_offset = src_offset,
-            .dst_offset = dst_offset,
-            .size_bytes = size_bytes,
-            .tag = 0,
-            .blocking = true,
-            .latency_cycles = 0,
-        };
-
-        int rc = tu_cluster_send(cluster, &msg);
-        if (rc != 0) return rc;
+        msg.dst_core_id = dst;
+        cost[dst] = plan_send(cluster, &msg);
+        if (cost[dst] == UINT64_MAX) { free(cost); return -1; }
     }
-
+    void *tmp = malloc(size_bytes);
+    if (!tmp) { free(cost); return -1; }
+    for (uint32_t dst = 0; dst < cluster->num_cores; dst++) {
+        if (dst == src_core_id) continue;
+        msg.dst_core_id = dst;
+        deliver(cluster, &msg, cost[dst], tmp);
+    }
+    free(tmp);
+    free(cost);
     return 0;
 }
 
@@ -420,13 +483,23 @@ int tu_cluster_allreduce_sum_f32(tu_cluster_t *cluster,
                                   uint32_t src_offset,
                                   uint32_t dst_offset,
                                   uint32_t num_elements) {
-    if (!cluster || num_elements == 0) return -1;
-
+    if (!cluster || !cluster->num_cores || !cluster->cores || !num_elements ||
+        num_elements > UINT32_MAX / sizeof(float)) return -1;
     uint32_t size_bytes = num_elements * sizeof(float);
 
-    /* Step 1: Gather all data to core 0 */
-    float *accumulator = calloc(num_elements, sizeof(float));
+    /* Bulk returns a local penalty, not success/failure. Admit both spans on
+     * every participant and reserve all scratch before the first metered read. */
+    for (uint32_t c = 0; c < cluster->num_cores; c++) {
+        tu_core_t *core = cluster->cores[c];
+        if (!core || !core->initialized) return -1;
+        tu_sram_region_t *sram = tu_core_get_sram_o(core);
+        if (!sram || (uint64_t)src_offset + size_bytes > sram->total_size ||
+                     (uint64_t)dst_offset + size_bytes > sram->total_size) return -1;
+    }
+    float *accumulator = malloc(size_bytes);
     if (!accumulator) return -1;
+    float *tmp = cluster->num_cores > 1 ? malloc(size_bytes) : NULL;
+    if (cluster->num_cores > 1 && !tmp) { free(accumulator); return -1; }
 
     /* Read from core 0 first */
     {
@@ -438,21 +511,14 @@ int tu_cluster_allreduce_sum_f32(tu_cluster_t *cluster,
     /* Add data from remaining cores */
     for (uint32_t c = 1; c < cluster->num_cores; c++) {
         tu_core_t *core = cluster->cores[c];
-        if (!core || !core->initialized) {
-            free(accumulator);
-            return -1;
-        }
-
         tu_sram_region_t *sram = tu_core_get_sram_o(core);
-        float *tmp = malloc(size_bytes);
-        if (!tmp) { free(accumulator); return -1; }
 
         tu_sram_read_bulk(sram, src_offset, tmp, size_bytes);
         for (uint32_t i = 0; i < num_elements; i++) {
             accumulator[i] += tmp[i];
         }
-        free(tmp);
     }
+    free(tmp);
 
     /* Step 2: Write result back to all cores */
     for (uint32_t c = 0; c < cluster->num_cores; c++) {
@@ -526,10 +592,12 @@ void tu_cluster_print_stats(const tu_cluster_t *cluster) {
     printf("  Hop latency:        %u cycles\n", cluster->hop_latency);
     printf("  Switching mode:     %d (0=legacy, 1=cut-through, 2=store-forward)\n",
            cluster->switching_mode);
-    printf("  Contention mode:    %d (0=ideal-parallel, 1=shared-link bound)\n",
+    printf("  Contention mode:    %d (0=ideal, 1=shared-link score, 2=shared-link floor)\n",
            cluster->contention_mode);
-    printf("  Mesh routing:       %s\n",
-           cluster->mesh_routing_mode == TU_ICC_MESH_ROUTE_YX ? "YX" : "XY");
+    printf("  Mesh routing:       %d (0=XY, 1=YX, 2=XY else YX, 3=YX else XY)\n",
+           cluster->mesh_routing_mode);
+    printf("  Ring tie:           %d (0=CW, 1=CCW, 2=even CW, 3=odd CW)\n", cluster->ring_tie_mode);
+    printf("  Link duplex:        %s\n", cluster->link_duplex == TU_ICC_DUPLEX_HALF ? "half" : "full");
     printf("  Link width:         %u bytes/cycle\n", cluster->link_bytes_per_cycle);
     printf("  ICC messages:       %lu\n",
            (unsigned long)cluster->stats.total_icc_messages);

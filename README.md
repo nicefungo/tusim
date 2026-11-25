@@ -4,6 +4,8 @@ Parametric tensor unit (TU) cycle-model simulator for pre-silicon architecture e
 
 **tusim** is the TU sub-architecture model of a larger heterogeneous accelerator system (RISC-V host + SU/GPU + TU + special memories). It answers architecture questions *before* the hardware spec locks — sweep PE dimensions, memory hierarchy configurations, precision types, and dataflow policies; measure utilization, bandwidth, and stall breakdowns.
 
+[November 2026 simulator closure: seven changes, focused checks and limits](docs/SIMULATOR_CLOSURE.md).
+
 ## Architecture
 
 ```

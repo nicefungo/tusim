@@ -2,6 +2,7 @@
 """Fail when the checked-in TU header drifts from its YAML generator."""
 
 import difflib
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -42,8 +43,17 @@ def main() -> int:
             )
             return 1
 
+        if shutil.which("g++"):
+            subprocess.run(
+                ["g++", "-std=gnu++20", "-fsyntax-only", "-x", "c++", str(generated)],
+                check=True,
+            )
+        else:
+            print("GNU C++20 header syntax check skipped: g++ not found")
+
         yaml_text = (ROOT / "config" / "tu_config.yaml").read_text()
         alternatives = {
+            'broadcast_admission: "sequential"': 'broadcast_admission: "preflight"',
             'word_metering: "size_only"': 'word_metering: "address_span"',
             'dataflow: "weight_stationary"': 'dataflow: "output_stationary"',
             "gbuf_size_kb: 1024": "gbuf_size_kb: 2048",
@@ -136,6 +146,7 @@ def main() -> int:
             '_Static_assert(TU_FP16_ROUNDING_MODE == TU_FP16_ROUNDING_STOCHASTIC, "rounding");\n'
             'int main(void) { tu_runtime_config_t c = tu_runtime_config_default(); '
             'return c.dataflow_mode != TU_DATAFLOW_MODE_OS || '
+            'c.icc_broadcast_admission != TU_ICC_BCAST_PREFLIGHT || '
             'c.sram_word_metering != 1 || '
             'c.dma_issue_payload_mode != TU_DMA_ISSUE_PAYLOAD_DEFAULT_OVERLAPPED || '
             'c.dma_burst_boundary_mode != TU_DMA_BURST_BOUNDARY_BOTH_ADDRESS || '

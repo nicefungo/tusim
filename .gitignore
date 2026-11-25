@@ -103,6 +103,13 @@ test-config
 test-softmax
 test-softmax-overflow
 test-softmax-row-schedule
+test-icc-traffic-floor
+test-icc-ragged-mesh
+test-icc-ring-ties
+test-icc-duplex
+test-icc-broadcast-admission
+test-allreduce-layouts
+test-softmax-sram-access
 test-softmax-preprocess-order
 test-softmax-log-range
 test-softmax-log-nearzero

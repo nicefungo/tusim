@@ -253,6 +253,17 @@ extern "C" {
 #define TU_INTERCONNECT_MESH    2
 #define TU_INTERCONNECT_MODE    0
 #define TU_CACHE_COHERENCE      0
+#define TU_ICC_DUPLEX_FULL 0
+#define TU_ICC_BCAST_SEQUENTIAL 0
+#define TU_ICC_BCAST_PREFLIGHT 1
+#define TU_ICC_BCAST_MODE 0
+#define TU_ICC_DUPLEX_HALF 1
+#define TU_ICC_DUPLEX_MODE 0
+#define TU_ICC_RING_TIE_CLOCKWISE 0
+#define TU_ICC_RING_TIE_COUNTERCLOCKWISE 1
+#define TU_ICC_RING_TIE_EVEN_CW 2
+#define TU_ICC_RING_TIE_ODD_CW 3
+#define TU_ICC_RING_TIE_MODE 0
 #define TU_ICC_SWITCH_LEGACY_HOP_ONLY  0
 #define TU_ICC_SWITCH_CUT_THROUGH      1
 #define TU_ICC_SWITCH_STORE_FORWARD    2
@@ -261,9 +272,12 @@ extern "C" {
 #define TU_ICC_ROUTER_LATENCY_CYCLES   5
 #define TU_ICC_CONTENTION_IDEAL_PARALLEL 0
 #define TU_ICC_CONTENTION_SHARED_LINK    1
+#define TU_ICC_CONTENTION_SHARED_FLOOR   2
 #define TU_ICC_CONTENTION_MODE           0
 #define TU_ICC_MESH_ROUTE_XY             0
 #define TU_ICC_MESH_ROUTE_YX             1
+#define TU_ICC_MESH_ROUTE_XY_ELSE_YX     2
+#define TU_ICC_MESH_ROUTE_YX_ELSE_XY     3
 #define TU_ICC_MESH_ROUTING_MODE         0
 
 /* ================================================================
@@ -392,6 +406,9 @@ typedef struct {
     int      icc_mesh_routing_mode;
     uint32_t icc_link_bytes_per_cycle;
     uint32_t icc_router_latency_cycles;
+    int      icc_ring_tie_mode;
+    int      icc_link_duplex;
+    int      icc_broadcast_admission;
 } tu_runtime_config_t;
 
 static inline tu_runtime_config_t tu_runtime_config_default(void) {
@@ -463,6 +480,9 @@ static inline tu_runtime_config_t tu_runtime_config_default(void) {
         .icc_mesh_routing_mode = TU_ICC_MESH_ROUTING_MODE,
         .icc_link_bytes_per_cycle = TU_ICC_LINK_BYTES_PER_CYCLE,
         .icc_router_latency_cycles = TU_ICC_ROUTER_LATENCY_CYCLES,
+        .icc_ring_tie_mode = TU_ICC_RING_TIE_MODE,
+        .icc_link_duplex = TU_ICC_DUPLEX_MODE,
+        .icc_broadcast_admission = TU_ICC_BCAST_MODE,
     };
 }
 

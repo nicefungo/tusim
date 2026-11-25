@@ -334,8 +334,8 @@ typedef struct tu_config_t {
     uint32_t num_cores;
     int      interconnect_mode;     /* NONE=0, RING=1, MESH=2 */
     int      icc_switching_mode;    /* legacy=0, cut-through=1, store-forward=2 */
-    int      icc_contention_mode;   /* ideal parallel=0, shared-link bound=1 */
-    int      icc_mesh_routing_mode; /* deterministic XY=0, deterministic YX=1 */
+    int      icc_contention_mode;   /* ideal=0, shared-link score=1, shared-link floor=2 */
+    int      icc_mesh_routing_mode; /* TU_ICC_MESH_ROUTE_*; fixed or alternate on absent turn */
     uint32_t icc_link_bytes_per_cycle;
     uint32_t icc_router_latency_cycles;
 
@@ -366,6 +366,9 @@ typedef struct tu_config_t {
     /* ---- Logging ---- */
     int      log_level;             /* TU_LOG_NONE=0 ... TU_LOG_TRACE=5 */
 
+    int      icc_ring_tie_mode; /* TU_ICC_RING_TIE_*: equal shortest paths only */
+    int      icc_link_duplex;   /* TU_ICC_DUPLEX_*: link service capacity */
+    int      icc_broadcast_admission; /* TU_ICC_BCAST_* */
 } tu_config_t;
 
 /* ================================================================

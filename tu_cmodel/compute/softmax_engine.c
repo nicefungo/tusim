@@ -64,19 +64,27 @@ static float softmax_exp(float x, tu_softmax_exp_policy_t policy,
 
 /* Load N FP32 elements from SRAM to host buffer. Returns stall cycles. */
 static uint64_t sram_load_floats(tu_sram_region_t *s, uint32_t off,
-                                  float *out, uint32_t n) {
+                                  float *out, uint32_t n, tu_softmax_sram_access_t access) {
+    if (access == TU_SOFTMAX_SRAM_ROW)
+        return tu_sram_read_bulk(s, off, out, n * sizeof(*out));
     uint64_t stall = 0;
     for (uint32_t i = 0; i < n; i++)
-        stall += tu_sram_read(s, off + i * sizeof(float), &out[i]);
+        stall += access == TU_SOFTMAX_SRAM_NATIVE
+            ? tu_sram_read(s, off + i * sizeof(*out), &out[i])
+            : tu_sram_read_bulk(s, off + i * sizeof(*out), &out[i], sizeof(*out));
     return stall;
 }
 
 /* Store N FP32 elements from host buffer to SRAM. Returns stall cycles. */
 static uint64_t sram_store_floats(tu_sram_region_t *s, uint32_t off,
-                                   const float *in, uint32_t n) {
+                                   const float *in, uint32_t n, tu_softmax_sram_access_t access) {
+    if (access == TU_SOFTMAX_SRAM_ROW)
+        return tu_sram_write_bulk(s, off, in, n * sizeof(*in));
     uint64_t stall = 0;
     for (uint32_t i = 0; i < n; i++)
-        stall += tu_sram_write(s, off + i * sizeof(float), &in[i]);
+        stall += access == TU_SOFTMAX_SRAM_NATIVE
+            ? tu_sram_write(s, off + i * sizeof(*in), &in[i])
+            : tu_sram_write_bulk(s, off + i * sizeof(*in), &in[i], sizeof(*in));
     return stall;
 }
 
@@ -231,6 +239,7 @@ static uint64_t softmax_single_row(tu_sram_region_t *sram,
                                     tu_softmax_mode_t mode,
                                     tu_softmax_exp_policy_t exp_policy,
                                     tu_softmax_preprocess_order_t preprocess_order,
+                                    tu_softmax_sram_access_t access,
                                     const float *mask, bool additive_mask,
                                     float mask_fill,
                                     float *max_out, float *sum_out) {
@@ -245,7 +254,7 @@ static uint64_t softmax_single_row(tu_sram_region_t *sram,
     uint64_t stall = 0;
 
     /* ---- Load row from SRAM ---- */
-    stall += sram_load_floats(sram, in_offset, row, cols);
+    stall += sram_load_floats(sram, in_offset, row, cols, access);
 
     /* Keep legacy scaling inside the row kernel for bitwise compatibility.
      * The alternative scales once before the existing mask/threshold stage;
@@ -282,7 +291,7 @@ static uint64_t softmax_single_row(tu_sram_region_t *sram,
     }
 
     /* ---- Write result back ---- */
-    stall += sram_store_floats(sram, out_offset, row, cols);
+    stall += sram_store_floats(sram, out_offset, row, cols, access);
 
     free(row);
     return stall;
@@ -329,7 +338,7 @@ uint64_t tu_softmax_execute(const tu_softmax_desc_t *desc) {
         float max_dummy, sum_dummy;
         uint64_t s = softmax_single_row(sram, row_in, row_out, cols,
                                          desc->scale, mode, desc->exp_policy,
-                                         desc->preprocess_order,
+                                         desc->preprocess_order, desc->sram_access,
                                          row_mask, desc->mask_is_additive,
                                          desc->mask_fill,
                                          desc->max_out ? &max_dummy : NULL,
@@ -581,5 +590,12 @@ bool tu_softmax_validate_desc(const tu_softmax_desc_t *desc) {
         }
     }
 
+    if ((unsigned)desc->sram_access > TU_SOFTMAX_SRAM_ROW ||
+        !desc->data_sram->banks.bank_width ||
+        (desc->sram_access == TU_SOFTMAX_SRAM_NATIVE &&
+         desc->data_sram->banks.bank_width != sizeof(float))) {
+        fprintf(stderr, "tu_softmax_validate: incompatible SRAM request mode or word width\n");
+        return false;
+    }
     return true;
 }

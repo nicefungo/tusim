@@ -517,7 +517,12 @@ test-softmax-row-schedule: tests/test_softmax_row_schedule.c libtucmodel.a
 	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a -Wl,--wrap=tu_sram_read -Wl,--wrap=tu_sram_write $(LDFLAGS)
 	./$@
 
-test test-quick: test-softmax-row-schedule
+.PHONY: test-softmax-sram-access
+test-softmax-sram-access: tests/test_softmax_sram_access.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
+	./$@
+
+test test-quick: test-softmax-row-schedule test-softmax-sram-access
 
 .PHONY: test-softmax-preprocess-order
 test-softmax-preprocess-order: tests/test_softmax_preprocess_order.c libtucmodel.a
@@ -762,6 +767,42 @@ test-interconnect-contention-sweep: tests/test_interconnect_contention_sweep.c l
 	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
 	./test-interconnect-contention-sweep
 
+.PHONY: test-icc-traffic-floor
+test-icc-traffic-floor: tests/test_icc_traffic_floor.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
+	./$@
+
+.PHONY: test-icc-ragged-mesh
+test-icc-ragged-mesh: tests/test_icc_ragged_mesh.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -Itu_cmodel -o $@ $< ./libtucmodel.a $(LDFLAGS)
+	./$@
+
+.PHONY: test-icc-ring-ties
+test-icc-ring-ties: tests/test_icc_ring_ties.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
+	./$@
+
+test test-quick: test-icc-traffic-floor test-icc-ragged-mesh test-icc-ring-ties
+
+.PHONY: test-icc-duplex
+test-icc-duplex: tests/test_icc_duplex.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
+	./$@
+
+test test-quick: test-icc-duplex
+
+.PHONY: test-icc-broadcast-admission
+test-icc-broadcast-admission: tests/test_icc_broadcast_admission.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
+	./$@
+
+.PHONY: test-allreduce-layouts
+test-allreduce-layouts: tests/test_allreduce_layouts.c libtucmodel.a
+	$(CC) $(CFLAGS) -I. -I$(TU_DIR) -o $@ $< ./libtucmodel.a $(LDFLAGS)
+	./$@
+
+test test-quick: test-icc-broadcast-admission test-allreduce-layouts
+
 # ---- Sweep: Deterministic Mesh Routing (XY vs YX) ----
 .PHONY: test-interconnect-routing-sweep
 test-interconnect-routing-sweep: tests/test_interconnect_routing_sweep.c libtucmodel.a
@@ -879,7 +920,10 @@ config-docs: libtucmodel.a
 
 # ---- Clean ----
 clean:
-	rm -f test-softmax-row-schedule
+	rm -f test-icc-duplex
+	rm -f test-icc-broadcast-admission test-allreduce-layouts
+	rm -f test-icc-traffic-floor test-icc-ragged-mesh test-icc-ring-ties
+	rm -f test-softmax-row-schedule test-softmax-sram-access
 	rm -f test-softmax-preprocess-order
 	rm -f test-softmax-exp-policy test-softmax-exp-policy-internal
 	rm -f test-softmax-log-nearzero

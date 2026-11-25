@@ -1,0 +1,5 @@
+admission,routing,status,changed_mask,messages,bytes,charged_cycles
+sequential,xy,-1,0x3,2,8,17
+sequential,xy_else_yx,0,0x17,4,16,39
+preflight,xy,-1,0x0,0,0,0
+preflight,xy_else_yx,0,0x17,4,16,39

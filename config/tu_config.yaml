@@ -141,8 +141,11 @@ tu:
     num_cores: 1
     interconnect: "none"  # none | ring | mesh | crossbar
     switching: "legacy_hop_only"  # legacy_hop_only | cut_through | store_and_forward
-    contention: "ideal_parallel"  # ideal_parallel | shared_link
-    mesh_routing: "xy"     # xy | yx deterministic dimension order
+    contention: "ideal_parallel"  # ideal_parallel | shared_link (score) | shared_link_floor
+    mesh_routing: "xy"     # xy | yx | xy_else_yx | yx_else_xy (missing turn only)
+    ring_tie: "clockwise"  # clockwise | counterclockwise | even_cw | odd_cw (source parity)
+    link_duplex: "full"    # full: independent directions; half: one shared lane per neighbor pair
+    broadcast_admission: "sequential"  # sequential prefix delivery or preflight all destinations
     link_bytes_per_cycle: 16
     router_latency_cycles: 5
     cache_coherence: false
